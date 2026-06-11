@@ -25,6 +25,20 @@ def _add_geo(df: pd.DataFrame, id_col: str, seed: int) -> pd.DataFrame:
     return df
 
 
+def _price_interval_to_midpoint(value: object) -> float:
+    text = str(value)
+    if text == "nan" or text == "NULL":
+        return np.nan
+    if text.startswith("<"):
+        return float(text[1:]) * 0.85
+    if text.startswith(">="):
+        return float(text[2:]) * 1.15
+    if text.startswith("[") and "," in text:
+        lo, hi = text.strip("[]()").split(",", 1)
+        return (float(lo) + float(hi)) / 2
+    return pd.to_numeric(text, errors="coerce")
+
+
 def preprocess(raw_dir: Path, processed_dir: Path, sample_orders: int | None = 50000, seed: int = 42) -> None:
     raw_dir = Path(raw_dir)
     processed_dir = ensure_dir(processed_dir)
@@ -40,18 +54,21 @@ def preprocess(raw_dir: Path, processed_dir: Path, sample_orders: int | None = 5
     require_columns(pois, ["wm_poi_id"], "pois")
     require_columns(spus, ["wm_food_spu_id"], "spus")
     require_columns(train, ["user_id", "wm_poi_id"], "orders_train")
-    require_columns(test, ["user_id", "wm_poi_id"], "orders_test_poi")
+    require_columns(test, ["user_id"], "orders_test_poi")
 
     if sample_orders and len(train) > sample_orders:
         train = train.sample(n=sample_orders, random_state=seed).sort_index()
     train = train.dropna(subset=["user_id", "wm_poi_id"]).copy()
-    test = test.dropna(subset=["user_id", "wm_poi_id"]).copy()
+    test = test.dropna(subset=["user_id"]).copy()
 
     for frame in [train, test]:
         if "wm_order_id" not in frame.columns:
             frame["wm_order_id"] = [f"generated_{i}" for i in range(len(frame))]
         if "order_price" not in frame.columns:
-            frame["order_price"] = np.nan
+            if "order_price_interval" in frame.columns:
+                frame["order_price"] = frame["order_price_interval"].map(_price_interval_to_midpoint)
+            else:
+                frame["order_price"] = np.nan
         if "ord_period_name" not in frame.columns:
             frame["ord_period_name"] = "unknown"
         if "aoi_id" not in frame.columns:
@@ -73,6 +90,8 @@ def preprocess(raw_dir: Path, processed_dir: Path, sample_orders: int | None = 5
     train_users = set(train["user_id"].astype(str))
     labels = labels[labels["user_id"].astype(str).isin(train_users)].copy()
     test = test[test["user_id"].astype(str).isin(set(labels["user_id"].astype(str)))].copy()
+    if "wm_poi_id" not in test.columns:
+        test = test.merge(labels[["wm_order_id", "wm_poi_id"]].drop_duplicates("wm_order_id"), on="wm_order_id", how="left")
 
     merchant_stats = (
         train.groupby("wm_poi_id")
@@ -86,9 +105,17 @@ def preprocess(raw_dir: Path, processed_dir: Path, sample_orders: int | None = 5
         if col not in pois.columns:
             pois[col] = 4.2
         pois[col] = pd.to_numeric(pois[col], errors="coerce").fillna(pois[col].median())
-    for col in ["primary_first_tag_id", "primary_second_tag_id", "primary_third_tag_id", "aor_id"]:
+    tag_fallbacks = {
+        "primary_first_tag_id": "primary_first_tag_name",
+        "primary_second_tag_id": "primary_second_tag_name",
+        "primary_third_tag_id": "primary_third_tag_name",
+    }
+    for col, fallback in tag_fallbacks.items():
         if col not in pois.columns:
-            pois[col] = "unknown"
+            pois[col] = pois[fallback] if fallback in pois.columns else "unknown"
+    if "aor_id" not in pois.columns:
+        pois["aor_id"] = "unknown"
+    for col in ["primary_first_tag_id", "primary_second_tag_id", "primary_third_tag_id", "aor_id"]:
         pois[col] = pois[col].fillna("unknown").astype(str)
 
     users = users[users["user_id"].astype(str).isin(train_users)].copy()

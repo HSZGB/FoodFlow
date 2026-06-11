@@ -23,11 +23,15 @@ class BaseRecommender:
 
     def fit(self, data: PreparedData) -> "BaseRecommender":
         self.data = data
-        self.merchant_ids = data.merchant_ids
         self.history = data.history_by_user()
-        self.popular = (
-            data.orders_train["wm_poi_id"].astype(str).value_counts().reindex(self.merchant_ids).fillna(0)
-        )
+        train_counts = data.orders_train["wm_poi_id"].astype(str).value_counts()
+        known_merchants = set(data.merchant_ids)
+        active = [m for m in train_counts.index.astype(str).tolist() if m in known_merchants]
+        self.active_ids = active or data.merchant_ids
+        self.active_set = set(self.active_ids)
+        self.merchant_ids = active[:400] or data.merchant_ids[:400]
+        self.merchant_set = set(self.merchant_ids)
+        self.popular = train_counts.reindex(self.merchant_ids).fillna(0)
         self.popular_list = self.popular.sort_values(ascending=False).index.astype(str).tolist()
         return self
 
@@ -45,14 +49,18 @@ class BaseRecommender:
         return RecommendationResult(self.name, recs, scores)
 
     def _remove_seen_and_backfill(self, user_id: str, ranked: list[str], k: int) -> list[str]:
-        seen = set(self.history.get(user_id, []))
+        # Food delivery has strong repeat consumption, so historical merchants remain valid candidates.
         out = []
         for item in ranked + self.popular_list:
-            if item not in seen and item not in out:
+            if item not in out:
                 out.append(item)
             if len(out) >= k:
                 break
         return out
+
+    def _personalized_candidates(self, user_id: str) -> list[str]:
+        history = [m for m in self.history.get(user_id, []) if m in self.active_set]
+        return list(dict.fromkeys(history + self.merchant_ids))
 
 
 class RandomRecommender(BaseRecommender):
@@ -99,23 +107,27 @@ class ItemCFRecommender(BaseRecommender):
 
     def fit(self, data: PreparedData) -> "ItemCFRecommender":
         super().fit(data)
-        user_items = data.orders_train.groupby("user_id")["wm_poi_id"].apply(lambda s: set(s.astype(str)))
-        item_users: dict[str, set[str]] = defaultdict(set)
-        for user_id, items in user_items.items():
-            for item in items:
-                item_users[item].add(str(user_id))
-        self.similar: dict[str, dict[str, float]] = defaultdict(dict)
-        items = list(item_users.keys())
-        for i, item_i in enumerate(items):
-            users_i = item_users[item_i]
-            for item_j in items[i + 1 :]:
-                users_j = item_users[item_j]
-                inter = len(users_i & users_j)
-                if inter == 0:
-                    continue
-                sim = inter / np.sqrt(len(users_i) * len(users_j))
-                self.similar[item_i][item_j] = float(sim)
-                self.similar[item_j][item_i] = float(sim)
+        train = data.orders_train[data.orders_train["wm_poi_id"].astype(str).isin(self.active_set)].copy()
+        user_items = train.groupby("user_id")["wm_poi_id"].apply(lambda s: list(dict.fromkeys(s.astype(str))))
+        item_counts = Counter(train["wm_poi_id"].astype(str))
+        co_counts: Counter[tuple[str, str]] = Counter()
+        for items in user_items:
+            # Very heavy users add little signal and can dominate runtime, so cap each basket.
+            capped = items[:80]
+            for i, item_i in enumerate(capped):
+                for item_j in capped[i + 1 :]:
+                    if item_i == item_j:
+                        continue
+                    a, b = sorted((item_i, item_j))
+                    co_counts[(a, b)] += 1
+        temp: dict[str, list[tuple[str, float]]] = defaultdict(list)
+        for (item_i, item_j), count in co_counts.items():
+            sim = count / np.sqrt(item_counts[item_i] * item_counts[item_j])
+            temp[item_i].append((item_j, float(sim)))
+            temp[item_j].append((item_i, float(sim)))
+        self.similar = {
+            item: dict(sorted(values, key=lambda x: x[1], reverse=True)[:120]) for item, values in temp.items()
+        }
         return self
 
     def recommend_for_user(self, user_id: str, k: int, period: str = "lunch") -> tuple[list[str], dict[str, float]]:
@@ -132,7 +144,7 @@ class ItemCFRecommender(BaseRecommender):
 class BPRMFRecommender(BaseRecommender):
     name = "BPR-MF"
 
-    def __init__(self, factors: int = 24, epochs: int = 10, lr: float = 0.035, reg: float = 0.002, seed: int = 42):
+    def __init__(self, factors: int = 24, epochs: int = 4, lr: float = 0.035, reg: float = 0.002, seed: int = 42):
         self.factors = factors
         self.epochs = epochs
         self.lr = lr
@@ -141,15 +153,16 @@ class BPRMFRecommender(BaseRecommender):
 
     def fit(self, data: PreparedData) -> "BPRMFRecommender":
         super().fit(data)
-        users = sorted(data.orders_train["user_id"].astype(str).unique())
-        items = sorted(data.orders_train["wm_poi_id"].astype(str).unique())
+        train = data.orders_train[data.orders_train["wm_poi_id"].astype(str).isin(self.active_set)].copy()
+        users = sorted(train["user_id"].astype(str).unique())
+        items = sorted(train["wm_poi_id"].astype(str).unique())
         self.user_index = {u: i for i, u in enumerate(users)}
         self.item_index = {m: i for i, m in enumerate(items)}
         self.index_item = {i: m for m, i in self.item_index.items()}
         rng = np.random.default_rng(self.seed)
         self.user_factors = rng.normal(0, 0.08, (len(users), self.factors))
         self.item_factors = rng.normal(0, 0.08, (len(items), self.factors))
-        positives = [(self.user_index[u], self.item_index[m]) for u, m in data.orders_train[["user_id", "wm_poi_id"]].astype(str).itertuples(index=False)]
+        positives = [(self.user_index[u], self.item_index[m]) for u, m in train[["user_id", "wm_poi_id"]].astype(str).itertuples(index=False)]
         user_pos = defaultdict(set)
         for u, i in positives:
             user_pos[u].add(i)
@@ -193,16 +206,23 @@ class UserOnlyRecommender(BaseRecommender):
         self.merchants = data.merchants.set_index("wm_poi_id", drop=False)
         self.users = data.users.set_index("user_id", drop=False)
         merged = data.orders_train.merge(data.merchants[["wm_poi_id", "primary_first_tag_id"]], on="wm_poi_id", how="left")
-        self.user_cat_counts = (
-            merged.groupby(["user_id", "primary_first_tag_id"]).size().groupby(level=0).apply(lambda s: (s / s.sum()).to_dict()).to_dict()
-        )
+        cat_counts = merged.groupby(["user_id", "primary_first_tag_id"]).size().reset_index(name="cnt")
+        cat_counts["share"] = cat_counts["cnt"] / cat_counts.groupby("user_id")["cnt"].transform("sum")
+        self.user_cat_counts = {
+            str(user_id): dict(zip(group["primary_first_tag_id"].astype(str), group["share"].astype(float)))
+            for user_id, group in cat_counts.groupby("user_id", sort=False)
+        }
         self.quality = dict(zip(data.merchants["wm_poi_id"].astype(str), minmax(data.merchants["poi_score"]).astype(float)))
         self.pop_norm = dict(zip(data.merchants["wm_poi_id"].astype(str), minmax(data.merchants["order_count"]).astype(float)))
-        self.period_pop = (
-            data.orders_train.groupby(["ord_period_name", "wm_poi_id"]).size().groupby(level=0).apply(lambda s: (s / s.max()).to_dict()).to_dict()
-            if "ord_period_name" in data.orders_train.columns
-            else {}
-        )
+        if "ord_period_name" in data.orders_train.columns:
+            period_counts = data.orders_train.groupby(["ord_period_name", "wm_poi_id"]).size().reset_index(name="cnt")
+            period_counts["score"] = period_counts["cnt"] / period_counts.groupby("ord_period_name")["cnt"].transform("max")
+            self.period_pop = {
+                str(period): dict(zip(group["wm_poi_id"].astype(str), group["score"].astype(float)))
+                for period, group in period_counts.groupby("ord_period_name", sort=False)
+            }
+        else:
+            self.period_pop = {}
         return self
 
     def user_score(self, user_id: str, merchant_id: str, period: str = "lunch") -> float:
@@ -217,10 +237,11 @@ class UserOnlyRecommender(BaseRecommender):
         period_fit = float(self.period_pop.get(period, {}).get(merchant_id, 0.0))
         novelty = 1.0 - float(self.pop_norm.get(merchant_id, 0.0))
         quality = float(self.quality.get(merchant_id, 0.5))
-        return float(0.30 * category_pref + 0.25 * repeat + 0.18 * price_fit + 0.12 * period_fit + 0.10 * quality + 0.05 * novelty)
+        return float(0.20 * category_pref + 0.52 * repeat + 0.10 * price_fit + 0.06 * period_fit + 0.07 * quality + 0.05 * novelty)
 
     def recommend_for_user(self, user_id: str, k: int, period: str = "lunch") -> tuple[list[str], dict[str, float]]:
-        scores = {m: self.user_score(user_id, m, period) for m in self.merchant_ids}
+        candidates = self._personalized_candidates(user_id)
+        scores = {m: self.user_score(user_id, m, period) for m in candidates}
         ranked = sorted(scores, key=scores.get, reverse=True)
         recs = self._remove_seen_and_backfill(user_id, ranked, k)
         return recs, {m: scores[m] for m in recs}
@@ -238,7 +259,7 @@ class OursFullRecommender(UserOnlyRecommender):
     def recommend_for_user(self, user_id: str, k: int, period: str = "lunch") -> tuple[list[str], dict[str, float]]:
         user_row = self.users.loc[user_id] if user_id in self.users.index else pd.Series(dtype=object)
         scores = {}
-        for m in self.merchant_ids:
+        for m in self._personalized_candidates(user_id):
             merchant = self.merchants.loc[m]
             user_score = self.user_score(user_id, m, period)
             eta = estimate_user_merchant_eta(user_row, merchant, period)

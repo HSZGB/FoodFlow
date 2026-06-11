@@ -5,6 +5,8 @@ from pathlib import Path
 
 import pandas as pd
 
+from .io import canonical_id
+
 
 @dataclass
 class PreparedData:
@@ -31,7 +33,7 @@ class PreparedData:
         for df in [self.users, self.merchants, self.orders_train, self.orders_test, self.test_interactions, self.spus]:
             for col in df.columns:
                 if col.endswith("_id") or col in {"user_id", "wm_poi_id", "wm_food_spu_id", "wm_order_id"}:
-                    df[col] = df[col].astype(str)
+                    df[col] = df[col].map(canonical_id)
         for col in ["order_count", "avg_order_price", "poi_score", "delivery_comment_avg_score", "food_comment_avg_score", "lng", "lat"]:
             if col in self.merchants.columns:
                 self.merchants[col] = pd.to_numeric(self.merchants[col], errors="coerce")

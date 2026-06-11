@@ -38,7 +38,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--output", type=Path, default=Path("outputs/results/offline_metrics.csv"))
     p.add_argument("--top-k", type=int, nargs="+", default=[10, 20])
     p.add_argument("--seed", type=int, default=42)
-    p.add_argument("--user-limit", type=int, default=500)
+    p.add_argument("--user-limit", type=int, default=300)
 
     p = sub.add_parser("simulate")
     p.add_argument("--processed-dir", type=Path, default=DEFAULT_PROCESSED_DIR)

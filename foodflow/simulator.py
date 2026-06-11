@@ -68,8 +68,8 @@ def run_simulation(
     data: PreparedData,
     policies: list[SimulationPolicy] | None = None,
     seed: int = 42,
-    requests_per_step: int = 24,
-    steps: int = 12,
+    requests_per_step: int = 16,
+    steps: int = 8,
     top_k: int = 10,
 ) -> pd.DataFrame:
     rng = np.random.default_rng(seed)
@@ -84,7 +84,7 @@ def run_simulation(
 
     for policy in policies:
         recommender = _select_recommender(data, policy.recommender, seed)
-        riders = generate_riders(data.merchants, n_riders=max(40, len(data.merchants) // 2), seed=seed + len(policy.name))
+        riders = generate_riders(data.merchants, n_riders=120, seed=seed + len(policy.name))
         exposure = Counter()
         completed = 0
         total_orders = 0

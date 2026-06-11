@@ -5,7 +5,7 @@ from pathlib import Path
 import requests
 
 from .config import OPTIONAL_TRD_FILES, REQUIRED_TRD_FILES, TRD_RECORD_API
-from .io import download_file, ensure_dir
+from .io import download_file, ensure_dir, md5sum
 
 
 def fetch_trd_file_manifest() -> list[dict]:
@@ -32,10 +32,15 @@ def download_trd(raw_dir: Path, skip_graph: bool = True, required_only: bool = F
         if key not in wanted:
             continue
         out_path = raw_dir / key
+        expected_md5 = str(item.get("checksum", "")).replace("md5:", "")
         if out_path.exists() and out_path.stat().st_size == item["size"]:
-            downloaded.append(out_path)
-            continue
+            if not expected_md5 or md5sum(out_path) == expected_md5:
+                downloaded.append(out_path)
+                continue
+            out_path.unlink()
         download_file(item["links"]["self"], out_path, expected_size=item["size"])
+        if expected_md5 and md5sum(out_path) != expected_md5:
+            raise RuntimeError(f"Checksum mismatch for {out_path}")
         downloaded.append(out_path)
     missing = [name for name in REQUIRED_TRD_FILES if not (raw_dir / name).exists()]
     if missing:

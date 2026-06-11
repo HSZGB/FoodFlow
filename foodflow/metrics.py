@@ -71,12 +71,17 @@ def evaluate_recommendations(
         for rank, merchant_id in enumerate(recs[:top_k], start=1):
             exposure[merchant_id] += 1
             weighted[merchant_id] += 1.0 / np.log2(rank + 1)
-    all_merchants = merchants["wm_poi_id"].astype(str).tolist()
+    order_count = pd.to_numeric(merchants["order_count"], errors="coerce").fillna(0)
+    catalog = merchants.loc[order_count > 0].copy()
+    if catalog.empty:
+        catalog = merchants.copy()
+        order_count = pd.to_numeric(catalog["order_count"], errors="coerce").fillna(0)
+    all_merchants = catalog["wm_poi_id"].astype(str).tolist()
     exposed = {m for m, count in exposure.items() if count > 0}
     metrics[f"Coverage@{top_k}"] = len(exposed) / max(len(all_merchants), 1)
     exposure_values = [weighted[m] for m in all_merchants]
     metrics["ExposureGini"] = gini(exposure_values)
-    threshold = pd.to_numeric(merchants["order_count"], errors="coerce").fillna(0).quantile(0.8)
-    long_tail = set(merchants.loc[pd.to_numeric(merchants["order_count"], errors="coerce").fillna(0) <= threshold, "wm_poi_id"].astype(str))
+    threshold = order_count.loc[catalog.index].quantile(0.8)
+    long_tail = set(catalog.loc[order_count.loc[catalog.index] <= threshold, "wm_poi_id"].astype(str))
     metrics[f"LongTailExposure@{top_k}"] = len(exposed & long_tail) / max(len(exposed), 1)
     return metrics

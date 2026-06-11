@@ -1,5 +1,10 @@
 PYTHON ?= .venv/bin/python
 PIP ?= .venv/bin/pip
+SMOKE_RAW ?= data/sample/raw
+SMOKE_PROCESSED ?= data/sample/processed
+SMOKE_RESULTS ?= outputs/smoke/results
+SMOKE_FIGURES ?= outputs/smoke/figures
+SMOKE_REPORT ?= outputs/smoke/report.md
 
 .PHONY: setup download mock preprocess eval simulate figures report demo test smoke clean
 
@@ -35,7 +40,14 @@ demo:
 test:
 	$(PYTHON) -m pytest -q
 
-smoke: mock preprocess eval simulate figures report test
+smoke:
+	$(PYTHON) -m foodflow.cli mock-data --raw-dir $(SMOKE_RAW) --seed 42
+	$(PYTHON) -m foodflow.cli preprocess --raw-dir $(SMOKE_RAW) --processed-dir $(SMOKE_PROCESSED) --sample-orders 50000 --seed 42
+	$(PYTHON) -m foodflow.cli eval-offline --processed-dir $(SMOKE_PROCESSED) --output $(SMOKE_RESULTS)/offline_metrics.csv --top-k 10 20 --seed 42
+	$(PYTHON) -m foodflow.cli simulate --processed-dir $(SMOKE_PROCESSED) --output $(SMOKE_RESULTS)/simulation_metrics.csv --seed 42
+	$(PYTHON) -m foodflow.cli figures --results-dir $(SMOKE_RESULTS) --figures-dir $(SMOKE_FIGURES)
+	$(PYTHON) -m foodflow.cli report --results-dir $(SMOKE_RESULTS) --figures-dir $(SMOKE_FIGURES) --output $(SMOKE_REPORT) --data-note $(SMOKE_PROCESSED)/data_note.json
+	$(PYTHON) -m pytest -q
 
 clean:
-	rm -rf data/raw/*.txt data/processed/*.csv outputs/results/*.csv outputs/figures/*.png report/实验报告.md
+	rm -rf data/sample outputs/smoke data/processed/*.csv outputs/results/*.csv outputs/figures/*.png report/实验报告.md

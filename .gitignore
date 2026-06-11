@@ -7,7 +7,7 @@ __pycache__/
 
 data/raw/
 data/processed/
-data/sample/*.csv
+data/sample/
 outputs/*
 !outputs/.gitkeep
 !outputs/results/
@@ -16,6 +16,7 @@ outputs/*
 !outputs/figures/
 !outputs/figures/.gitkeep
 !outputs/figures/*.png
+outputs/smoke/
 
 ppt/FoodFlow/origin_image/
 ppt/FoodFlow/prompts/

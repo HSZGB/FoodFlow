@@ -9,6 +9,15 @@ import requests
 from tqdm import tqdm
 
 
+def canonical_id(value: object) -> str:
+    if pd.isna(value):
+        return ""
+    text = str(value).strip()
+    if text.endswith(".0") and text[:-2].isdigit():
+        return text[:-2]
+    return text
+
+
 def ensure_dir(path: Path | str) -> Path:
     path = Path(path)
     path.mkdir(parents=True, exist_ok=True)
@@ -46,14 +55,12 @@ def md5sum(path: Path | str, chunk_size: int = 1024 * 1024) -> str:
 def download_file(url: str, out_path: Path | str, expected_size: int | None = None) -> None:
     out_path = Path(out_path)
     ensure_dir(out_path.parent)
-    headers = {}
-    if out_path.exists():
-        headers["Range"] = f"bytes={out_path.stat().st_size}-"
-    with requests.get(url, stream=True, timeout=60, headers=headers) as resp:
+    if out_path.exists() and expected_size is not None and out_path.stat().st_size != expected_size:
+        out_path.unlink()
+    with requests.get(url, stream=True, timeout=60) as resp:
         resp.raise_for_status()
-        mode = "ab" if resp.status_code == 206 and out_path.exists() else "wb"
         total = int(resp.headers.get("content-length", 0))
-        with out_path.open(mode) as fh, tqdm(
+        with out_path.open("wb") as fh, tqdm(
             total=total,
             unit="B",
             unit_scale=True,
@@ -78,5 +85,5 @@ def normalize_id_columns(df: pd.DataFrame) -> pd.DataFrame:
     df = df.copy()
     for col in df.columns:
         if col.endswith("_id") or col in {"user_id", "wm_poi_id", "wm_food_spu_id", "wm_order_id"}:
-            df[col] = df[col].astype(str)
+            df[col] = df[col].map(canonical_id)
     return df
