@@ -1,0 +1,147 @@
+from __future__ import annotations
+
+from pathlib import Path
+
+import numpy as np
+import pandas as pd
+
+from .io import ensure_dir, normalize_id_columns, read_table, require_columns, write_csv
+
+
+def _safe_read(raw_dir: Path, name: str) -> pd.DataFrame:
+    return normalize_id_columns(read_table(raw_dir / name))
+
+
+def _add_geo(df: pd.DataFrame, id_col: str, seed: int) -> pd.DataFrame:
+    rng = np.random.default_rng(seed)
+    keys = sorted(df[id_col].astype(str).unique())
+    coords = {
+        key: (float(rng.normal(116.40, 0.045)), float(rng.normal(39.92, 0.035)))
+        for key in keys
+    }
+    df = df.copy()
+    df["lng"] = df[id_col].astype(str).map(lambda x: coords[x][0])
+    df["lat"] = df[id_col].astype(str).map(lambda x: coords[x][1])
+    return df
+
+
+def preprocess(raw_dir: Path, processed_dir: Path, sample_orders: int | None = 50000, seed: int = 42) -> None:
+    raw_dir = Path(raw_dir)
+    processed_dir = ensure_dir(processed_dir)
+    rng = np.random.default_rng(seed)
+
+    users = _safe_read(raw_dir, "users.txt")
+    pois = _safe_read(raw_dir, "pois.txt")
+    spus = _safe_read(raw_dir, "spus.txt")
+    train = _safe_read(raw_dir, "orders_train.txt")
+    test = _safe_read(raw_dir, "orders_test_poi.txt")
+
+    require_columns(users, ["user_id"], "users")
+    require_columns(pois, ["wm_poi_id"], "pois")
+    require_columns(spus, ["wm_food_spu_id"], "spus")
+    require_columns(train, ["user_id", "wm_poi_id"], "orders_train")
+    require_columns(test, ["user_id", "wm_poi_id"], "orders_test_poi")
+
+    if sample_orders and len(train) > sample_orders:
+        train = train.sample(n=sample_orders, random_state=seed).sort_index()
+    train = train.dropna(subset=["user_id", "wm_poi_id"]).copy()
+    test = test.dropna(subset=["user_id", "wm_poi_id"]).copy()
+
+    for frame in [train, test]:
+        if "wm_order_id" not in frame.columns:
+            frame["wm_order_id"] = [f"generated_{i}" for i in range(len(frame))]
+        if "order_price" not in frame.columns:
+            frame["order_price"] = np.nan
+        if "ord_period_name" not in frame.columns:
+            frame["ord_period_name"] = "unknown"
+        if "aoi_id" not in frame.columns:
+            frame["aoi_id"] = "unknown_aoi"
+        if "order_timestamp" not in frame.columns:
+            frame["order_timestamp"] = np.arange(len(frame))
+
+    if (raw_dir / "orders_poi_test_label.txt").exists():
+        labels = _safe_read(raw_dir, "orders_poi_test_label.txt")
+        label_cols = [c for c in ["wm_order_id", "user_id", "wm_poi_id"] if c in labels.columns]
+        if "user_id" not in label_cols or "wm_poi_id" not in label_cols:
+            labels = test[["wm_order_id", "user_id", "wm_poi_id"]].copy()
+        else:
+            labels = labels[label_cols].dropna()
+    else:
+        labels = test[["wm_order_id", "user_id", "wm_poi_id"]].copy()
+
+    # Keep test users that also have train history, because offline recommenders need a profile.
+    train_users = set(train["user_id"].astype(str))
+    labels = labels[labels["user_id"].astype(str).isin(train_users)].copy()
+    test = test[test["user_id"].astype(str).isin(set(labels["user_id"].astype(str)))].copy()
+
+    merchant_stats = (
+        train.groupby("wm_poi_id")
+        .agg(order_count=("wm_poi_id", "size"), avg_order_price=("order_price", "mean"))
+        .reset_index()
+    )
+    pois = pois.merge(merchant_stats, on="wm_poi_id", how="left")
+    pois["order_count"] = pois["order_count"].fillna(0).astype(int)
+    pois["avg_order_price"] = pois["avg_order_price"].fillna(train["order_price"].median())
+    for col in ["poi_score", "delivery_comment_avg_score", "food_comment_avg_score"]:
+        if col not in pois.columns:
+            pois[col] = 4.2
+        pois[col] = pd.to_numeric(pois[col], errors="coerce").fillna(pois[col].median())
+    for col in ["primary_first_tag_id", "primary_second_tag_id", "primary_third_tag_id", "aor_id"]:
+        if col not in pois.columns:
+            pois[col] = "unknown"
+        pois[col] = pois[col].fillna("unknown").astype(str)
+
+    users = users[users["user_id"].astype(str).isin(train_users)].copy()
+    if "avg_pay_amt" not in users.columns:
+        users["avg_pay_amt"] = train.groupby("user_id")["order_price"].mean().reindex(users["user_id"]).values
+    users["avg_pay_amt"] = pd.to_numeric(users["avg_pay_amt"], errors="coerce").fillna(train["order_price"].median())
+
+    user_profile = (
+        train.groupby("user_id")
+        .agg(history_orders=("wm_poi_id", "size"), avg_order_price=("order_price", "mean"))
+        .reset_index()
+    )
+    fav_cat = (
+        train.merge(pois[["wm_poi_id", "primary_first_tag_id"]], on="wm_poi_id", how="left")
+        .groupby(["user_id", "primary_first_tag_id"])
+        .size()
+        .reset_index(name="cnt")
+        .sort_values(["user_id", "cnt"], ascending=[True, False])
+        .drop_duplicates("user_id")
+        .rename(columns={"primary_first_tag_id": "favorite_category"})
+    )
+    users = users.merge(user_profile, on="user_id", how="left").merge(
+        fav_cat[["user_id", "favorite_category"]], on="user_id", how="left"
+    )
+    users["history_orders"] = users["history_orders"].fillna(0).astype(int)
+    users["avg_order_price"] = users["avg_order_price"].fillna(users["avg_pay_amt"])
+    users["favorite_category"] = users["favorite_category"].fillna("unknown")
+
+    pois = _add_geo(pois, "aor_id", seed + 7)
+    user_aoi = train.groupby("user_id")["aoi_id"].agg(lambda x: x.mode().iloc[0] if len(x.mode()) else x.iloc[0])
+    users["aoi_id"] = users["user_id"].map(user_aoi).fillna("unknown_aoi")
+    users = _add_geo(users, "aoi_id", seed + 17)
+
+    train["split"] = "train"
+    test["split"] = "test"
+
+    write_csv(users, processed_dir / "users.csv")
+    write_csv(pois, processed_dir / "merchants.csv")
+    write_csv(spus, processed_dir / "spus.csv")
+    write_csv(train, processed_dir / "orders_train.csv")
+    write_csv(test, processed_dir / "orders_test.csv")
+    write_csv(labels, processed_dir / "test_interactions.csv")
+
+    data_note = {
+        "source": "Takeout Recommendation Dataset (TRD), Zenodo DOI 10.5281/zenodo.8025855",
+        "mode": "mock" if (raw_dir / "MOCK_DATASET").exists() else "trd",
+        "train_orders": int(len(train)),
+        "test_orders": int(len(test)),
+        "test_labels": int(len(labels)),
+        "users": int(len(users)),
+        "merchants": int(len(pois)),
+        "sample_orders": sample_orders,
+        "seed": seed,
+        "rider_data": "synthetic, generated by FoodFlow simulation with fixed seed",
+    }
+    pd.Series(data_note).to_json(processed_dir / "data_note.json", force_ascii=False, indent=2)
