@@ -13,6 +13,7 @@ from foodflow.demo_support import (
     build_recommendation_frame,
     build_rider_policy_frame,
     clamp01,
+    demo_user_cases,
     streamlit_image_width_kwargs,
     user_category_profile,
 )
@@ -99,6 +100,9 @@ def recommendation_card(row: pd.Series, selected: bool = False) -> str:
     category = html.escape(str(row["category"]))
     merchant_id = html.escape(str(row["merchant_id"]))
     reason = html.escape(str(row["reason"]))
+    reason_chips = "".join(
+        f'<span class="ff-chip">{html.escape(part)}</span>' for part in str(row["reason"]).split(" / ") if part
+    )
     return f"""
     <div class="{card_class}">
       <div class="ff-rank">TOP {int(row['rank'])}</div>
@@ -107,7 +111,7 @@ def recommendation_card(row: pd.Series, selected: bool = False) -> str:
         ID {merchant_id} · 品类 {category}<br>
         评分 {float(row['poi_score']):.2f} · 均价 {float(row['avg_price']):.1f} · 距离 {float(row['distance_km']):.2f} km
       </div>
-      <div class="ff-reason">{reason}</div>
+      <div class="ff-reason" aria-label="{reason}">{reason_chips}</div>
       <span class="ff-chip">总分 <span class="ff-score">{float(row['final_score']):.3f}</span></span>
       <span class="ff-chip">ETA {float(row['eta_minutes']):.1f} min</span>
       <div class="ff-meta" style="margin-top:0.55rem;">用户偏好</div>
@@ -127,10 +131,14 @@ models = load_models(data)
 user_ids = data.user_ids
 user_set = set(user_ids)
 default_user = "8" if "8" in user_set else user_ids[0]
+case_options = demo_user_cases(data.users)
 
 with st.sidebar:
     st.header("演示参数")
-    typed_user = st.text_input("用户 ID", value=default_user).strip()
+    case_label = st.selectbox("快速案例", list(case_options.keys()), index=0)
+    typed_user = st.text_input("手动用户 ID", value="", placeholder="留空则使用快速案例").strip()
+    selected_case_user = case_options.get(case_label, default_user)
+    typed_user = typed_user or selected_case_user
     if typed_user not in user_set:
         st.warning(f"用户 {typed_user} 不在当前处理数据中，已回退到 {default_user}。")
         user_id = default_user
@@ -180,10 +188,22 @@ with tab_case:
             st.plotly_chart(fig, use_container_width=True)
 
     st.subheader(f"{strategy_name} 推荐商家卡片")
-    card_count = min(6, len(rec_df))
+    reason_choices = sorted({item for text in rec_df["reason"].astype(str) for item in text.split(" / ") if item})
+    selected_reasons = st.multiselect("推荐理由筛选", reason_choices, default=[])
+    if selected_reasons:
+        card_df = rec_df[
+            rec_df["reason"].astype(str).apply(lambda text: any(reason in text for reason in selected_reasons))
+        ].copy()
+    else:
+        card_df = rec_df.copy()
+    if card_df.empty:
+        st.info("当前筛选条件下没有推荐商家，已展示完整推荐列表。")
+        card_df = rec_df.copy()
+
+    card_count = min(6, len(card_df))
     for start in range(0, card_count, 3):
         cols = st.columns(3)
-        for col, (_, row) in zip(cols, rec_df.iloc[start : start + 3].iterrows()):
+        for col, (_, row) in zip(cols, card_df.iloc[start : start + 3].iterrows()):
             with col:
                 st.markdown(recommendation_card(row), unsafe_allow_html=True)
 

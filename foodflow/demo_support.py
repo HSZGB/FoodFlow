@@ -41,6 +41,41 @@ def merchant_category(merchant: pd.Series) -> str:
     return "unknown"
 
 
+def demo_user_cases(users: pd.DataFrame) -> dict[str, str]:
+    cases: dict[str, str] = {}
+
+    def add(label: str, user_id: object) -> None:
+        user_id_str = str(user_id)
+        if user_id_str and user_id_str.lower() != "nan" and user_id_str not in cases.values():
+            cases[label] = user_id_str
+
+    user_ids = set(users["user_id"].astype(str))
+    if "8" in user_ids:
+        add("默认案例：用户 8", "8")
+    elif len(users):
+        add("默认案例：首个用户", users.iloc[0]["user_id"])
+
+    if "history_orders" in users.columns and len(users):
+        history = pd.to_numeric(users["history_orders"], errors="coerce").fillna(0)
+        add("复购活跃型", users.loc[history.idxmax(), "user_id"])
+
+    price_col = "avg_order_price" if "avg_order_price" in users.columns else "avg_pay_amt"
+    if price_col in users.columns and len(users):
+        prices = pd.to_numeric(users[price_col], errors="coerce")
+        valid = users[prices.notna()].copy()
+        if len(valid):
+            valid_prices = pd.to_numeric(valid[price_col], errors="coerce")
+            add("高消费型", valid.loc[valid_prices.idxmax(), "user_id"])
+            add("价格敏感型", valid.loc[valid_prices.idxmin(), "user_id"])
+
+    for _, row in users.head(20).iterrows():
+        if len(cases) >= 5:
+            break
+        add(f"备选用户 {row['user_id']}", row["user_id"])
+
+    return cases
+
+
 def user_category_profile(data: PreparedData, user_id: str, top_n: int = 6) -> pd.DataFrame:
     history = data.orders_train[data.orders_train["user_id"].astype(str) == str(user_id)]
     if history.empty:

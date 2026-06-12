@@ -4,6 +4,7 @@ from foodflow.data import PreparedData
 from foodflow.demo_support import (
     build_recommendation_frame,
     build_rider_policy_frame,
+    demo_user_cases,
     streamlit_image_width_kwargs,
 )
 from foodflow.mock_data import make_mock_trd
@@ -30,6 +31,10 @@ def test_demo_recommendation_and_rider_frames(tmp_path: Path):
     preprocess(raw, processed, sample_orders=240, seed=456)
 
     data = PreparedData.load(processed)
+    cases = demo_user_cases(data.users)
+    assert cases
+    assert set(cases.values()).issubset(set(data.user_ids))
+
     model = OursFullRecommender().fit(data)
     user_model = UserOnlyRecommender().fit(data)
     user_id = data.user_ids[0]
