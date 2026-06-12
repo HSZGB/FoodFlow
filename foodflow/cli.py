@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
+from .audit import audit_data
 from .config import DEFAULT_PROCESSED_DIR, DEFAULT_RAW_DIR
 from .data import PreparedData
 from .download import download_trd
@@ -49,11 +50,18 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--results-dir", type=Path, default=Path("outputs/results"))
     p.add_argument("--figures-dir", type=Path, default=Path("outputs/figures"))
 
+    p = sub.add_parser("audit-data")
+    p.add_argument("--raw-dir", type=Path, default=DEFAULT_RAW_DIR)
+    p.add_argument("--processed-dir", type=Path, default=DEFAULT_PROCESSED_DIR)
+    p.add_argument("--output", type=Path, default=Path("outputs/results/data_audit.json"))
+    p.add_argument("--markdown", type=Path, default=Path("docs/DATA_AUDIT.md"))
+
     p = sub.add_parser("report")
     p.add_argument("--results-dir", type=Path, default=Path("outputs/results"))
     p.add_argument("--figures-dir", type=Path, default=Path("outputs/figures"))
     p.add_argument("--output", type=Path, default=Path("report/实验报告.md"))
     p.add_argument("--data-note", type=Path, default=Path("data/processed/data_note.json"))
+    p.add_argument("--data-audit", type=Path, default=Path("outputs/results/data_audit.json"))
 
     p = sub.add_parser("explain-case")
     p.add_argument("--processed-dir", type=Path, default=DEFAULT_PROCESSED_DIR)
@@ -88,8 +96,14 @@ def main(argv: list[str] | None = None) -> None:
     elif args.command == "figures":
         paths = generate_figures(args.results_dir, args.figures_dir)
         print(f"Generated {len(paths)} figures under {args.figures_dir}")
+    elif args.command == "audit-data":
+        audit = audit_data(args.raw_dir, args.processed_dir, args.output, args.markdown)
+        print(
+            f"Data audit written to {args.output}; train_mode={audit['train_mode']} "
+            f"sample_fraction={audit['train_sample_fraction']:.4f}"
+        )
     elif args.command == "report":
-        path = build_report(args.results_dir, args.figures_dir, args.output, args.data_note)
+        path = build_report(args.results_dir, args.figures_dir, args.output, args.data_note, args.data_audit)
         print(f"Report written to {path}")
     elif args.command == "explain-case":
         from .explain import explain_recommendation

@@ -28,10 +28,10 @@
 
 ## 必须保留的关键数字
 
-- [ ] `UserOnly`：Recall@20 = `0.1753`，NDCG@20 = `0.1486`，HitRate@20 = `0.2867`。
-- [ ] `Ours-Full`：Recall@20 = `0.1291`，NDCG@20 = `0.1273`，HitRate@20 = `0.2300`。
-- [ ] `Repeat`：Recall@20 = `0.1542`，NDCG@20 = `0.1413`。
-- [ ] `UserOnly + Nearest`：Avg ETA = `95.25`，Timeout Rate = `0.8675`，Utility = `0.3707`。
-- [ ] `UserOnly + MinETA`：Avg ETA = `53.35`，Timeout Rate = `0.6282`，Utility = `0.4450`。
-- [ ] `Ours-Full`：Avg ETA = `45.54`，Timeout Rate = `0.4605`，Utility = `0.4948`。
-
+- [ ] `UserOnly`：Recall@20 = `0.4287`，NDCG@20 = `0.3423`，HitRate@20 = `0.5733`。
+- [ ] `Ours-Balanced`：Recall@20 = `0.4097`，NDCG@20 = `0.3346`，HitRate@20 = `0.5633`。
+- [ ] `Ours-Full`：Recall@20 = `0.4055`，NDCG@20 = `0.3320`，HitRate@20 = `0.5633`。
+- [ ] `Repeat`：Recall@20 = `0.4062`，NDCG@20 = `0.3348`。
+- [ ] `UserOnly + Nearest`：Avg ETA = `95.41`，Timeout Rate = `0.8182`，Utility = `0.4255`。
+- [ ] `UserOnly + MinETA`：Avg ETA = `53.86`，Timeout Rate = `0.6517`，Utility = `0.4779`。
+- [ ] `Ours-Full`：Avg ETA = `46.78`，Timeout Rate = `0.4725`，Utility = `0.5394`。

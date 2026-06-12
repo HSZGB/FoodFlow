@@ -30,6 +30,7 @@ ppt/notebooklm/upload_pack/
 
 - 生成中文 16:9 答辩 PPT，共 11 页。
 - 必须说明 TRD 数据来源、Zenodo DOI、骑手数据为固定 seed 合成 proxy。
+- 必须说明当前结果已经通过 `data_audit.json` 证明使用完整 TRD 训练订单。
 - 必须展示标准推荐指标：Recall@K、NDCG@K、MRR@K、HitRate@K。
 - 必须展示三方扩展指标：Coverage、Long-tail Exposure、Exposure Gini、Avg ETA、Timeout Rate、Rider Load Std、Platform Utility。
 - 必须体现三方推荐：用户获得商家推荐，商家获得公平曝光，订单被推荐/匹配给骑手。

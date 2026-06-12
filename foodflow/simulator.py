@@ -8,7 +8,7 @@ import pandas as pd
 
 from .data import PreparedData
 from .metrics import gini
-from .recommenders import OursFullRecommender, PopularRecommender, UserOnlyRecommender
+from .recommenders import OursBalancedRecommender, OursFullRecommender, PopularRecommender, UserOnlyRecommender
 from .rider_sim import assign_order, generate_riders, update_rider_after_assignment
 
 
@@ -24,6 +24,7 @@ DEFAULT_POLICIES = [
     SimulationPolicy("Popular + Nearest", "popular", "nearest"),
     SimulationPolicy("UserOnly + Nearest", "useronly", "nearest"),
     SimulationPolicy("UserOnly + MinETA", "useronly", "min_eta"),
+    SimulationPolicy("Ours-Balanced", "ours_balanced", "load_aware", fairness=True),
     SimulationPolicy("Ours w/o Fairness", "useronly", "load_aware"),
     SimulationPolicy("Ours-Full", "ours", "load_aware", fairness=True),
 ]
@@ -36,6 +37,8 @@ def _select_recommender(data: PreparedData, name: str, seed: int):
         return UserOnlyRecommender().fit(data)
     if name == "ours":
         return OursFullRecommender().fit(data)
+    if name == "ours_balanced":
+        return OursBalancedRecommender().fit(data)
     raise ValueError(name)
 
 

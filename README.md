@@ -79,13 +79,16 @@ tests/               # 单元测试与集成 smoke 测试
 
 ## 快速开始
 
-推荐使用虚拟环境。不要直接用系统 `python3 -m foodflow.cli` 跑完整流程，因为系统环境可能缺少 pandas、matplotlib 等依赖。
+推荐使用 conda 环境：
 
 ```bash
 git clone git@github.com:HSZGB/FoodFlow.git
 cd FoodFlow
-make setup
+make conda-setup
+conda activate foodflow
 ```
+
+如果不使用 conda，也可以运行 `make setup` 创建 `.venv`。不要直接用系统 `python3 -m foodflow.cli` 跑完整流程，因为系统环境可能缺少 pandas、matplotlib 等依赖。
 
 ### 1. 快速 smoke 测试
 
@@ -103,11 +106,14 @@ mock-data -> preprocess -> eval-offline -> simulate -> figures -> report -> test
 
 ### 2. 真实 TRD 数据实验
 
+快速复现实验默认抽样 5 万训练订单：
+
 ```bash
 make download
 make preprocess
 make eval
 make simulate
+make audit
 make figures
 make report
 ```
@@ -115,7 +121,19 @@ make report
 也可以一行运行：
 
 ```bash
-make download preprocess eval simulate figures report
+make download preprocess eval simulate audit figures report
+```
+
+如果要使用完整 TRD 训练集：
+
+```bash
+make download
+make preprocess-full
+make eval
+make simulate
+make audit
+make figures
+make report
 ```
 
 ### 3. 运行测试
@@ -141,7 +159,9 @@ http://localhost:8501
 ```text
 outputs/results/offline_metrics.csv       # 离线推荐指标
 outputs/results/simulation_metrics.csv    # 动态履约仿真指标
+outputs/results/data_audit.json           # TRD 完整性与抽样审计
 outputs/figures/*.png                     # 实验图表
+docs/DATA_AUDIT.md                        # 数据审计 Markdown
 report/实验报告.md                        # 实验报告
 ppt/notebooklm/upload_pack/               # NotebookLM PPT 上传素材包
 ```
@@ -154,15 +174,18 @@ python3 scripts/prepare_notebooklm_pack.py
 
 ## 实验结果摘要
 
-离线推荐中，`UserOnly` 的 Recall@20 最高，为 `0.1753`；`Ours-Full` 的 Recall@20 为 `0.1291`，低于 UserOnly，但保留了明显高于 Random、Popular、ItemCF、BPR-MF 的推荐效果。
+当前提交的结果已经使用完整 TRD `orders_train.txt`，数据审计显示原始训练订单 `1,068,495` 条，处理后训练订单 `1,068,495` 条，训练订单使用比例 `1.0000`。
 
-动态履约仿真中，`Ours-Full` 取得最低平均 ETA 和最高平台综合效用：
+离线推荐中，`UserOnly` 的 Recall@20 最高，为 `0.4287`；`Ours-Balanced` 的 Recall@20 为 `0.4097`，`Ours-Full` 的 Recall@20 为 `0.4055`，与 UserOnly 差距较小，同时保留了履约与供给约束。
+
+动态履约仿真中，`Ours-Full` 取得最低平均 ETA、最低超时率和最高平台综合效用：
 
 | 策略 | Avg ETA | Timeout Rate | Platform Utility |
 |---|---:|---:|---:|
-| UserOnly + Nearest | 95.25 | 0.8675 | 0.3707 |
-| UserOnly + MinETA | 53.35 | 0.6282 | 0.4450 |
-| Ours-Full | 45.54 | 0.4605 | 0.4948 |
+| UserOnly + Nearest | 95.41 | 0.8182 | 0.4255 |
+| UserOnly + MinETA | 53.86 | 0.6517 | 0.4779 |
+| Ours-Balanced | 59.00 | 0.7941 | 0.4597 |
+| Ours-Full | 46.78 | 0.4725 | 0.5394 |
 
 结论不是“单一模型在所有指标上最优”，而是：Ours-Full 牺牲一部分离线准确性，换取更低 ETA、更低超时率和更高平台综合效用，更符合外卖平台的多主体优化目标。
 
@@ -171,6 +194,8 @@ python3 scripts/prepare_notebooklm_pack.py
 ![Offline Recall@20](outputs/figures/offline_recall20.png)
 
 ![Simulation Platform Utility](outputs/figures/simulation_platform_utility.png)
+
+![Tripartite Scorecard](outputs/figures/tripartite_scorecard.png)
 
 ## 局限与说明
 

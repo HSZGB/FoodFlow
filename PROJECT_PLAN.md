@@ -5,8 +5,9 @@
 - [x] 选定主线：TRD 真实外卖推荐数据 + 合成骑手 + 动态履约仿真。
 - [x] 评分约束：必须展示指标、说明数据集来源、讲清故事、做 PPT。
 - [x] 工程骨架、数据管道、算法、仿真、报告和 PPT 大纲已实现。
-- [x] 真实 TRD 必需 txt 文件已下载并通过 md5 校验；正式指标和报告已由 TRD 样本生成。
+- [x] 真实 TRD 必需 txt 文件已下载并通过 md5 校验；正式指标和报告已由完整 TRD `orders_train.txt` 生成。
 - [x] `make smoke` 已改为隔离目录，不会覆盖真实 TRD raw/processed/outputs。
+- [x] 新增 conda 环境、数据审计、Ours-Balanced 权重敏感策略和三方可视化看板。
 - [ ] PPT 最终图片页和 `.pptx` 等待 `codex-ppt` 审批门禁。
 
 ## 重复执行流程
@@ -53,6 +54,7 @@
 ### 阶段 3：推荐与指标
 
 - [x] Random、Popular、Repeat、ItemCF、BPR-MF、UserOnly、Ours-Full
+- [x] Ours-Balanced，用于展示准确性、商家公平和履约约束的权衡路径
 - [x] Recall@K、NDCG@K、MRR@K、HitRate@K
 - [x] Coverage、Long-tail Exposure、Exposure Gini
 - 验收命令：`make eval`
@@ -68,6 +70,7 @@
 ### 阶段 5：图表、报告、Demo
 
 - [x] 指标图表
+- [x] trade-off 图、三方 scorecard 与 Streamlit 三页看板
 - [x] 实验报告 Markdown
 - [x] Streamlit demo
 - 验收命令：`make figures report`
@@ -86,7 +89,8 @@
 ### 阶段 7：总验收
 
 - [x] `make smoke` 通过。
-- [x] `make preprocess eval simulate figures report` 已在真实 TRD 必需文件上通过。
+- [x] `make preprocess-full eval simulate audit figures report` 已在完整 TRD 必需文件上通过。
+- [x] `make conda-setup` 和 `make conda-test` 已通过。
 - [x] 至少 5 种推荐策略有离线指标。
 - [x] 至少 4 种三方策略有仿真指标。
 - [ ] 报告包含数据来源、指标表、对比图和结果分析；PPT 最终产物等待审批后生成。

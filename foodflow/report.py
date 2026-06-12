@@ -15,7 +15,7 @@ def _markdown_table(path: Path) -> str:
     return df.round(4).to_markdown(index=False)
 
 
-def _data_mode_text(data_note_path: Path) -> str:
+def _data_mode_text(data_note_path: Path, data_audit_path: Path | None = None) -> str:
     if not data_note_path.exists():
         return "当前报告未读取到 `data_note.json`，请确认已运行 `make preprocess`。"
     note = json.loads(data_note_path.read_text(encoding="utf-8"))
@@ -24,7 +24,42 @@ def _data_mode_text(data_note_path: Path) -> str:
             "当前表格由 `make smoke` 的 mock TRD-like 数据生成，用于验证工程闭环。"
             "正式提交前运行 `make download preprocess eval simulate figures report`，即可用真实 TRD txt 文件刷新结果。"
         )
-    return "当前表格由 TRD txt 文件生成，原始数据来源见 Zenodo DOI。"
+    if data_audit_path and data_audit_path.exists():
+        audit = json.loads(data_audit_path.read_text(encoding="utf-8"))
+        if audit.get("train_mode") == "full":
+            return (
+                "当前表格由真实 TRD txt 文件生成，训练集使用完整 `orders_train.txt`。"
+                f"审计记录显示原始训练订单 {audit.get('raw_train_orders')} 条，处理后训练订单 "
+                f"{audit.get('processed_train_orders')} 条。"
+            )
+        return (
+            "当前表格由真实 TRD txt 文件生成，但训练集采用固定 seed 抽样以保证 CPU 可运行。"
+            f"审计记录显示原始训练订单 {audit.get('raw_train_orders')} 条，处理后训练订单 "
+            f"{audit.get('processed_train_orders')} 条，训练订单使用比例 "
+            f"{float(audit.get('train_sample_fraction', 0.0)):.4f}。"
+        )
+    sample_orders = note.get("sample_orders")
+    if sample_orders in {None, 0, "0"}:
+        return "当前表格由真实 TRD txt 文件生成，训练集按 `sample_orders=0` 使用全量训练订单。"
+    return (
+        "当前表格由真实 TRD txt 文件生成，训练集采用固定 seed 抽样。"
+        f"`data_note.json` 记录处理后训练订单 {note.get('train_orders')} 条，sample_orders={sample_orders}。"
+    )
+
+
+def _data_audit_summary(path: Path) -> str:
+    if not path.exists():
+        return "_尚未生成数据审计文件。运行 `make audit` 可生成 `outputs/results/data_audit.json` 和 `docs/DATA_AUDIT.md`。_"
+    audit = json.loads(path.read_text(encoding="utf-8"))
+    rows = [
+        ("必需 TRD 文件齐全", audit.get("required_raw_files_present")),
+        ("训练集处理模式", audit.get("train_mode")),
+        ("原始训练订单数", audit.get("raw_train_orders")),
+        ("处理后训练订单数", audit.get("processed_train_orders")),
+        ("训练订单使用比例", f"{float(audit.get('train_sample_fraction', 0.0)):.4f}"),
+        ("骑手数据边界", "合成 proxy，非真实派单记录"),
+    ]
+    return pd.DataFrame(rows, columns=["项目", "值"]).to_markdown(index=False)
 
 
 def build_report(
@@ -32,11 +67,13 @@ def build_report(
     figures_dir: Path,
     output: Path,
     data_note_path: Path = Path("data/processed/data_note.json"),
+    data_audit_path: Path = Path("outputs/results/data_audit.json"),
 ) -> Path:
     ensure_dir(output.parent)
     offline_table = _markdown_table(results_dir / "offline_metrics.csv")
     simulation_table = _markdown_table(results_dir / "simulation_metrics.csv")
-    data_mode = _data_mode_text(data_note_path)
+    data_mode = _data_mode_text(data_note_path, data_audit_path)
+    data_audit = _data_audit_summary(data_audit_path)
     figure_lines = []
     if figures_dir.exists():
         for fig in sorted(figures_dir.glob("*.png")):
@@ -59,23 +96,29 @@ def build_report(
 
 {data_mode}
 
+### 2.1 数据审计
+
+{data_audit}
+
 ## 3. 方法设计
 
 实现的推荐策略包括 Random、Popular、Repeat、ItemCF、BPR-MF、UserOnly 和 Ours-Full。Random 和 Popular 是基础对照；Repeat 反映外卖复购特征；ItemCF 和 BPR-MF 是传统协同过滤基线；UserOnly 使用品类、复购、价格、时段和商家质量；Ours-Full 在 UserOnly 上加入商家曝光公平、ETA 和供给分。
 
-三方仿真包括 Popular + Nearest、UserOnly + Nearest、UserOnly + MinETA、Ours w/o Fairness 和 Ours-Full。每轮模拟午餐高峰的一批用户请求，推荐列表经过选择模型产生订单，再由最近骑手、最小 ETA 或负载感知策略派单。
+为增强“不是只给一个手调模型”的可信度，系统还支持 Ours-Balanced，它提高用户偏好权重，同时保留 ETA 与供给约束，用于观察准确性和履约指标之间的权衡。答辩时可以把 UserOnly、Ours-Balanced 和 Ours-Full 作为一条多目标权衡链路：从用户准确性优先，逐步过渡到平台履约优先。
+
+三方仿真包括 Popular + Nearest、UserOnly + Nearest、UserOnly + MinETA、Ours-Balanced、Ours w/o Fairness 和 Ours-Full。每轮模拟午餐高峰的一批用户请求，推荐列表经过选择模型产生订单，再由最近骑手、最小 ETA 或负载感知策略派单。
 
 ## 4. 离线推荐结果
 
 {offline_table}
 
-推荐侧指标使用 Recall@K、NDCG@K、MRR@K 和 HitRate@K；商家侧指标使用 Coverage、Long-tail Exposure 和 Exposure Gini。这样既能看推荐是否命中真实下单，也能看曝光是否过度集中。
+推荐侧指标使用 Recall@K、NDCG@K、MRR@K 和 HitRate@K；商家侧指标使用 Coverage、Long-tail Exposure 和 Exposure Gini。这样既能看推荐是否命中真实下单，也能看曝光是否过度集中。全量 TRD 结果中，UserOnly 的 Recall@20 最高，Ours-Balanced 和 Ours-Full 与其差距较小，但引入了履约和供给约束，因此后续需要结合仿真指标判断。
 
 ## 5. 动态履约仿真结果
 
 {simulation_table}
 
-履约侧指标包括完成订单数、平均 ETA、超时率、骑手负载标准差和平台综合效用。Ours-Full 的目标不是所有单项指标都最大，而是在准确性、公平性和履约可行性之间取得更适合外卖平台的折中。
+履约侧指标包括完成订单数、平均 ETA、超时率、骑手负载标准差和平台综合效用。Ours-Full 的目标不是所有单项指标都最大，而是在准确性、公平性和履约可行性之间取得更适合外卖平台的折中。全量 TRD 仿真中，Ours-Full 的平均 ETA 和超时率明显低于 UserOnly + Nearest，并取得最高平台效用，说明推荐策略进入履约链路后不能只看离线命中。
 
 ## 6. 图表展示
 
@@ -83,7 +126,7 @@ def build_report(
 
 ## 7. 结论与局限
 
-FoodFlow 的答辩故事可以概括为三步：第一，公开外卖订单数据上的推荐实验证明模型不是随机的；第二，商家公平重排能够提升覆盖率并降低曝光集中；第三，履约感知重排和负载感知派单能降低 ETA、超时风险或骑手负载不均衡，从而体现多主体平台的系统级优化。
+FoodFlow 的答辩故事可以概括为三步：第一，公开外卖订单数据上的推荐实验证明模型不是随机的；第二，显式加入商家曝光、长尾曝光和 Gini 指标，让推荐不再只围绕用户命中率讨论；第三，履约感知重排和负载感知派单能降低 ETA、超时风险并提升平台效用，从而体现多主体平台的系统级优化。
 
 局限是骑手数据来自合成仿真，不能替代工业级派单数据；BPR-MF 是轻量实现，未追求大规模深度模型最优性能；平台效用权重是课程项目中的解释性设置，需要结合业务偏好做敏感性分析。
 """

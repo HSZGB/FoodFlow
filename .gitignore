@@ -13,6 +13,7 @@ outputs/*
 !outputs/results/
 !outputs/results/.gitkeep
 !outputs/results/*.csv
+!outputs/results/*.json
 !outputs/figures/
 !outputs/figures/.gitkeep
 !outputs/figures/*.png

@@ -1,5 +1,6 @@
 from pathlib import Path
 
+from foodflow.audit import audit_data
 from foodflow.data import PreparedData
 from foodflow.evaluate import run_offline_eval
 from foodflow.figures import generate_figures
@@ -23,7 +24,10 @@ def test_tiny_pipeline(tmp_path: Path):
     sim = run_simulation(data, seed=123, requests_per_step=8, steps=3, top_k=10)
     sim.to_csv(results / "simulation_metrics.csv", index=False)
     assert len(sim) >= 4
+    audit = audit_data(raw, processed, results / "data_audit.json", tmp_path / "DATA_AUDIT.md")
+    assert audit["required_raw_files_present"]
+    assert audit["processed_train_orders"] > 0
     made = generate_figures(results, figures)
     assert made
-    build_report(results, figures, report)
+    build_report(results, figures, report, processed / "data_note.json", results / "data_audit.json")
     assert report.exists()

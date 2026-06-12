@@ -38,16 +38,19 @@ NotebookLM 上传时建议保留原文件名。图表页要优先使用 PNG 作�
 | `figures/offline_coverage20.png` | Slide 6 | 可作为商家覆盖率证据 |
 | `figures/offline_exposure_gini.png` | Slide 6 | 可作为曝光集中度证据 |
 | `figures/tradeoff_ndcg_gini.png` | Slide 6 | 推荐准确性与曝光公平 trade-off |
+| `figures/tradeoff_recall_coverage.png` | Slide 6 | 推荐召回与商家覆盖率 trade-off |
 | `figures/simulation_avg_eta.png` | Slide 8 | 主图，展示平均 ETA |
 | `figures/simulation_timeout_rate.png` | Slide 8 | 展示超时率 |
 | `figures/simulation_rider_load_std.png` | Slide 8 | 展示骑手负载均衡 |
 | `figures/simulation_platform_utility.png` | Slide 8 | 主图，展示平台综合效用 |
 | `figures/simulation_exposure_gini.png` | Slide 8 | 展示仿真中的商家曝光集中度 |
+| `figures/tradeoff_eta_utility.png` | Slide 8 | 展示 ETA 与平台效用权衡 |
+| `figures/tripartite_scorecard.png` | Slide 10 | 用户、商家、平台三方指标总览 |
 
 ## 图片使用规则
 
 - 第 6 页至少使用 `offline_recall20.png` 和 `tradeoff_ndcg_gini.png`。
 - 第 8 页至少使用 `simulation_avg_eta.png` 和 `simulation_platform_utility.png`。
+- 第 10 页可以使用 `tripartite_scorecard.png` 总结三方贡献。
 - 任何图表都必须保留原始坐标轴、图例、模型名称和数值含义。
 - 如果 NotebookLM 重新绘制图表，必须以 CSV 数值为准，并在讲稿中说明图表来自本项目实验输出。
-

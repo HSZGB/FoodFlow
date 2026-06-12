@@ -247,28 +247,81 @@ class UserOnlyRecommender(BaseRecommender):
         return recs, {m: scores[m] for m in recs}
 
 
-class OursFullRecommender(UserOnlyRecommender):
-    name = "Ours-Full"
+class TripartiteRerankRecommender(UserOnlyRecommender):
+    name = "Tripartite-Rerank"
 
-    def fit(self, data: PreparedData) -> "OursFullRecommender":
+    def __init__(
+        self,
+        name: str = "Tripartite-Rerank",
+        user_weight: float = 0.62,
+        fairness_weight: float = 0.18,
+        eta_weight: float = 0.14,
+        supply_weight: float = 0.06,
+    ):
+        self.name = name
+        self.user_weight = user_weight
+        self.fairness_weight = fairness_weight
+        self.eta_weight = eta_weight
+        self.supply_weight = supply_weight
+
+    def fit(self, data: PreparedData) -> "TripartiteRerankRecommender":
         super().fit(data)
         self.fair = fairness_scores(data.merchants)
         self.data = data
         return self
 
-    def recommend_for_user(self, user_id: str, k: int, period: str = "lunch") -> tuple[list[str], dict[str, float]]:
+    def component_scores(self, user_id: str, merchant_id: str, period: str = "lunch") -> dict[str, float]:
         user_row = self.users.loc[user_id] if user_id in self.users.index else pd.Series(dtype=object)
+        merchant = self.merchants.loc[merchant_id]
+        user_score = self.user_score(user_id, merchant_id, period)
+        eta = estimate_user_merchant_eta(user_row, merchant, period)
+        eta_score = 1.0 - min(eta / 70.0, 1.0)
+        supply = supply_score_for_merchant(merchant)
+        fair = float(self.fair.get(merchant_id, 0.0))
+        final = float(
+            self.user_weight * user_score
+            + self.fairness_weight * fair
+            + self.eta_weight * eta_score
+            + self.supply_weight * supply
+        )
+        return {
+            "user_score": float(user_score),
+            "merchant_fairness": fair,
+            "eta_minutes": float(eta),
+            "eta_score": float(eta_score),
+            "supply_score": float(supply),
+            "final_score": final,
+        }
+
+    def recommend_for_user(self, user_id: str, k: int, period: str = "lunch") -> tuple[list[str], dict[str, float]]:
         scores = {}
         for m in self._personalized_candidates(user_id):
-            merchant = self.merchants.loc[m]
-            user_score = self.user_score(user_id, m, period)
-            eta = estimate_user_merchant_eta(user_row, merchant, period)
-            eta_score = 1.0 - min(eta / 70.0, 1.0)
-            supply = supply_score_for_merchant(merchant)
-            scores[m] = float(0.62 * user_score + 0.18 * self.fair.get(m, 0.0) + 0.14 * eta_score + 0.06 * supply)
+            scores[m] = self.component_scores(user_id, m, period)["final_score"]
         ranked = sorted(scores, key=scores.get, reverse=True)
         recs = self._remove_seen_and_backfill(user_id, ranked, k)
         return recs, {m: scores[m] for m in recs}
+
+
+class OursBalancedRecommender(TripartiteRerankRecommender):
+    def __init__(self):
+        super().__init__(
+            name="Ours-Balanced",
+            user_weight=0.72,
+            fairness_weight=0.08,
+            eta_weight=0.14,
+            supply_weight=0.06,
+        )
+
+
+class OursFullRecommender(TripartiteRerankRecommender):
+    def __init__(self):
+        super().__init__(
+            name="Ours-Full",
+            user_weight=0.62,
+            fairness_weight=0.18,
+            eta_weight=0.14,
+            supply_weight=0.06,
+        )
 
 
 def build_recommenders(seed: int = 42) -> list[BaseRecommender]:
@@ -279,5 +332,6 @@ def build_recommenders(seed: int = 42) -> list[BaseRecommender]:
         ItemCFRecommender(),
         BPRMFRecommender(seed=seed),
         UserOnlyRecommender(),
+        OursBalancedRecommender(),
         OursFullRecommender(),
     ]

@@ -24,7 +24,7 @@
 - 使用用户、商家、菜品、训练订单、测试订单和测试标签。
 - 不下载约 1.8GB 的 `graph.bin`，因为本项目核心实现不依赖 DGL 图文件。
 - 骑手位置、在线状态、负载、可靠性和收入是固定 seed 合成 proxy，只用于仿真，不能说成真实骑手数据。
-- 已实现推荐策略：Random、Popular、Repeat、ItemCF、BPR-MF、UserOnly、Ours-Full。
+- 已实现推荐策略：Random、Popular、Repeat、ItemCF、BPR-MF、UserOnly、Ours-Balanced、Ours-Full。
 - Ours-Full = 用户偏好 + 商家公平 + ETA + 供给分。
 - 已实现仿真策略：Popular + Nearest、UserOnly + Nearest、UserOnly + MinETA、Ours w/o Fairness、Ours-Full。
 - 三方推荐必须体现为：
@@ -36,15 +36,17 @@
 
 离线推荐：
 
-- `UserOnly`：Recall@20 = `0.1753`，NDCG@20 = `0.1486`，HitRate@20 = `0.2867`。
-- `Repeat`：Recall@20 = `0.1542`，NDCG@20 = `0.1413`。
-- `Ours-Full`：Recall@20 = `0.1291`，NDCG@20 = `0.1273`，HitRate@20 = `0.2300`。
+- `UserOnly`：Recall@20 = `0.4287`，NDCG@20 = `0.3423`，HitRate@20 = `0.5733`。
+- `Repeat`：Recall@20 = `0.4062`，NDCG@20 = `0.3348`。
+- `Ours-Balanced`：Recall@20 = `0.4097`，NDCG@20 = `0.3346`，HitRate@20 = `0.5633`。
+- `Ours-Full`：Recall@20 = `0.4055`，NDCG@20 = `0.3320`，HitRate@20 = `0.5633`。
 
 动态履约仿真：
 
-- `UserOnly + Nearest`：Avg ETA = `95.25`，Timeout Rate = `0.8675`，Platform Utility = `0.3707`。
-- `UserOnly + MinETA`：Avg ETA = `53.35`，Timeout Rate = `0.6282`，Platform Utility = `0.4450`。
-- `Ours-Full`：Avg ETA = `45.54`，Timeout Rate = `0.4605`，Platform Utility = `0.4948`。
+- `UserOnly + Nearest`：Avg ETA = `95.41`，Timeout Rate = `0.8182`，Platform Utility = `0.4255`。
+- `UserOnly + MinETA`：Avg ETA = `53.86`，Timeout Rate = `0.6517`，Platform Utility = `0.4779`。
+- `Ours-Balanced`：Avg ETA = `59.00`，Timeout Rate = `0.7941`，Platform Utility = `0.4597`。
+- `Ours-Full`：Avg ETA = `46.78`，Timeout Rate = `0.4725`，Platform Utility = `0.5394`。
 
 结论必须表达为：Ours-Full 牺牲一部分离线准确性，但换来更好的履约效率、更低超时风险和最高平台综合效用。
 
@@ -77,7 +79,7 @@
    展示数据处理 -> 推荐召回排序 -> 三方重排 -> 骑手匹配 -> 动态仿真 -> 指标评估。
 
 5. **推荐算法与三方重排**  
-   对比 Random、Popular、Repeat、ItemCF、BPR-MF、UserOnly、Ours-Full；展示 Ours-Full 打分拆解。
+   对比 Random、Popular、Repeat、ItemCF、BPR-MF、UserOnly、Ours-Balanced、Ours-Full；展示 Ours-Full 打分拆解。
 
 6. **离线推荐指标结果**  
    使用 `offline_recall20.png` 和 `tradeoff_ndcg_gini.png`，也可引用 `offline_metrics.csv` 生成小表。说明标准推荐指标与商家曝光指标。
@@ -108,4 +110,3 @@
 - 演讲备注，约 80-120 字
 
 不要编造上传资料之外的新实验数据。不要把本项目包装成工业生产系统。不要只写概念，必须展示指标和结果分析。
-

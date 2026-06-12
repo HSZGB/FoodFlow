@@ -19,6 +19,8 @@ PROMPT_FILES = [
 SOURCE_FILES = [
     (ROOT / "report" / "实验报告.md", "实验报告.md"),
     (ROOT / "docs" / "DATA_SOURCE.md", "DATA_SOURCE.md"),
+    (ROOT / "docs" / "DATA_AUDIT.md", "DATA_AUDIT.md"),
+    (ROOT / "docs" / "IMPROVEMENT_RESEARCH.md", "IMPROVEMENT_RESEARCH.md"),
     (ROOT / "ppt" / "FoodFlow" / "outline.md", "ppt_outline.md"),
     (ROOT / "作业要求.md", "作业要求.md"),
     (ROOT / "硬性要求.md", "硬性要求.md"),
@@ -31,6 +33,7 @@ OPTIONAL_SOURCE_FILES = [
 RESULT_FILES = [
     ROOT / "outputs" / "results" / "offline_metrics.csv",
     ROOT / "outputs" / "results" / "simulation_metrics.csv",
+    ROOT / "outputs" / "results" / "data_audit.json",
 ]
 
 FIGURE_FILES = [
@@ -39,11 +42,14 @@ FIGURE_FILES = [
     ROOT / "outputs" / "figures" / "offline_coverage20.png",
     ROOT / "outputs" / "figures" / "offline_exposure_gini.png",
     ROOT / "outputs" / "figures" / "tradeoff_ndcg_gini.png",
+    ROOT / "outputs" / "figures" / "tradeoff_recall_coverage.png",
     ROOT / "outputs" / "figures" / "simulation_avg_eta.png",
     ROOT / "outputs" / "figures" / "simulation_timeout_rate.png",
     ROOT / "outputs" / "figures" / "simulation_rider_load_std.png",
     ROOT / "outputs" / "figures" / "simulation_platform_utility.png",
     ROOT / "outputs" / "figures" / "simulation_exposure_gini.png",
+    ROOT / "outputs" / "figures" / "tradeoff_eta_utility.png",
+    ROOT / "outputs" / "figures" / "tripartite_scorecard.png",
 ]
 
 
@@ -116,4 +122,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

@@ -13,6 +13,8 @@ FoodFlow uses the Takeout Recommendation Dataset (TRD) as the primary public dat
 
 The implementation downloads the text files needed for recommendation experiments and skips `graph.bin` by default because this project does not depend on DGL.
 
+The current committed experiment outputs are generated from the full TRD training text file. `docs/DATA_AUDIT.md` and `outputs/results/data_audit.json` record the evidence: all required raw files are present, `orders_train.txt` has 1,068,495 rows, and `orders_train.csv` also has 1,068,495 rows. For faster local iteration, `make preprocess` still supports a fixed-seed 50,000-order sample; `make preprocess-full` uses the full training set.
+
 ## Files Used
 
 - `users.txt`: user attributes.

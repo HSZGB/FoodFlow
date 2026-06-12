@@ -99,6 +99,7 @@
 
 - Baselines：Random、Popular、Repeat、ItemCF、BPR-MF
 - UserOnly：品类偏好 + 复购 + 价格匹配 + 时段偏好 + 商家质量
+- Ours-Balanced：提高用户偏好权重，同时保留 ETA 与供给约束
 - Ours-Full：用户偏好 + 商家公平 + ETA + 供给分
 - 可解释输出只引用真实参与打分的特征
 
@@ -137,9 +138,10 @@ score = 0.62 user_score
 
 必须出现的文本：
 
-- UserOnly Recall@20 = 0.1753，NDCG@20 = 0.1486
-- Repeat Recall@20 = 0.1542，体现外卖复购特征
-- Ours-Full Recall@20 = 0.1291，NDCG@20 = 0.1273
+- UserOnly Recall@20 = 0.4287，NDCG@20 = 0.3423
+- Repeat Recall@20 = 0.4062，体现外卖复购特征
+- Ours-Balanced Recall@20 = 0.4097，NDCG@20 = 0.3346
+- Ours-Full Recall@20 = 0.4055，NDCG@20 = 0.3320
 - Ours-Full 不是追求单一 Recall 最大，而是在准确性、公平性和履约之间折中
 
 视觉布局：
@@ -189,16 +191,17 @@ score = 0.62 user_score
 
 必须出现的文本：
 
-- UserOnly + Nearest：Avg ETA = 95.25，Timeout Rate = 0.8675，Utility = 0.3707
-- UserOnly + MinETA：Avg ETA = 53.35，Timeout Rate = 0.6282，Utility = 0.4450
-- Ours-Full：Avg ETA = 45.54，Timeout Rate = 0.4605，Utility = 0.4948
+- UserOnly + Nearest：Avg ETA = 95.41，Timeout Rate = 0.8182，Utility = 0.4255
+- UserOnly + MinETA：Avg ETA = 53.86，Timeout Rate = 0.6517，Utility = 0.4779
+- Ours-Balanced：Avg ETA = 59.00，Timeout Rate = 0.7941，Utility = 0.4597
+- Ours-Full：Avg ETA = 46.78，Timeout Rate = 0.4725，Utility = 0.5394
 - Ours-Full 平台综合效用最高
 
 视觉布局：
 
 - 上方放两个主图：平均 ETA、平台效用。
 - 下方放小表格，列出三条关键策略的 ETA、超时率、效用。
-- 用正式红突出 Ours-Full 的 `0.4948`。
+- 用正式红突出 Ours-Full 的 `0.5394`。
 
 演讲备注：
 
@@ -244,7 +247,7 @@ score = 0.62 user_score
 
 - 上方三个结论卡片。
 - 下方一个“局限与后续”横条。
-- 右侧放关键数字摘要：Recall@20 0.1291、Avg ETA 45.54、Utility 0.4948。
+- 右侧放关键数字摘要：Recall@20 0.4055、Avg ETA 46.78、Utility 0.5394。
 
 演讲备注：
 
@@ -270,4 +273,3 @@ score = 0.62 user_score
 演讲备注：
 
 最后强调项目不是只做展示页面，而是有数据来源、可重复执行脚本、标准推荐指标、三方仿真指标和实验报告支撑。欢迎围绕数据边界、指标设计、三方重排和动态仿真提问。
-
