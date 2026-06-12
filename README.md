@@ -148,11 +148,25 @@ make test
 make demo
 ```
 
+`make demo` 默认使用 conda 环境中的 Streamlit。如果需要临时改用其它 Streamlit，可覆盖变量，例如：
+
+```bash
+make STREAMLIT=".venv/bin/streamlit" demo
+```
+
+如果需要指定端口：
+
+```bash
+make STREAMLIT_FLAGS="--server.port 8502" demo
+```
+
 然后在浏览器打开：
 
 ```text
 http://localhost:8501
 ```
+
+demo 默认展示用户 `8`，也可以在侧边栏输入其它用户 ID。当前界面包含推荐商家卡片、用户品类偏好、Ours-Full 分数组成、同一订单的骑手策略 ETA 对比、用户-商家-骑手链路图、空间散点图和实验指标看板。
 
 ## 主要输出
 

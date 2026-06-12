@@ -2,6 +2,8 @@ PYTHON ?= .venv/bin/python
 PIP ?= .venv/bin/pip
 CONDA_ENV ?= foodflow
 CONDA_RUN ?= conda run -n $(CONDA_ENV)
+STREAMLIT ?= $(CONDA_RUN) streamlit
+STREAMLIT_FLAGS ?=
 SMOKE_RAW ?= data/sample/raw
 SMOKE_PROCESSED ?= data/sample/processed
 SMOKE_RESULTS ?= outputs/smoke/results
@@ -59,7 +61,7 @@ report:
 	$(PYTHON) -m foodflow.cli report --results-dir outputs/results --figures-dir outputs/figures --output report/实验报告.md --data-audit outputs/results/data_audit.json
 
 demo:
-	.venv/bin/streamlit run app.py
+	$(STREAMLIT) run app.py $(STREAMLIT_FLAGS)
 
 test:
 	$(PYTHON) -m pytest -q
