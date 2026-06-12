@@ -7,7 +7,7 @@ from typing import Callable
 import pandas as pd
 
 from .data import PreparedData
-from .rerank import haversine_km
+from .rerank import estimate_user_merchant_eta, fairness_scores, haversine_km, supply_score_for_merchant
 from .rider_sim import assign_order
 
 
@@ -70,6 +70,7 @@ def build_recommendation_frame(data: PreparedData, model, user_id: str, recs: li
     merchants = data.merchants.set_index("wm_poi_id", drop=False)
     users = data.users.set_index("user_id", drop=False)
     user_row = users.loc[user_id]
+    fairness_lookup = getattr(model, "fair", fairness_scores(data.merchants))
     history = data.orders_train[data.orders_train["user_id"].astype(str) == str(user_id)]
     repeat_counts = Counter(history["wm_poi_id"].astype(str))
     category_profile = user_category_profile(data, user_id, top_n=20)
@@ -78,7 +79,27 @@ def build_recommendation_frame(data: PreparedData, model, user_id: str, recs: li
     rows = []
     for rank, merchant_id in enumerate(recs, start=1):
         merchant = merchants.loc[merchant_id]
-        components = model.component_scores(user_id, merchant_id, period)
+        if hasattr(model, "component_scores"):
+            components = model.component_scores(user_id, merchant_id, period)
+            user_weight = float(getattr(model, "user_weight", 1.0))
+            fairness_weight = float(getattr(model, "fairness_weight", 0.0))
+            eta_weight = float(getattr(model, "eta_weight", 0.0))
+            supply_weight = float(getattr(model, "supply_weight", 0.0))
+        else:
+            user_score = float(model.user_score(user_id, merchant_id, period))
+            eta = estimate_user_merchant_eta(user_row, merchant, period)
+            components = {
+                "user_score": user_score,
+                "merchant_fairness": float(fairness_lookup.get(str(merchant_id), 0.0)),
+                "eta_minutes": float(eta),
+                "eta_score": float(1.0 - min(eta / 70.0, 1.0)),
+                "supply_score": float(supply_score_for_merchant(merchant)),
+                "final_score": user_score,
+            }
+            user_weight = 1.0
+            fairness_weight = 0.0
+            eta_weight = 0.0
+            supply_weight = 0.0
         category = merchant_category(merchant)
         repeat = int(repeat_counts.get(str(merchant_id), 0))
         user_price = float(user_row.get("avg_order_price", user_row.get("avg_pay_amt", 35)) or 35)
@@ -122,10 +143,10 @@ def build_recommendation_frame(data: PreparedData, model, user_id: str, recs: li
                 "eta_minutes": float(components["eta_minutes"]),
                 "eta_score": float(components["eta_score"]),
                 "supply": float(components["supply_score"]),
-                "user_contrib": float(getattr(model, "user_weight", 0.62) * components["user_score"]),
-                "fairness_contrib": float(getattr(model, "fairness_weight", 0.18) * components["merchant_fairness"]),
-                "eta_contrib": float(getattr(model, "eta_weight", 0.14) * components["eta_score"]),
-                "supply_contrib": float(getattr(model, "supply_weight", 0.06) * components["supply_score"]),
+                "user_contrib": float(user_weight * components["user_score"]),
+                "fairness_contrib": float(fairness_weight * components["merchant_fairness"]),
+                "eta_contrib": float(eta_weight * components["eta_score"]),
+                "supply_contrib": float(supply_weight * components["supply_score"]),
                 "reason": " / ".join(reasons),
                 "lng": float(merchant.get("lng", 116.40)),
                 "lat": float(merchant.get("lat", 39.92)),

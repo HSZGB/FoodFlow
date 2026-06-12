@@ -8,7 +8,7 @@ from foodflow.demo_support import (
 )
 from foodflow.mock_data import make_mock_trd
 from foodflow.preprocess import preprocess
-from foodflow.recommenders import OursFullRecommender
+from foodflow.recommenders import OursFullRecommender, UserOnlyRecommender
 from foodflow.rider_sim import generate_riders
 
 
@@ -31,12 +31,18 @@ def test_demo_recommendation_and_rider_frames(tmp_path: Path):
 
     data = PreparedData.load(processed)
     model = OursFullRecommender().fit(data)
+    user_model = UserOnlyRecommender().fit(data)
     user_id = data.user_ids[0]
     recs = model.recommend([user_id], 5, {user_id: "lunch"}).recommendations[user_id]
     rec_frame = build_recommendation_frame(data, model, user_id, recs, "lunch")
+    user_recs = user_model.recommend([user_id], 5, {user_id: "lunch"}).recommendations[user_id]
+    user_frame = build_recommendation_frame(data, user_model, user_id, user_recs, "lunch")
 
     assert len(rec_frame) == 5
     assert {"merchant_name", "final_score", "reason", "eta_minutes"}.issubset(rec_frame.columns)
+    assert len(user_frame) == 5
+    assert user_frame["fairness_contrib"].eq(0).all()
+    assert user_frame["eta_contrib"].eq(0).all()
 
     users = data.users.set_index("user_id", drop=False)
     merchants = data.merchants.set_index("wm_poi_id", drop=False)

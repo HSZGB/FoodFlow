@@ -16,7 +16,7 @@ from foodflow.demo_support import (
     streamlit_image_width_kwargs,
     user_category_profile,
 )
-from foodflow.recommenders import OursFullRecommender
+from foodflow.recommenders import OursBalancedRecommender, OursFullRecommender, UserOnlyRecommender
 from foodflow.rider_sim import generate_riders
 
 
@@ -81,8 +81,12 @@ def load_data() -> PreparedData:
 
 
 @st.cache_resource(show_spinner=False)
-def load_model(_data: PreparedData) -> OursFullRecommender:
-    return OursFullRecommender().fit(_data)
+def load_models(_data: PreparedData) -> dict[str, object]:
+    return {
+        "UserOnly": UserOnlyRecommender().fit(_data),
+        "Ours-Balanced": OursBalancedRecommender().fit(_data),
+        "Ours-Full": OursFullRecommender().fit(_data),
+    }
 
 
 def pct(value: float) -> str:
@@ -119,7 +123,7 @@ def recommendation_card(row: pd.Series, selected: bool = False) -> str:
 
 
 data = load_data()
-model = load_model(data)
+models = load_models(data)
 user_ids = data.user_ids
 user_set = set(user_ids)
 default_user = "8" if "8" in user_set else user_ids[0]
@@ -135,8 +139,10 @@ with st.sidebar:
     period_label = st.selectbox("时段", ["午餐高峰", "晚餐高峰", "早餐", "夜宵"], index=0)
     period_map = {"午餐高峰": "lunch", "晚餐高峰": "dinner", "早餐": "breakfast", "夜宵": "night"}
     period = period_map[period_label]
+    strategy_name = st.selectbox("推荐策略", ["Ours-Full", "Ours-Balanced", "UserOnly"], index=0)
     top_k = st.slider("推荐数量", min_value=5, max_value=12, value=10, step=1)
 
+model = models[strategy_name]
 rec_result = model.recommend([user_id], top_k, {user_id: period})
 recs = rec_result.recommendations[user_id]
 rec_df = build_recommendation_frame(data, model, user_id, recs, period)
@@ -173,13 +179,55 @@ with tab_case:
             fig.update_layout(height=230, margin=dict(l=8, r=8, t=44, b=8), coloraxis_showscale=False)
             st.plotly_chart(fig, use_container_width=True)
 
-    st.subheader("推荐商家卡片")
+    st.subheader(f"{strategy_name} 推荐商家卡片")
     card_count = min(6, len(rec_df))
     for start in range(0, card_count, 3):
         cols = st.columns(3)
         for col, (_, row) in zip(cols, rec_df.iloc[start : start + 3].iterrows()):
             with col:
                 st.markdown(recommendation_card(row), unsafe_allow_html=True)
+
+    st.subheader("同一用户的策略对比")
+    strategy_rows = []
+    for name, candidate_model in models.items():
+        candidate_recs = candidate_model.recommend([user_id], top_k, {user_id: period}).recommendations[user_id]
+        candidate_frame = build_recommendation_frame(data, candidate_model, user_id, candidate_recs, period)
+        strategy_rows.append(
+            {
+                "策略": name,
+                "Top3 商家": " / ".join(candidate_frame["merchant_name"].head(3).astype(str).tolist()),
+                "平均用户偏好": candidate_frame["user_score"].mean(),
+                "平均商家公平": candidate_frame["fairness"].mean(),
+                "平均 ETA": candidate_frame["eta_minutes"].mean(),
+                "平均供给": candidate_frame["supply"].mean(),
+                "与当前策略重合数": len(set(candidate_recs).intersection(set(recs))),
+            }
+        )
+    strategy_df = pd.DataFrame(strategy_rows)
+    compare_left, compare_right = st.columns([1.2, 1])
+    with compare_left:
+        st.dataframe(
+            strategy_df,
+            use_container_width=True,
+            hide_index=True,
+            column_config={
+                "平均用户偏好": st.column_config.NumberColumn(format="%.3f"),
+                "平均商家公平": st.column_config.NumberColumn(format="%.3f"),
+                "平均 ETA": st.column_config.NumberColumn(format="%.1f"),
+                "平均供给": st.column_config.NumberColumn(format="%.3f"),
+            },
+        )
+    with compare_right:
+        strategy_chart = px.bar(
+            strategy_df,
+            x="策略",
+            y=["平均用户偏好", "平均商家公平", "平均供给"],
+            barmode="group",
+            title="策略侧重点对比",
+            color_discrete_sequence=["#2563eb", "#0f766e", "#7c3aed"],
+        )
+        strategy_chart.update_layout(height=300, margin=dict(l=8, r=8, t=48, b=8), xaxis_title="")
+        st.plotly_chart(strategy_chart, use_container_width=True)
 
     option_labels = [
         f"TOP {int(row.rank)} · {row.merchant_name} · ID {row.merchant_id}" for row in rec_df.itertuples(index=False)
@@ -218,7 +266,7 @@ with tab_case:
             x="component",
             y="weighted_score",
             color="component",
-            title="Ours-Full 加权分数组成",
+            title=f"{strategy_name} 加权分数组成",
             color_discrete_sequence=["#2563eb", "#0f766e", "#dc6803", "#7c3aed"],
         )
         contrib_fig.update_layout(showlegend=False, height=280, margin=dict(l=8, r=8, t=48, b=8))
