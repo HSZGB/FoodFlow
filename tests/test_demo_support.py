@@ -3,6 +3,7 @@ from pathlib import Path
 from foodflow.data import PreparedData
 from foodflow.demo_support import (
     build_recommendation_frame,
+    build_peak_trace,
     build_rider_policy_frame,
     demo_user_cases,
     streamlit_image_width_kwargs,
@@ -56,3 +57,18 @@ def test_demo_recommendation_and_rider_frames(tmp_path: Path):
 
     assert set(rider_frame["policy_key"]) == {"nearest", "min_eta", "load_aware"}
     assert rider_frame["eta"].min() > 0
+
+    trace = build_peak_trace(
+        data,
+        {
+            "UserOnly + MinETA": (user_model, "min_eta"),
+            "Ours-Full": (model, "load_aware"),
+        },
+        seed=456,
+        steps=3,
+        requests_per_step=4,
+        top_k=5,
+    )
+    assert set(trace["policy"]) == {"UserOnly + MinETA", "Ours-Full"}
+    assert trace["step"].max() == 3
+    assert trace["completed_orders"].max() > 0

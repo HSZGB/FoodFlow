@@ -4,11 +4,12 @@ import inspect
 from collections import Counter
 from typing import Callable
 
+import numpy as np
 import pandas as pd
 
 from .data import PreparedData
 from .rerank import estimate_user_merchant_eta, fairness_scores, haversine_km, supply_score_for_merchant
-from .rider_sim import assign_order
+from .rider_sim import assign_order, generate_riders, update_rider_after_assignment
 
 
 def streamlit_image_width_kwargs(image_func: Callable) -> dict[str, object]:
@@ -218,4 +219,80 @@ def build_rider_policy_frame(
                 "lat": float(rider.iloc[0]["lat"]) if not rider.empty else None,
             }
         )
+    return pd.DataFrame(rows)
+
+
+def build_peak_trace(
+    data: PreparedData,
+    policies: dict[str, tuple[object, str]],
+    seed: int = 42,
+    steps: int = 6,
+    requests_per_step: int = 8,
+    top_k: int = 10,
+) -> pd.DataFrame:
+    random = np.random.default_rng(seed)
+    truth = data.truth_by_user()
+    known_users = set(data.users["user_id"].astype(str))
+    eval_users = [u for u in truth if u in known_users]
+    if not eval_users:
+        return pd.DataFrame()
+
+    users_df = data.users.set_index("user_id", drop=False)
+    merchants_df = data.merchants.set_index("wm_poi_id", drop=False)
+    rows = []
+
+    for policy_name, (model, rider_policy) in policies.items():
+        riders = generate_riders(data.merchants, n_riders=60, seed=seed + len(policy_name))
+        etas: list[float] = []
+        completed = 0
+        timeout = 0
+        current_time = 0
+
+        for step in range(steps):
+            current_time = step * 12
+            sample_size = min(requests_per_step, len(eval_users))
+            request_users = random.choice(eval_users, size=sample_size, replace=False).tolist()
+            periods = {user_id: "lunch" for user_id in request_users}
+            rec_result = model.recommend(request_users, top_k, periods)
+
+            for user_id in request_users:
+                recs = rec_result.recommendations.get(user_id, [])
+                true_items = truth.get(user_id, set())
+                hits = [merchant_id for merchant_id in recs if merchant_id in true_items]
+                chosen = hits[0] if hits else (recs[0] if recs else None)
+                if chosen is None or chosen not in merchants_df.index or user_id not in users_df.index:
+                    continue
+
+                available = riders[riders["available_at"] <= current_time].copy()
+                if available.empty:
+                    available = riders.copy()
+                rider_id, eta = assign_order(
+                    users_df.loc[user_id],
+                    merchants_df.loc[chosen],
+                    available,
+                    rider_policy,
+                    "lunch",
+                    current_time,
+                )
+                if rider_id is None:
+                    continue
+                update_rider_after_assignment(riders, rider_id, eta, current_time)
+                completed += 1
+                etas.append(float(eta))
+                timeout += int(float(eta) > 45.0)
+
+            assigned = riders[pd.to_numeric(riders["assigned"], errors="coerce").fillna(0) > 0]
+            rows.append(
+                {
+                    "policy": policy_name,
+                    "step": step + 1,
+                    "minute": current_time,
+                    "completed_orders": completed,
+                    "avg_eta": float(np.mean(etas)) if etas else 0.0,
+                    "timeout_rate": float(timeout / completed) if completed else 0.0,
+                    "active_riders": int(len(assigned)),
+                    "rider_load_std": float(assigned["assigned"].std(ddof=0)) if len(assigned) else 0.0,
+                }
+            )
+
     return pd.DataFrame(rows)

@@ -11,6 +11,7 @@ import streamlit as st
 from foodflow.data import PreparedData
 from foodflow.demo_support import (
     build_recommendation_frame,
+    build_peak_trace,
     build_rider_policy_frame,
     clamp01,
     demo_user_cases,
@@ -160,7 +161,7 @@ merchants = data.merchants.set_index("wm_poi_id", drop=False)
 user_row = users_df.loc[user_id]
 riders = generate_riders(data.merchants, n_riders=60, seed=7)
 
-tab_case, tab_metrics, tab_figures = st.tabs(["推荐工作台", "指标故事线", "图表材料"])
+tab_case, tab_peak, tab_metrics, tab_figures = st.tabs(["推荐工作台", "高峰仿真回放", "指标故事线", "图表材料"])
 
 with tab_case:
     profile_col, category_col = st.columns([1.05, 1.25])
@@ -412,6 +413,81 @@ with tab_case:
         }
     )
     st.dataframe(display_df, use_container_width=True, hide_index=True)
+
+with tab_peak:
+    st.subheader("午餐高峰仿真回放")
+    trace_df = build_peak_trace(
+        data,
+        {
+            "UserOnly + MinETA": (models["UserOnly"], "min_eta"),
+            "Ours-Balanced": (models["Ours-Balanced"], "load_aware"),
+            "Ours-Full": (models["Ours-Full"], "load_aware"),
+        },
+        seed=33,
+        steps=6,
+        requests_per_step=8,
+        top_k=top_k,
+    )
+    if trace_df.empty:
+        st.warning("当前数据没有可用于仿真的测试用户。")
+    else:
+        final_trace = trace_df.sort_values("step").groupby("policy", as_index=False).tail(1)
+        p1, p2, p3, p4 = st.columns(4)
+        best_eta_trace = final_trace.sort_values("avg_eta").iloc[0]
+        best_timeout_trace = final_trace.sort_values("timeout_rate").iloc[0]
+        p1.metric("回放订单数", int(final_trace["completed_orders"].max()))
+        p2.metric("最低累计 Avg ETA", f"{best_eta_trace['avg_eta']:.1f}", str(best_eta_trace["policy"]))
+        p3.metric("最低累计超时率", f"{best_timeout_trace['timeout_rate']:.3f}", str(best_timeout_trace["policy"]))
+        p4.metric("仿真步数", int(trace_df["step"].max()))
+
+        t1, t2 = st.columns(2)
+        with t1:
+            order_fig = px.line(
+                trace_df,
+                x="step",
+                y="completed_orders",
+                color="policy",
+                markers=True,
+                title="累计完成订单",
+            )
+            order_fig.update_layout(height=330, margin=dict(l=8, r=8, t=48, b=8), xaxis_title="时间步")
+            st.plotly_chart(order_fig, use_container_width=True)
+
+            eta_line = px.line(
+                trace_df,
+                x="step",
+                y="avg_eta",
+                color="policy",
+                markers=True,
+                title="累计平均 ETA",
+            )
+            eta_line.update_layout(height=330, margin=dict(l=8, r=8, t=48, b=8), xaxis_title="时间步", yaxis_title="分钟")
+            st.plotly_chart(eta_line, use_container_width=True)
+
+        with t2:
+            timeout_line = px.line(
+                trace_df,
+                x="step",
+                y="timeout_rate",
+                color="policy",
+                markers=True,
+                title="累计超时率",
+            )
+            timeout_line.update_layout(height=330, margin=dict(l=8, r=8, t=48, b=8), xaxis_title="时间步")
+            st.plotly_chart(timeout_line, use_container_width=True)
+
+            rider_line = px.line(
+                trace_df,
+                x="step",
+                y="rider_load_std",
+                color="policy",
+                markers=True,
+                title="骑手接单负载波动",
+            )
+            rider_line.update_layout(height=330, margin=dict(l=8, r=8, t=48, b=8), xaxis_title="时间步")
+            st.plotly_chart(rider_line, use_container_width=True)
+
+        st.dataframe(trace_df, use_container_width=True, hide_index=True)
 
 offline_path = Path("outputs/results/offline_metrics.csv")
 sim_path = Path("outputs/results/simulation_metrics.csv")
