@@ -9,40 +9,96 @@ import seaborn as sns
 from .io import ensure_dir
 
 
-def _save_bar(df: pd.DataFrame, x: str, y: str, title: str, path: Path, rotate: bool = True) -> None:
-    plt.figure(figsize=(10, 5.6))
-    sns.barplot(data=df, x=x, y=y, color="#3B82F6")
-    plt.title(title)
-    plt.xlabel("")
-    plt.ylabel(y)
-    if rotate:
-        plt.xticks(rotation=30, ha="right")
-    plt.tight_layout()
-    plt.savefig(path, dpi=180)
-    plt.close()
+HIGHLIGHT = {
+    "Seq-Hybrid": "#2563EB",
+    "Seq-Tripartite": "#0F766E",
+    "Ours-Full": "#B5121B",
+    "Ours-Balanced": "#7C3AED",
+}
+DEFAULT_COLOR = "#CBD5E1"
+TEXT_COLOR = "#0F172A"
+GRID_COLOR = "#E2E8F0"
+
+
+def _color_for(label: str) -> str:
+    for key, color in HIGHLIGHT.items():
+        if key in str(label):
+            return color
+    return DEFAULT_COLOR
+
+
+def _save_bar(
+    df: pd.DataFrame,
+    x: str,
+    y: str,
+    title: str,
+    path: Path,
+    higher_better: bool = True,
+) -> None:
+    plot_df = df[[x, y]].copy()
+    plot_df[y] = pd.to_numeric(plot_df[y], errors="coerce").fillna(0.0)
+    plot_df = plot_df.sort_values(y, ascending=higher_better)
+    colors = [_color_for(label) for label in plot_df[x]]
+
+    fig_height = max(4.8, 0.48 * len(plot_df) + 1.6)
+    fig, ax = plt.subplots(figsize=(10.5, fig_height))
+    bars = ax.barh(plot_df[x].astype(str), plot_df[y], color=colors, edgecolor="white", linewidth=0.8)
+    ax.set_title(title, fontsize=14, fontweight="bold", color=TEXT_COLOR, loc="left", pad=12)
+    ax.set_xlabel(y, color="#475569")
+    ax.set_ylabel("")
+    ax.grid(axis="x", color=GRID_COLOR, linewidth=0.8)
+    ax.grid(axis="y", visible=False)
+    ax.spines[["top", "right", "left"]].set_visible(False)
+    ax.spines["bottom"].set_color(GRID_COLOR)
+    ax.tick_params(axis="both", colors="#334155", labelsize=9)
+
+    xmax = max(float(plot_df[y].max()), 1e-9)
+    ax.set_xlim(0, xmax * 1.14)
+    for bar, value in zip(bars, plot_df[y]):
+        ax.text(
+            bar.get_width() + xmax * 0.012,
+            bar.get_y() + bar.get_height() / 2,
+            f"{value:.4f}" if value < 10 else f"{value:.2f}",
+            va="center",
+            ha="left",
+            fontsize=8.5,
+            color="#334155",
+        )
+    fig.tight_layout()
+    fig.savefig(path, dpi=190, facecolor="white")
+    plt.close(fig)
 
 
 def _save_tripartite_summary(offline: pd.DataFrame, sim: pd.DataFrame, path: Path) -> None:
-    fig, axes = plt.subplots(1, 3, figsize=(16, 4.8))
-    sns.barplot(data=offline, x="model", y="Recall@20", ax=axes[0], color="#2563EB")
-    axes[0].set_title("User: Recall@20")
-    axes[0].set_xlabel("")
-    axes[0].tick_params(axis="x", rotation=35)
+    fig, axes = plt.subplots(1, 3, figsize=(17, 5.2))
+    panels = [
+        (offline, "model", "Recall@20", "User side: Recall@20", True),
+        (offline, "model", "Coverage@20", "Merchant side: Coverage@20", True),
+        (sim, "policy", "platform_utility", "Platform side: Utility", True),
+    ]
+    for ax, (df, label_col, metric_col, title, higher_better) in zip(axes, panels):
+        if metric_col not in df.columns:
+            ax.axis("off")
+            continue
+        plot_df = df[[label_col, metric_col]].copy()
+        plot_df[metric_col] = pd.to_numeric(plot_df[metric_col], errors="coerce").fillna(0.0)
+        plot_df = plot_df.sort_values(metric_col, ascending=False).head(5).sort_values(metric_col)
+        colors = [_color_for(label) for label in plot_df[label_col]]
+        ax.barh(plot_df[label_col].astype(str), plot_df[metric_col], color=colors, edgecolor="white")
+        ax.set_title(title, fontsize=12, fontweight="bold", loc="left", color=TEXT_COLOR)
+        ax.set_xlabel("")
+        ax.set_ylabel("")
+        ax.grid(axis="x", color=GRID_COLOR)
+        ax.spines[["top", "right", "left"]].set_visible(False)
+        ax.spines["bottom"].set_color(GRID_COLOR)
+        xmax = max(float(plot_df[metric_col].max()), 1e-9)
+        ax.set_xlim(0, xmax * 1.18)
+        for y_pos, value in enumerate(plot_df[metric_col]):
+            ax.text(value + xmax * 0.02, y_pos, f"{value:.4f}", va="center", fontsize=8.5, color="#334155")
 
-    if "Coverage@20" in offline.columns:
-        sns.barplot(data=offline, x="model", y="Coverage@20", ax=axes[1], color="#059669")
-        axes[1].set_title("Merchant: Coverage@20")
-        axes[1].set_xlabel("")
-        axes[1].tick_params(axis="x", rotation=35)
-
-    sns.barplot(data=sim, x="policy", y="platform_utility", ax=axes[2], color="#B5121B")
-    axes[2].set_title("Platform: Utility")
-    axes[2].set_xlabel("")
-    axes[2].tick_params(axis="x", rotation=35)
-
-    fig.suptitle("FoodFlow tripartite scorecard", fontsize=15, fontweight="bold")
+    fig.suptitle("FoodFlow tripartite scorecard", fontsize=16, fontweight="bold", color=TEXT_COLOR)
     fig.tight_layout()
-    fig.savefig(path, dpi=180)
+    fig.savefig(path, dpi=190, facecolor="white")
     plt.close(fig)
 
 
@@ -52,6 +108,16 @@ def generate_figures(results_dir: Path, figures_dir: Path) -> list[Path]:
     offline_path = results_dir / "offline_metrics.csv"
     sim_path = results_dir / "simulation_metrics.csv"
     sns.set_theme(style="whitegrid", font="DejaVu Sans")
+    plt.rcParams.update(
+        {
+            "axes.facecolor": "#F8FAFC",
+            "figure.facecolor": "white",
+            "axes.edgecolor": GRID_COLOR,
+            "axes.labelcolor": "#475569",
+            "xtick.color": "#334155",
+            "ytick.color": "#334155",
+        }
+    )
 
     if offline_path.exists():
         offline = pd.read_csv(offline_path)
@@ -63,27 +129,47 @@ def generate_figures(results_dir: Path, figures_dir: Path) -> list[Path]:
         ]:
             if metric in offline.columns:
                 out = figures_dir / filename
-                _save_bar(offline, "model", metric, title, out)
+                _save_bar(offline, "model", metric, title, out, higher_better=metric != "ExposureGini")
                 made.append(out)
 
         if {"NDCG@20", "ExposureGini"}.issubset(offline.columns):
-            plt.figure(figsize=(7.5, 5.2))
-            sns.scatterplot(data=offline, x="NDCG@20", y="ExposureGini", hue="model", s=90)
-            plt.title("Accuracy-Fairness trade-off")
-            plt.tight_layout()
+            fig, ax = plt.subplots(figsize=(8.2, 5.6))
+            sns.scatterplot(
+                data=offline,
+                x="NDCG@20",
+                y="ExposureGini",
+                hue="model",
+                palette={label: _color_for(label) for label in offline["model"].astype(str)},
+                s=110,
+                ax=ax,
+            )
+            ax.set_title("Accuracy-Fairness trade-off", fontsize=14, fontweight="bold", loc="left")
+            ax.grid(color=GRID_COLOR)
+            ax.legend(frameon=False, bbox_to_anchor=(1.02, 1), loc="upper left")
+            fig.tight_layout()
             out = figures_dir / "tradeoff_ndcg_gini.png"
-            plt.savefig(out, dpi=180)
-            plt.close()
+            fig.savefig(out, dpi=190, facecolor="white")
+            plt.close(fig)
             made.append(out)
 
         if {"Recall@20", "Coverage@20"}.issubset(offline.columns):
-            plt.figure(figsize=(7.5, 5.2))
-            sns.scatterplot(data=offline, x="Recall@20", y="Coverage@20", hue="model", s=90)
-            plt.title("Accuracy-Coverage trade-off")
-            plt.tight_layout()
+            fig, ax = plt.subplots(figsize=(8.2, 5.6))
+            sns.scatterplot(
+                data=offline,
+                x="Recall@20",
+                y="Coverage@20",
+                hue="model",
+                palette={label: _color_for(label) for label in offline["model"].astype(str)},
+                s=110,
+                ax=ax,
+            )
+            ax.set_title("Accuracy-Coverage trade-off", fontsize=14, fontweight="bold", loc="left")
+            ax.grid(color=GRID_COLOR)
+            ax.legend(frameon=False, bbox_to_anchor=(1.02, 1), loc="upper left")
+            fig.tight_layout()
             out = figures_dir / "tradeoff_recall_coverage.png"
-            plt.savefig(out, dpi=180)
-            plt.close()
+            fig.savefig(out, dpi=190, facecolor="white")
+            plt.close(fig)
             made.append(out)
 
     if sim_path.exists():
@@ -97,10 +183,17 @@ def generate_figures(results_dir: Path, figures_dir: Path) -> list[Path]:
         ]:
             if metric in sim.columns:
                 out = figures_dir / filename
-                _save_bar(sim, "policy", metric, title, out)
+                _save_bar(
+                    sim,
+                    "policy",
+                    metric,
+                    title,
+                    out,
+                    higher_better=metric in {"platform_utility"},
+                )
                 made.append(out)
         if {"avg_eta", "platform_utility", "completed_orders"}.issubset(sim.columns):
-            plt.figure(figsize=(8.2, 5.2))
+            fig, ax = plt.subplots(figsize=(8.8, 5.6))
             sns.scatterplot(
                 data=sim,
                 x="avg_eta",
@@ -108,12 +201,16 @@ def generate_figures(results_dir: Path, figures_dir: Path) -> list[Path]:
                 hue="policy",
                 size="completed_orders",
                 sizes=(70, 240),
+                palette={label: _color_for(label) for label in sim["policy"].astype(str)},
+                ax=ax,
             )
-            plt.title("ETA-Utility trade-off")
-            plt.tight_layout()
+            ax.set_title("ETA-Utility trade-off", fontsize=14, fontweight="bold", loc="left")
+            ax.grid(color=GRID_COLOR)
+            ax.legend(frameon=False, bbox_to_anchor=(1.02, 1), loc="upper left")
+            fig.tight_layout()
             out = figures_dir / "tradeoff_eta_utility.png"
-            plt.savefig(out, dpi=180)
-            plt.close()
+            fig.savefig(out, dpi=190, facecolor="white")
+            plt.close(fig)
             made.append(out)
 
     if offline_path.exists() and sim_path.exists():
