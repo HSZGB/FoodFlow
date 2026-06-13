@@ -309,32 +309,88 @@ class SequentialHybridRecommender(UserOnlyRecommender):
         candidates.extend(self.popular_list)
         return [m for m in dict.fromkeys(candidates) if m in self.merchants.index]
 
-    def recommend_for_user(self, user_id: str, k: int, period: str = "lunch") -> tuple[list[str], dict[str, float]]:
+    def user_score(self, user_id: str, merchant_id: str, period: str = "lunch") -> float:
         seq = self.recent_by_user.get(user_id, [])
         counts = self.user_item_counts.get(user_id, Counter())
+        merchant = self.merchants.loc[merchant_id]
+        category = merchant.get("primary_first_tag_id", "unknown")
+        category_pref = float(self.user_cat_counts.get(user_id, {}).get(category, 0.0))
+        repeat = np.log1p(counts.get(merchant_id, 0)) / np.log(5)
+        recency_fast, recency_slow = self._recency_scores(seq, merchant_id)
+        transition = self._transition_score(seq, merchant_id)
+        popularity = float(self.pop_log.get(merchant_id, 0.0))
+        quality = float(self.quality.get(merchant_id, 0.5))
+        return float(
+            0.25 * recency_fast
+            + 0.12 * recency_slow
+            + 0.30 * repeat
+            + 0.23 * transition
+            + 0.05 * category_pref
+            + 0.03 * popularity
+            + 0.02 * quality
+        )
+
+    def recommend_for_user(self, user_id: str, k: int, period: str = "lunch") -> tuple[list[str], dict[str, float]]:
         candidates = self._sequential_candidates(user_id)
         scores: dict[str, float] = {}
         for merchant_id in candidates:
-            merchant = self.merchants.loc[merchant_id]
-            category = merchant.get("primary_first_tag_id", "unknown")
-            category_pref = float(self.user_cat_counts.get(user_id, {}).get(category, 0.0))
-            repeat = np.log1p(counts.get(merchant_id, 0)) / np.log(5)
-            recency_fast, recency_slow = self._recency_scores(seq, merchant_id)
-            transition = self._transition_score(seq, merchant_id)
-            popularity = float(self.pop_log.get(merchant_id, 0.0))
-            quality = float(self.quality.get(merchant_id, 0.5))
-            scores[merchant_id] = float(
-                0.25 * recency_fast
-                + 0.12 * recency_slow
-                + 0.30 * repeat
-                + 0.23 * transition
-                + 0.05 * category_pref
-                + 0.03 * popularity
-                + 0.02 * quality
-            )
+            scores[merchant_id] = self.user_score(user_id, merchant_id, period)
         ranked = sorted(scores, key=scores.get, reverse=True)
         recs = self._remove_seen_and_backfill(user_id, ranked, k)
         return recs, {m: scores.get(m, float(self.popular.get(m, 0))) for m in recs}
+
+
+class SeqTripartiteRecommender(SequentialHybridRecommender):
+    name = "Seq-Tripartite"
+
+    def __init__(
+        self,
+        user_weight: float = 0.95,
+        fairness_weight: float = 0.02,
+        eta_weight: float = 0.02,
+        supply_weight: float = 0.01,
+    ):
+        self.user_weight = user_weight
+        self.fairness_weight = fairness_weight
+        self.eta_weight = eta_weight
+        self.supply_weight = supply_weight
+
+    def fit(self, data: PreparedData) -> "SeqTripartiteRecommender":
+        super().fit(data)
+        self.fair = fairness_scores(data.merchants)
+        self.data = data
+        return self
+
+    def component_scores(self, user_id: str, merchant_id: str, period: str = "lunch") -> dict[str, float]:
+        user_row = self.users.loc[user_id] if user_id in self.users.index else pd.Series(dtype=object)
+        merchant = self.merchants.loc[merchant_id]
+        user_score = self.user_score(user_id, merchant_id, period)
+        eta = estimate_user_merchant_eta(user_row, merchant, period)
+        eta_score = 1.0 - min(eta / 70.0, 1.0)
+        supply = supply_score_for_merchant(merchant)
+        fair = float(self.fair.get(merchant_id, 0.0))
+        final = float(
+            self.user_weight * user_score
+            + self.fairness_weight * fair
+            + self.eta_weight * eta_score
+            + self.supply_weight * supply
+        )
+        return {
+            "user_score": float(user_score),
+            "merchant_fairness": fair,
+            "eta_minutes": float(eta),
+            "eta_score": float(eta_score),
+            "supply_score": float(supply),
+            "final_score": final,
+        }
+
+    def recommend_for_user(self, user_id: str, k: int, period: str = "lunch") -> tuple[list[str], dict[str, float]]:
+        scores = {}
+        for merchant_id in self._sequential_candidates(user_id):
+            scores[merchant_id] = self.component_scores(user_id, merchant_id, period)["final_score"]
+        ranked = sorted(scores, key=scores.get, reverse=True)
+        recs = self._remove_seen_and_backfill(user_id, ranked, k)
+        return recs, {m: scores[m] for m in recs}
 
 
 class TripartiteRerankRecommender(UserOnlyRecommender):
@@ -423,6 +479,7 @@ def build_recommenders(seed: int = 42) -> list[BaseRecommender]:
         BPRMFRecommender(seed=seed),
         UserOnlyRecommender(),
         SequentialHybridRecommender(),
+        SeqTripartiteRecommender(),
         OursBalancedRecommender(),
         OursFullRecommender(),
     ]

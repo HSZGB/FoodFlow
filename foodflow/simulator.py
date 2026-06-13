@@ -12,6 +12,7 @@ from .metrics import gini
 from .recommenders import (
     OursBalancedRecommender,
     OursFullRecommender,
+    SeqTripartiteRecommender,
     PopularRecommender,
     SequentialHybridRecommender,
     UserOnlyRecommender,
@@ -33,6 +34,7 @@ DEFAULT_POLICIES = [
     SimulationPolicy("UserOnly + MinETA", "useronly", "min_eta"),
     SimulationPolicy("Seq-Hybrid + MinETA", "seq_hybrid", "min_eta"),
     SimulationPolicy("Seq-Hybrid + LoadAware", "seq_hybrid", "load_aware"),
+    SimulationPolicy("Seq-Tripartite", "seq_tripartite", "load_aware", fairness=True),
     SimulationPolicy("Ours-Balanced", "ours_balanced", "load_aware", fairness=True),
     SimulationPolicy("Ours w/o Fairness", "useronly", "load_aware"),
     SimulationPolicy("Ours-Full", "ours", "load_aware", fairness=True),
@@ -46,6 +48,8 @@ def _select_recommender(data: PreparedData, name: str, seed: int):
         return UserOnlyRecommender().fit(data)
     if name == "seq_hybrid":
         return SequentialHybridRecommender().fit(data)
+    if name == "seq_tripartite":
+        return SeqTripartiteRecommender().fit(data)
     if name == "ours":
         return OursFullRecommender().fit(data)
     if name == "ours_balanced":

@@ -49,11 +49,12 @@ score =
 | UserOnly | 0.4287 | 0.3423 | 0.5733 |
 | Seq-Hybrid | 0.4441 | 0.3513 | 0.5933 |
 
-仿真结果中，`Ours-Full` 仍取得最高平台效用。答辩故事因此更自然：`Seq-Hybrid` 证明推荐准确性可以继续提升；`Ours-Full` 证明外卖平台不能只看准确性，还要看 ETA、超时率、商家曝光和骑手负载。
+本轮继续实现了 `Seq-Tripartite`：在 `Seq-Hybrid` 的序列偏好底座上轻量加入公平、ETA 和供给约束。它的 NDCG@20 和 HitRate@20 高于 UserOnly，仿真平台效用也高于 `Seq-Hybrid + MinETA`，说明序列准确性可以和三方约束结合。
+
+仿真结果中，`Ours-Full` 仍取得最高平台效用。答辩故事因此更自然：`Seq-Hybrid` 证明推荐准确性可以继续提升；`Seq-Tripartite` 证明高准确序列模型可以接入三方约束；`Ours-Full` 证明外卖平台不能只看准确性，还要看 ETA、超时率、商家曝光和骑手负载。
 
 ## 下一步可继续尝试
 
-1. 把 `Seq-Hybrid` 作为 `Ours-Full` 的用户偏好底座，形成 `Seq-Tripartite`。
-2. 引入 DPP/xQuAD 的列表级重排，让商家覆盖和品类多样性更直观。
-3. 对三方权重做网格搜索或贝叶斯优化，输出 Pareto frontier，而不是只给单点权重。
-4. 用真实地图底图或 hexbin 密度图替换普通散点，让 demo 的空间分布更像业务看板。
+1. 引入 DPP/xQuAD 的列表级重排，让商家覆盖和品类多样性更直观。
+2. 对三方权重做网格搜索或贝叶斯优化，输出 Pareto frontier，而不是只给单点权重。
+3. 用真实地图底图或 hexbin 密度图替换普通散点，让 demo 的空间分布更像业务看板。
