@@ -6,7 +6,7 @@
 
 ## 项目亮点
 
-- 用户侧推荐：实现 Random、Popular、Repeat、ItemCF、BPR-MF、UserOnly、Ours-Full 等策略。
+- 用户侧推荐：实现 Random、Popular、Repeat、ItemCF、BPR-MF、UserOnly、Seq-Hybrid、Ours-Full 等策略。
 - 商家侧公平：在重排中引入商家曝光公平、长尾曝光与 Exposure Gini 等指标。
 - 骑手侧履约：模拟订单-骑手匹配，比较最近骑手、最小 ETA、负载感知三类策略。
 - 动态仿真：模拟午餐高峰多时间步请求，持续更新骑手状态和订单履约结果。
@@ -39,6 +39,8 @@ TRD 数据下载与清洗
   -> 午餐高峰动态履约仿真
   -> 指标、图表、报告与 demo
 ```
+
+本轮新增 `Seq-Hybrid`，借鉴 FPMC/下一篮子推荐和会话推荐思想，把外卖复购、最近订单时间衰减和商家转移概率加入排序，用于提升离线推荐准确性。
 
 Ours-Full 推荐分数采用可解释加权重排：
 
@@ -200,18 +202,19 @@ python3 scripts/prepare_notebooklm_pack.py
 
 当前提交的结果已经使用完整 TRD `orders_train.txt`，数据审计显示原始训练订单 `1,068,495` 条，处理后训练订单 `1,068,495` 条，训练订单使用比例 `1.0000`。
 
-离线推荐中，`UserOnly` 的 Recall@20 最高，为 `0.4287`；`Ours-Balanced` 的 Recall@20 为 `0.4097`，`Ours-Full` 的 Recall@20 为 `0.4055`，与 UserOnly 差距较小，同时保留了履约与供给约束。
+离线推荐中，`Seq-Hybrid` 的 Recall@20 最高，为 `0.4441`，NDCG@20 为 `0.3513`，HitRate@20 为 `0.5933`；相比原先最强的 `UserOnly`，Recall@20 从 `0.4287` 提升到 `0.4441`。`Ours-Full` 的 Recall@20 为 `0.4055`，离线准确率不是最高，但保留了履约与供给约束。
 
 动态履约仿真中，`Ours-Full` 取得最低平均 ETA、最低超时率和最高平台综合效用：
 
 | 策略 | Avg ETA | Timeout Rate | Platform Utility |
 |---|---:|---:|---:|
-| UserOnly + Nearest | 95.41 | 0.8182 | 0.4255 |
-| UserOnly + MinETA | 53.86 | 0.6517 | 0.4779 |
-| Ours-Balanced | 59.00 | 0.7941 | 0.4597 |
-| Ours-Full | 46.78 | 0.4725 | 0.5394 |
+| UserOnly + Nearest | 86.54 | 0.8721 | 0.3998 |
+| UserOnly + MinETA | 55.33 | 0.6701 | 0.4831 |
+| Seq-Hybrid + MinETA | 52.49 | 0.6667 | 0.4851 |
+| Ours-Balanced | 50.98 | 0.6344 | 0.4875 |
+| Ours-Full | 50.85 | 0.5714 | 0.5246 |
 
-结论不是“单一模型在所有指标上最优”，而是：Ours-Full 牺牲一部分离线准确性，换取更低 ETA、更低超时率和更高平台综合效用，更符合外卖平台的多主体优化目标。
+结论不是“单一模型在所有指标上最优”，而是：`Seq-Hybrid` 通过序列复购建模取得最强离线推荐准确性；`Ours-Full` 牺牲一部分离线准确性，换取更低超时率和更高平台综合效用，更符合外卖平台的多主体优化目标。
 
 ## 图表示例
 

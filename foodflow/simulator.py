@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 from collections import Counter
 from dataclasses import dataclass
 
@@ -8,7 +9,13 @@ import pandas as pd
 
 from .data import PreparedData
 from .metrics import gini
-from .recommenders import OursBalancedRecommender, OursFullRecommender, PopularRecommender, UserOnlyRecommender
+from .recommenders import (
+    OursBalancedRecommender,
+    OursFullRecommender,
+    PopularRecommender,
+    SequentialHybridRecommender,
+    UserOnlyRecommender,
+)
 from .rider_sim import assign_order, generate_riders, update_rider_after_assignment
 
 
@@ -24,6 +31,8 @@ DEFAULT_POLICIES = [
     SimulationPolicy("Popular + Nearest", "popular", "nearest"),
     SimulationPolicy("UserOnly + Nearest", "useronly", "nearest"),
     SimulationPolicy("UserOnly + MinETA", "useronly", "min_eta"),
+    SimulationPolicy("Seq-Hybrid + MinETA", "seq_hybrid", "min_eta"),
+    SimulationPolicy("Seq-Hybrid + LoadAware", "seq_hybrid", "load_aware"),
     SimulationPolicy("Ours-Balanced", "ours_balanced", "load_aware", fairness=True),
     SimulationPolicy("Ours w/o Fairness", "useronly", "load_aware"),
     SimulationPolicy("Ours-Full", "ours", "load_aware", fairness=True),
@@ -35,11 +44,18 @@ def _select_recommender(data: PreparedData, name: str, seed: int):
         return PopularRecommender().fit(data)
     if name == "useronly":
         return UserOnlyRecommender().fit(data)
+    if name == "seq_hybrid":
+        return SequentialHybridRecommender().fit(data)
     if name == "ours":
         return OursFullRecommender().fit(data)
     if name == "ours_balanced":
         return OursBalancedRecommender().fit(data)
     raise ValueError(name)
+
+
+def _stable_policy_seed(seed: int, policy_name: str) -> int:
+    digest = hashlib.md5(f"{seed}:{policy_name}".encode("utf-8")).hexdigest()
+    return int(digest[:8], 16)
 
 
 def _choice_model(recs: list[str], truth: set[str], rng: np.random.Generator) -> str | None:
@@ -75,7 +91,6 @@ def run_simulation(
     steps: int = 8,
     top_k: int = 10,
 ) -> pd.DataFrame:
-    rng = np.random.default_rng(seed)
     policies = policies or DEFAULT_POLICIES
     truth = data.truth_by_user()
     eval_users = list(truth.keys())
@@ -86,8 +101,10 @@ def run_simulation(
     results = []
 
     for policy in policies:
+        policy_seed = _stable_policy_seed(seed, policy.name)
+        rng = np.random.default_rng(policy_seed)
         recommender = _select_recommender(data, policy.recommender, seed)
-        riders = generate_riders(data.merchants, n_riders=120, seed=seed + len(policy.name))
+        riders = generate_riders(data.merchants, n_riders=120, seed=policy_seed)
         exposure = Counter()
         completed = 0
         total_orders = 0

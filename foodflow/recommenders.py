@@ -247,6 +247,96 @@ class UserOnlyRecommender(BaseRecommender):
         return recs, {m: scores[m] for m in recs}
 
 
+class SequentialHybridRecommender(UserOnlyRecommender):
+    name = "Seq-Hybrid"
+
+    def fit(self, data: PreparedData) -> "SequentialHybridRecommender":
+        super().fit(data)
+        train = data.orders_train.copy()
+        train["user_id"] = train["user_id"].astype(str)
+        train["wm_poi_id"] = train["wm_poi_id"].astype(str)
+        if "order_timestamp" in train.columns:
+            train["order_timestamp"] = pd.to_numeric(train["order_timestamp"], errors="coerce").fillna(0)
+            train = train.sort_values(["user_id", "order_timestamp"])
+        else:
+            train = train.sort_values(["user_id"])
+
+        self.user_item_counts = {
+            str(user_id): Counter(group["wm_poi_id"].astype(str))
+            for user_id, group in train.groupby("user_id", sort=False)
+        }
+        self.recent_by_user: dict[str, list[str]] = {}
+        transition_counts: dict[str, Counter[str]] = defaultdict(Counter)
+        for user_id, group in train.groupby("user_id", sort=False):
+            seq = [item for item in group["wm_poi_id"].astype(str).tolist() if item in self.active_set]
+            if not seq:
+                continue
+            self.recent_by_user[str(user_id)] = seq
+            for prev, nxt in zip(seq, seq[1:]):
+                if prev != nxt:
+                    transition_counts[prev][nxt] += 1
+
+        self.transitions: dict[str, dict[str, float]] = {}
+        for item, counts in transition_counts.items():
+            total = float(sum(counts.values()))
+            if total <= 0:
+                continue
+            self.transitions[item] = {
+                other: count / total for other, count in counts.most_common(120)
+            }
+        max_pop = float(np.log1p(max(float(self.popular.max()), 1.0)))
+        self.pop_log = {m: float(np.log1p(self.popular.get(m, 0)) / max_pop) for m in self.active_ids}
+        return self
+
+    def _recency_scores(self, seq: list[str], merchant_id: str) -> tuple[float, float]:
+        for age, item in enumerate(reversed(seq)):
+            if item == merchant_id:
+                return float(np.exp(-age / 6.0)), float(np.exp(-age / 12.0))
+        return 0.0, 0.0
+
+    def _transition_score(self, seq: list[str], merchant_id: str) -> float:
+        score = 0.0
+        for offset, item in enumerate(reversed(seq[-5:]), start=1):
+            score = max(score, (0.85 ** offset) * self.transitions.get(item, {}).get(merchant_id, 0.0))
+        return float(score)
+
+    def _sequential_candidates(self, user_id: str) -> list[str]:
+        seq = self.recent_by_user.get(user_id, [])
+        candidates: list[str] = []
+        candidates.extend(list(dict.fromkeys(reversed(seq[-40:]))))
+        for item in reversed(seq[-8:]):
+            candidates.extend(list(self.transitions.get(item, {}).keys())[:80])
+        candidates.extend(self.popular_list)
+        return [m for m in dict.fromkeys(candidates) if m in self.merchants.index]
+
+    def recommend_for_user(self, user_id: str, k: int, period: str = "lunch") -> tuple[list[str], dict[str, float]]:
+        seq = self.recent_by_user.get(user_id, [])
+        counts = self.user_item_counts.get(user_id, Counter())
+        candidates = self._sequential_candidates(user_id)
+        scores: dict[str, float] = {}
+        for merchant_id in candidates:
+            merchant = self.merchants.loc[merchant_id]
+            category = merchant.get("primary_first_tag_id", "unknown")
+            category_pref = float(self.user_cat_counts.get(user_id, {}).get(category, 0.0))
+            repeat = np.log1p(counts.get(merchant_id, 0)) / np.log(5)
+            recency_fast, recency_slow = self._recency_scores(seq, merchant_id)
+            transition = self._transition_score(seq, merchant_id)
+            popularity = float(self.pop_log.get(merchant_id, 0.0))
+            quality = float(self.quality.get(merchant_id, 0.5))
+            scores[merchant_id] = float(
+                0.25 * recency_fast
+                + 0.12 * recency_slow
+                + 0.30 * repeat
+                + 0.23 * transition
+                + 0.05 * category_pref
+                + 0.03 * popularity
+                + 0.02 * quality
+            )
+        ranked = sorted(scores, key=scores.get, reverse=True)
+        recs = self._remove_seen_and_backfill(user_id, ranked, k)
+        return recs, {m: scores.get(m, float(self.popular.get(m, 0))) for m in recs}
+
+
 class TripartiteRerankRecommender(UserOnlyRecommender):
     name = "Tripartite-Rerank"
 
@@ -332,6 +422,7 @@ def build_recommenders(seed: int = 42) -> list[BaseRecommender]:
         ItemCFRecommender(),
         BPRMFRecommender(seed=seed),
         UserOnlyRecommender(),
+        SequentialHybridRecommender(),
         OursBalancedRecommender(),
         OursFullRecommender(),
     ]

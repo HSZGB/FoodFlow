@@ -19,7 +19,12 @@ from foodflow.demo_support import (
     streamlit_image_width_kwargs,
     user_category_profile,
 )
-from foodflow.recommenders import OursBalancedRecommender, OursFullRecommender, UserOnlyRecommender
+from foodflow.recommenders import (
+    OursBalancedRecommender,
+    OursFullRecommender,
+    SequentialHybridRecommender,
+    UserOnlyRecommender,
+)
 from foodflow.rider_sim import generate_riders
 
 
@@ -118,6 +123,7 @@ def build_interactive_data(
 def load_model(strategy: str, data_key: str, _data: PreparedData) -> object:
     factories = {
         "UserOnly": UserOnlyRecommender,
+        "Seq-Hybrid": SequentialHybridRecommender,
         "Ours-Balanced": OursBalancedRecommender,
         "Ours-Full": OursFullRecommender,
     }
@@ -181,7 +187,7 @@ with st.sidebar:
     period_label = st.selectbox("时段", ["午餐高峰", "晚餐高峰", "早餐", "夜宵"], index=0)
     period_map = {"午餐高峰": "lunch", "晚餐高峰": "dinner", "早餐": "breakfast", "夜宵": "night"}
     period = period_map[period_label]
-    strategy_name = st.selectbox("推荐策略", ["Ours-Full", "Ours-Balanced", "UserOnly"], index=0)
+    strategy_name = st.selectbox("推荐策略", ["Seq-Hybrid", "Ours-Full", "Ours-Balanced", "UserOnly"], index=0)
     top_k = st.slider("推荐数量", min_value=5, max_value=12, value=10, step=1)
 
 interactive_data = build_interactive_data(user_id, demo_max_orders, tuple(case_options.values()), data)
@@ -253,7 +259,7 @@ with tab_case:
     run_strategy_compare = st.checkbox("计算三策略对比", value=False)
     if run_strategy_compare:
         strategy_rows = []
-        for name in ["UserOnly", "Ours-Balanced", "Ours-Full"]:
+        for name in ["UserOnly", "Seq-Hybrid", "Ours-Balanced", "Ours-Full"]:
             with st.spinner(f"加载 {name} 并生成对比..."):
                 candidate_model = load_model(name, model_data_key, interactive_data)
                 candidate_recs = candidate_model.recommend([user_id], top_k, {user_id: period}).recommendations[user_id]
@@ -470,6 +476,7 @@ with tab_peak:
                 data,
                 {
                     "UserOnly + MinETA": (load_model("UserOnly", model_data_key, interactive_data), "min_eta"),
+                    "Seq-Hybrid + MinETA": (load_model("Seq-Hybrid", model_data_key, interactive_data), "min_eta"),
                     "Ours-Balanced": (load_model("Ours-Balanced", model_data_key, interactive_data), "load_aware"),
                     "Ours-Full": (load_model("Ours-Full", model_data_key, interactive_data), "load_aware"),
                 },
