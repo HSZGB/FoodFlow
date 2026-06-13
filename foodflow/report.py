@@ -102,23 +102,23 @@ def build_report(
 
 ## 3. 方法设计
 
-实现的推荐策略包括 Random、Popular、Repeat、ItemCF、BPR-MF、UserOnly、Seq-Hybrid、Seq-Tripartite 和 Ours-Full。Random 和 Popular 是基础对照；Repeat 反映外卖复购特征；ItemCF 和 BPR-MF 是传统协同过滤基线；UserOnly 使用品类、复购、价格、时段和商家质量；Seq-Hybrid 借鉴 FPMC/下一篮子推荐和会话推荐思想，加入最近订单时间衰减、复购频率和商家转移概率；Seq-Tripartite 在序列偏好底座上轻量加入公平、ETA 和供给约束；Ours-Full 在 UserOnly 上加入商家曝光公平、ETA 和供给分。
+实现的推荐策略包括 Random、Popular、Repeat、ItemCF、BPR-MF、UserOnly、Seq-Hybrid、Seq-xQuAD、Seq-Tripartite 和 Ours-Full。Random 和 Popular 是基础对照；Repeat 反映外卖复购特征；ItemCF 和 BPR-MF 是传统协同过滤基线；UserOnly 使用品类、复购、价格、时段和商家质量；Seq-Hybrid 借鉴 FPMC/下一篮子推荐和会话推荐思想，加入最近订单时间衰减、复购频率和商家转移概率；Seq-xQuAD 在序列相关性基础上做列表级多样性与长尾曝光重排；Seq-Tripartite 在序列偏好底座上轻量加入公平、ETA 和供给约束；Ours-Full 在 UserOnly 上加入商家曝光公平、ETA 和供给分。
 
-为增强“不是只给一个手调模型”的可信度，系统还支持 Ours-Balanced，它提高用户偏好权重，同时保留 ETA 与供给约束，用于观察准确性和履约指标之间的权衡。答辩时可以把 Seq-Hybrid、Seq-Tripartite、Ours-Balanced 和 Ours-Full 作为一条多目标权衡链路：先用序列复购模型把离线准确性拉高，再展示三方重排如何换取更好的履约与平台效用。
+为增强“不是只给一个手调模型”的可信度，系统还支持 Ours-Balanced，它提高用户偏好权重，同时保留 ETA 与供给约束，用于观察准确性和履约指标之间的权衡。答辩时可以把 Seq-Hybrid、Seq-xQuAD、Seq-Tripartite、Ours-Balanced 和 Ours-Full 作为一条多目标权衡链路：先用序列复购模型把离线准确性拉高，再用列表级重排扩大覆盖，最后展示三方重排如何换取更好的履约与平台效用。
 
-三方仿真包括 Popular + Nearest、UserOnly + Nearest、UserOnly + MinETA、Seq-Hybrid + MinETA、Seq-Hybrid + LoadAware、Seq-Tripartite、Ours-Balanced、Ours w/o Fairness 和 Ours-Full。每轮模拟午餐高峰的一批用户请求，推荐列表经过选择模型产生订单，再由最近骑手、最小 ETA 或负载感知策略派单。
+三方仿真包括 Popular + Nearest、UserOnly + Nearest、UserOnly + MinETA、Seq-Hybrid + MinETA、Seq-xQuAD + MinETA、Seq-Hybrid + LoadAware、Seq-Tripartite、Ours-Balanced、Ours w/o Fairness 和 Ours-Full。每轮模拟午餐高峰的一批用户请求，推荐列表经过选择模型产生订单，再由最近骑手、最小 ETA 或负载感知策略派单。
 
 ## 4. 离线推荐结果
 
 {offline_table}
 
-推荐侧指标使用 Recall@K、NDCG@K、MRR@K 和 HitRate@K；商家侧指标使用 Coverage、Long-tail Exposure 和 Exposure Gini。这样既能看推荐是否命中真实下单，也能看曝光是否过度集中。全量 TRD 结果中，Seq-Hybrid 的 Recall@20、NDCG@20 和 HitRate@20 最高，说明外卖推荐确实受最近订单和复购序列影响；Seq-Tripartite 的 NDCG@20 和 HitRate@20 高于 UserOnly，同时保持更低曝光 Gini；Ours-Balanced 和 Ours-Full 离线准确率较低，但引入了履约和供给约束，因此后续需要结合仿真指标判断。
+推荐侧指标使用 Recall@K、NDCG@K、MRR@K 和 HitRate@K；商家侧指标使用 Coverage、Long-tail Exposure 和 Exposure Gini。这样既能看推荐是否命中真实下单，也能看曝光是否过度集中。全量 TRD 结果中，Seq-xQuAD 的 Recall@20、NDCG@20、MRR@20 和 HitRate@20 最高，说明外卖推荐既受最近订单和复购序列影响，也能从列表级多样性重排中获益；Seq-Tripartite 的 NDCG@20 和 HitRate@20 高于 UserOnly，同时保持更低曝光 Gini；Ours-Balanced 和 Ours-Full 离线准确率较低，但引入了履约和供给约束，因此后续需要结合仿真指标判断。
 
 ## 5. 动态履约仿真结果
 
 {simulation_table}
 
-履约侧指标包括完成订单数、平均 ETA、超时率、骑手负载标准差和平台综合效用。Ours-Full 的目标不是所有单项指标都最大，而是在准确性、公平性和履约可行性之间取得更适合外卖平台的折中。全量 TRD 仿真中，Seq-Hybrid 提升了离线推荐准确性；Seq-Tripartite 在序列准确性和履约约束之间取得折中；Ours-Full 则取得最高平台效用和更低超时率，说明推荐策略进入履约链路后不能只看离线命中。
+履约侧指标包括完成订单数、平均 ETA、超时率、骑手负载标准差和平台综合效用。Ours-Full 的目标不是所有单项指标都最大，而是在准确性、公平性和履约可行性之间取得更适合外卖平台的折中。全量 TRD 仿真中，Seq-xQuAD 提升了离线推荐准确性，但进入派单后平台效用不一定最高；Seq-Tripartite 在序列准确性和履约约束之间取得折中；Ours-Full 则取得最高平台效用和更低超时率，说明推荐策略进入履约链路后不能只看离线命中。
 
 ## 6. 图表展示
 
@@ -126,7 +126,7 @@ def build_report(
 
 ## 7. 结论与局限
 
-FoodFlow 的答辩故事可以概括为三步：第一，公开外卖订单数据上的推荐实验证明模型不是随机的；第二，显式加入商家曝光、长尾曝光和 Gini 指标，让推荐不再只围绕用户命中率讨论；第三，履约感知重排和负载感知派单能降低 ETA、超时风险并提升平台效用，从而体现多主体平台的系统级优化。
+FoodFlow 的答辩故事可以概括为三步：第一，公开外卖订单数据上的推荐实验证明模型不是随机的，并用 Seq-xQuAD 把离线排序指标继续推高；第二，显式加入商家曝光、长尾曝光和 Gini 指标，让推荐不再只围绕用户命中率讨论；第三，履约感知重排和负载感知派单能降低 ETA、超时风险并提升平台效用，从而体现多主体平台的系统级优化。
 
 局限是骑手数据来自合成仿真，不能替代工业级派单数据；BPR-MF 是轻量实现，未追求大规模深度模型最优性能；平台效用权重是课程项目中的解释性设置，需要结合业务偏好做敏感性分析。
 """

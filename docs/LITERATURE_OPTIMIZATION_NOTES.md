@@ -14,10 +14,10 @@ FoodFlow 当前最值得增强的方向不是直接堆大模型，而是把外�
 | 时间上下文推荐 | Déjà vu: Contextualized Temporal Attention for Sequential Recommendation, 2020 | 重复消费需要显式建模时间与上下文 | 加入时段、最近订单和时间衰减特征 |
 | 多目标推荐 | Multi-Objective Recommender Systems: Survey and Challenges, 2022 | 准确率、覆盖、公平、履约并非单一目标 | 保留 `Seq-Hybrid` 作为准确性上界，同时用 `Ours-Full` 讲系统级收益 |
 | 曝光公平 | Burke, Multisided Fairness for Recommendation, 2017；Joint Multisided Exposure Fairness, SIGIR 2022 | 推荐平台要同时考虑消费者和供给侧曝光 | `Ours-Full` 和图表继续展示 Coverage、Long-tail Exposure、Exposure Gini |
-| 多样性重排 | YouTube DPP reranking, CIKM 2018；MMR/xQuAD 思路 | 排序后可做多样性、覆盖和供给约束重排 | 后续可把当前公平分升级成 DPP/xQuAD 风格的显式列表级重排 |
+| 多样性重排 | YouTube DPP reranking, CIKM 2018；MMR/xQuAD 思路 | 排序后可做多样性、覆盖和供给约束重排 | 新增 `Seq-xQuAD`，在序列相关性后做品类覆盖和长尾曝光的列表级重排 |
 | 即时配送派单 | Matching Algorithm with Reinforcement Learning and Decoupling Strategy for Order Dispatching in On-Demand Food Delivery, TST 2023 | 推荐产生订单后，派单和 ETA 会反过来影响平台体验 | 当前履约仿真比较最近骑手、最小 ETA、负载感知派单 |
 
-## 本轮实现：Seq-Hybrid
+## 本轮实现：Seq-Hybrid 与 Seq-xQuAD
 
 `Seq-Hybrid` 是一个轻量的序列混合模型：
 
@@ -40,21 +40,33 @@ score =
 - `transition_score`：用户最近商家到候选商家的全局转移概率，借鉴 FPMC/下一篮子思路。
 - `category_preference`、`merchant_popularity`、`merchant_quality`：保留可解释业务特征。
 
+在此基础上继续新增 `Seq-xQuAD`。它不替换序列模型，而是在 `Seq-Hybrid` 候选分上做贪心列表级重排：
+
+```text
+list_score =
+  relevance_weight * normalized_seq_score
++ diversity_weight * uncovered_category_gain
++ tail_weight * long_tail_gain
+```
+
+其中 `uncovered_category_gain` 借鉴 xQuAD/MMR 的覆盖思想，让推荐列表不要被单一品类挤满；`long_tail_gain` 给订单量较低的商家一点曝光补偿。这个版本的定位不是工业级 DPP，而是课程项目中可解释、可运行、指标有提升的列表重排模块。
+
 ## 当前指标收益
 
-完整 TRD 处理结果上，`Seq-Hybrid` 成为离线推荐指标最强策略：
+完整 TRD 处理结果上，`Seq-xQuAD` 成为离线推荐指标最强策略：
 
 | 模型 | Recall@20 | NDCG@20 | HitRate@20 |
 |---|---:|---:|---:|
 | UserOnly | 0.4287 | 0.3423 | 0.5733 |
 | Seq-Hybrid | 0.4441 | 0.3513 | 0.5933 |
+| Seq-xQuAD | 0.4447 | 0.3538 | 0.5967 |
 
 本轮继续实现了 `Seq-Tripartite`：在 `Seq-Hybrid` 的序列偏好底座上轻量加入公平、ETA 和供给约束。它的 NDCG@20 和 HitRate@20 高于 UserOnly，仿真平台效用也高于 `Seq-Hybrid + MinETA`，说明序列准确性可以和三方约束结合。
 
-仿真结果中，`Ours-Full` 仍取得最高平台效用。答辩故事因此更自然：`Seq-Hybrid` 证明推荐准确性可以继续提升；`Seq-Tripartite` 证明高准确序列模型可以接入三方约束；`Ours-Full` 证明外卖平台不能只看准确性，还要看 ETA、超时率、商家曝光和骑手负载。
+仿真结果中，`Ours-Full` 仍取得最高平台效用。答辩故事因此更自然：`Seq-xQuAD` 证明推荐准确性可以继续提升；`Seq-Tripartite` 证明高准确序列模型可以接入三方约束；`Ours-Full` 证明外卖平台不能只看准确性，还要看 ETA、超时率、商家曝光和骑手负载。
 
 ## 下一步可继续尝试
 
-1. 引入 DPP/xQuAD 的列表级重排，让商家覆盖和品类多样性更直观。
-2. 对三方权重做网格搜索或贝叶斯优化，输出 Pareto frontier，而不是只给单点权重。
-3. 用真实地图底图或 hexbin 密度图替换普通散点，让 demo 的空间分布更像业务看板。
+1. 对三方权重做网格搜索或贝叶斯优化，输出 Pareto frontier，而不是只给单点权重。
+2. 用真实地图底图或 hexbin 密度图替换普通散点，让 demo 的空间分布更像业务看板。
+3. 把 `Seq-xQuAD` 的多样性项从品类覆盖升级为距离、商家层级、菜品标签的多维覆盖。

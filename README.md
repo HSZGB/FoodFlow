@@ -6,7 +6,7 @@
 
 ## 项目亮点
 
-- 用户侧推荐：实现 Random、Popular、Repeat、ItemCF、BPR-MF、UserOnly、Seq-Hybrid、Seq-Tripartite、Ours-Full 等策略。
+- 用户侧推荐：实现 Random、Popular、Repeat、ItemCF、BPR-MF、UserOnly、Seq-Hybrid、Seq-xQuAD、Seq-Tripartite、Ours-Full 等策略。
 - 商家侧公平：在重排中引入商家曝光公平、长尾曝光与 Exposure Gini 等指标。
 - 骑手侧履约：模拟订单-骑手匹配，比较最近骑手、最小 ETA、负载感知三类策略。
 - 动态仿真：模拟午餐高峰多时间步请求，持续更新骑手状态和订单履约结果。
@@ -40,7 +40,7 @@ TRD 数据下载与清洗
   -> 指标、图表、报告与 demo
 ```
 
-本轮新增 `Seq-Hybrid`，借鉴 FPMC/下一篮子推荐和会话推荐思想，把外卖复购、最近订单时间衰减和商家转移概率加入排序，用于提升离线推荐准确性。`Seq-Tripartite` 则在序列偏好底座上轻量加入公平、ETA 和供给约束，用于展示“更准的偏好模型也可以接入三方重排”。
+本轮新增 `Seq-Hybrid`，借鉴 FPMC/下一篮子推荐和会话推荐思想，把外卖复购、最近订单时间衰减和商家转移概率加入排序，用于提升离线推荐准确性。`Seq-xQuAD` 进一步借鉴 xQuAD/MMR 的列表级重排思想，在序列相关性之外加入品类覆盖和长尾曝光增益，是当前离线指标最强策略。`Seq-Tripartite` 则在序列偏好底座上轻量加入公平、ETA 和供给约束，用于展示“更准的偏好模型也可以接入三方重排”。
 
 Ours-Full 推荐分数采用可解释加权重排：
 
@@ -178,7 +178,7 @@ make STREAMLIT=".venv/bin/streamlit" demo
 make STREAMLIT_FLAGS="--server.port 8502" demo
 ```
 
-demo 默认展示用户 `8`，也提供复购活跃型、高消费型、价格敏感型等快速案例；侧边栏可手动输入其它用户 ID，并在 `Seq-Hybrid`、`UserOnly`、`Ours-Balanced`、`Ours-Full` 之间切换策略。当前界面包含推荐商家卡片、推荐理由筛选、用户品类偏好、策略对比、分数组成、同一订单的骑手策略 ETA 对比、用户-商家-骑手链路图、骑手供给云与履约路径、午餐高峰热力图回放和实验指标看板。
+demo 默认展示用户 `8`，也提供复购活跃型、高消费型、价格敏感型等快速案例；侧边栏可手动输入其它用户 ID，并在 `Seq-xQuAD`、`Seq-Hybrid`、`Seq-Tripartite`、`UserOnly`、`Ours-Balanced`、`Ours-Full` 之间切换策略。当前界面包含推荐商家卡片、推荐理由筛选、用户品类偏好、策略对比、分数组成、同一订单的骑手策略 ETA 对比、用户-商家-骑手链路图、骑手供给云与履约路径、午餐高峰热力图回放和实验指标看板。
 
 ## 主要输出
 
@@ -202,7 +202,7 @@ python3 scripts/prepare_notebooklm_pack.py
 
 当前提交的结果已经使用完整 TRD `orders_train.txt`，数据审计显示原始训练订单 `1,068,495` 条，处理后训练订单 `1,068,495` 条，训练订单使用比例 `1.0000`。
 
-离线推荐中，`Seq-Hybrid` 的 Recall@20 最高，为 `0.4441`，NDCG@20 为 `0.3513`，HitRate@20 为 `0.5933`；相比原先最强的 `UserOnly`，Recall@20 从 `0.4287` 提升到 `0.4441`。`Seq-Tripartite` 的 NDCG@20 为 `0.3470`，HitRate@20 为 `0.5833`，高于 UserOnly，同时保留轻量三方约束。`Ours-Full` 的 Recall@20 为 `0.4055`，离线准确率不是最高，但平台效用最好。
+离线推荐中，`Seq-xQuAD` 的 Recall@20 最高，为 `0.4447`，NDCG@20 为 `0.3538`，HitRate@20 为 `0.5967`；相比原先最强的 `UserOnly`，Recall@20 从 `0.4287` 提升到 `0.4447`。`Seq-Tripartite` 的 NDCG@20 为 `0.3470`，HitRate@20 为 `0.5833`，高于 UserOnly，同时保留轻量三方约束。`Ours-Full` 的 Recall@20 为 `0.4055`，离线准确率不是最高，但平台效用最好。
 
 动态履约仿真中，`Ours-Full` 取得最低平均 ETA、最低超时率和最高平台综合效用：
 
@@ -211,11 +211,12 @@ python3 scripts/prepare_notebooklm_pack.py
 | UserOnly + Nearest | 86.54 | 0.8721 | 0.3998 |
 | UserOnly + MinETA | 55.33 | 0.6701 | 0.4831 |
 | Seq-Hybrid + MinETA | 52.49 | 0.6667 | 0.4851 |
+| Seq-xQuAD + MinETA | 53.61 | 0.7596 | 0.4582 |
 | Seq-Tripartite | 52.15 | 0.6364 | 0.4963 |
 | Ours-Balanced | 50.98 | 0.6344 | 0.4875 |
 | Ours-Full | 50.85 | 0.5714 | 0.5246 |
 
-结论不是“单一模型在所有指标上最优”，而是：`Seq-Hybrid` 通过序列复购建模取得最强离线推荐准确性；`Seq-Tripartite` 证明高准确偏好模型可以接入三方约束；`Ours-Full` 牺牲一部分离线准确性，换取更低超时率和更高平台综合效用，更符合外卖平台的多主体优化目标。
+结论不是“单一模型在所有指标上最优”，而是：`Seq-xQuAD` 通过序列复购和列表级重排取得最强离线推荐准确性；`Seq-Tripartite` 证明高准确偏好模型可以接入三方约束；`Ours-Full` 牺牲一部分离线准确性，换取更低超时率和更高平台综合效用，更符合外卖平台的多主体优化目标。
 
 ## 图表示例
 

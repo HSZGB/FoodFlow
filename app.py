@@ -23,6 +23,7 @@ from foodflow.recommenders import (
     OursBalancedRecommender,
     OursFullRecommender,
     SeqTripartiteRecommender,
+    SeqXQuadRecommender,
     SequentialHybridRecommender,
     UserOnlyRecommender,
 )
@@ -125,6 +126,7 @@ def load_model(strategy: str, data_key: str, _data: PreparedData) -> object:
     factories = {
         "UserOnly": UserOnlyRecommender,
         "Seq-Hybrid": SequentialHybridRecommender,
+        "Seq-xQuAD": SeqXQuadRecommender,
         "Seq-Tripartite": SeqTripartiteRecommender,
         "Ours-Balanced": OursBalancedRecommender,
         "Ours-Full": OursFullRecommender,
@@ -191,7 +193,7 @@ with st.sidebar:
     period = period_map[period_label]
     strategy_name = st.selectbox(
         "推荐策略",
-        ["Seq-Hybrid", "Seq-Tripartite", "Ours-Full", "Ours-Balanced", "UserOnly"],
+        ["Seq-xQuAD", "Seq-Hybrid", "Seq-Tripartite", "Ours-Full", "Ours-Balanced", "UserOnly"],
         index=0,
     )
     top_k = st.slider("推荐数量", min_value=5, max_value=12, value=10, step=1)
@@ -265,7 +267,7 @@ with tab_case:
     run_strategy_compare = st.checkbox("计算三策略对比", value=False)
     if run_strategy_compare:
         strategy_rows = []
-        for name in ["UserOnly", "Seq-Hybrid", "Seq-Tripartite", "Ours-Balanced", "Ours-Full"]:
+        for name in ["UserOnly", "Seq-Hybrid", "Seq-xQuAD", "Seq-Tripartite", "Ours-Balanced", "Ours-Full"]:
             with st.spinner(f"加载 {name} 并生成对比..."):
                 candidate_model = load_model(name, model_data_key, interactive_data)
                 candidate_recs = candidate_model.recommend([user_id], top_k, {user_id: period}).recommendations[user_id]
@@ -514,6 +516,7 @@ with tab_peak:
                 {
                     "UserOnly + MinETA": (load_model("UserOnly", model_data_key, interactive_data), "min_eta"),
                     "Seq-Hybrid + MinETA": (load_model("Seq-Hybrid", model_data_key, interactive_data), "min_eta"),
+                    "Seq-xQuAD + MinETA": (load_model("Seq-xQuAD", model_data_key, interactive_data), "min_eta"),
                     "Seq-Tripartite": (load_model("Seq-Tripartite", model_data_key, interactive_data), "load_aware"),
                     "Ours-Balanced": (load_model("Ours-Balanced", model_data_key, interactive_data), "load_aware"),
                     "Ours-Full": (load_model("Ours-Full", model_data_key, interactive_data), "load_aware"),
