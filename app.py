@@ -214,7 +214,7 @@ rec_df = build_recommendation_frame(interactive_data, model, user_id, recs, peri
 users_df = data.users.set_index("user_id", drop=False)
 merchants = data.merchants.set_index("wm_poi_id", drop=False)
 user_row = users_df.loc[user_id]
-riders = generate_riders(data.merchants, n_riders=160, seed=7)
+riders = generate_riders(data.merchants, n_riders=240, seed=7)
 
 tab_case, tab_peak, tab_metrics, tab_figures = st.tabs(["推荐工作台", "高峰仿真回放", "指标故事线", "图表材料"])
 
@@ -393,6 +393,21 @@ with tab_case:
         rider_point = rider_compare[rider_compare["policy_key"] == "load_aware"].iloc[0]
         map_fig = go.Figure()
         map_fig.add_trace(
+            go.Histogram2dContour(
+                x=pd.to_numeric(riders["lng"], errors="coerce"),
+                y=pd.to_numeric(riders["lat"], errors="coerce"),
+                colorscale=[
+                    [0.0, "rgba(15, 118, 110, 0.00)"],
+                    [0.35, "rgba(45, 212, 191, 0.16)"],
+                    [1.0, "rgba(15, 118, 110, 0.38)"],
+                ],
+                contours=dict(coloring="heatmap", showlines=False),
+                showscale=False,
+                name="骑手密度",
+                hoverinfo="skip",
+            )
+        )
+        map_fig.add_trace(
             go.Scatter(
                 x=pd.to_numeric(riders["lng"], errors="coerce"),
                 y=pd.to_numeric(riders["lat"], errors="coerce"),
@@ -400,10 +415,10 @@ with tab_case:
                 name="骑手供给",
                 text=riders["rider_id"],
                 marker=dict(
-                    size=7,
+                    size=6,
                     color=pd.to_numeric(riders["load"], errors="coerce"),
                     colorscale=[[0, "#cbd5e1"], [0.5, "#94a3b8"], [1, "#475569"]],
-                    opacity=0.42,
+                    opacity=0.36,
                     line=dict(width=0),
                 ),
                 hovertemplate="骑手 %{text}<br>经度 %{x:.4f}<br>纬度 %{y:.4f}<extra></extra>",
@@ -464,7 +479,7 @@ with tab_case:
             )
         )
         map_fig.update_layout(
-            title="空间供需：骑手池、推荐商家与履约路径",
+            title="空间供需：骑手密度、推荐商家与履约路径",
             height=340,
             xaxis_title="经度",
             yaxis_title="纬度",

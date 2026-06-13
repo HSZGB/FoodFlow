@@ -242,7 +242,7 @@ def build_peak_trace(
     rows = []
 
     for policy_name, (model, rider_policy) in policies.items():
-        riders = generate_riders(data.merchants, n_riders=60, seed=seed + len(policy_name))
+        riders = generate_riders(data.merchants, n_riders=160, seed=seed + len(policy_name))
         etas: list[float] = []
         completed = 0
         timeout = 0
