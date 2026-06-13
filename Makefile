@@ -1,7 +1,7 @@
 PYTHON ?= .venv/bin/python
 PIP ?= .venv/bin/pip
 CONDA_ENV ?= foodflow
-CONDA_RUN ?= conda run -n $(CONDA_ENV)
+CONDA_RUN ?= conda run --no-capture-output -n $(CONDA_ENV)
 STREAMLIT ?= $(CONDA_RUN) streamlit
 STREAMLIT_FLAGS ?=
 SMOKE_RAW ?= data/sample/raw
@@ -61,6 +61,8 @@ report:
 	$(PYTHON) -m foodflow.cli report --results-dir outputs/results --figures-dir outputs/figures --output report/实验报告.md --data-audit outputs/results/data_audit.json
 
 demo:
+	@echo "Starting FoodFlow demo..."
+	@echo "Open http://localhost:8501 after Streamlit starts. Press Ctrl+C to stop."
 	$(STREAMLIT) run app.py $(STREAMLIT_FLAGS)
 
 test:

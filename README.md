@@ -148,7 +148,23 @@ make test
 make demo
 ```
 
-`make demo` 默认使用 conda 环境中的 Streamlit。如果需要临时改用其它 Streamlit，可覆盖变量，例如：
+`make demo` 默认使用 conda 环境中的 Streamlit。这个命令启动的是 Web 服务，所以正常情况下不会自动结束；看到 Streamlit 地址后，保持终端开着，在浏览器访问页面即可。停止服务时在该终端按 `Ctrl+C`。
+
+默认地址：
+
+```text
+http://localhost:8501
+```
+
+首次打开页面时，系统需要加载处理后的数据并拟合当前选中的推荐模型；之后会被 Streamlit 缓存，切换用户会快很多。为保证课堂展示流畅，交互推荐模型默认使用完整 processed 数据中的约 15 万条训练订单，并保留当前演示用户历史；完整实验指标、报告和图表仍来自全量 TRD 输出。三策略对比和高峰仿真回放默认不预计算，需要展示时在页面中勾选。
+
+如果想让 demo 交互模型也强制使用完整训练订单：
+
+```bash
+FOODFLOW_DEMO_MAX_ORDERS=0 make demo
+```
+
+如果需要临时改用其它 Streamlit，可覆盖变量，例如：
 
 ```bash
 make STREAMLIT=".venv/bin/streamlit" demo
@@ -158,12 +174,6 @@ make STREAMLIT=".venv/bin/streamlit" demo
 
 ```bash
 make STREAMLIT_FLAGS="--server.port 8502" demo
-```
-
-然后在浏览器打开：
-
-```text
-http://localhost:8501
 ```
 
 demo 默认展示用户 `8`，也提供复购活跃型、高消费型、价格敏感型等快速案例；侧边栏可手动输入其它用户 ID，并在 `UserOnly`、`Ours-Balanced`、`Ours-Full` 之间切换策略。当前界面包含推荐商家卡片、推荐理由筛选、用户品类偏好、策略对比、分数组成、同一订单的骑手策略 ETA 对比、用户-商家-骑手链路图、空间散点图、午餐高峰仿真回放和实验指标看板。

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import html
+import os
 from pathlib import Path
 
 import pandas as pd
@@ -83,12 +84,44 @@ def load_data() -> PreparedData:
 
 
 @st.cache_resource(show_spinner=False)
-def load_models(_data: PreparedData) -> dict[str, object]:
-    return {
-        "UserOnly": UserOnlyRecommender().fit(_data),
-        "Ours-Balanced": OursBalancedRecommender().fit(_data),
-        "Ours-Full": OursFullRecommender().fit(_data),
+def build_interactive_data(
+    selected_user: str,
+    max_orders: int,
+    case_users: tuple[str, ...],
+    _data: PreparedData,
+) -> PreparedData:
+    train = _data.orders_train
+    if max_orders <= 0 or len(train) <= max_orders:
+        return _data
+
+    keep_users = {str(selected_user), *[str(user_id) for user_id in case_users]}
+    keep_mask = train["user_id"].astype(str).isin(keep_users)
+    kept = train[keep_mask]
+    remaining = train[~keep_mask]
+    remaining_n = max(max_orders - len(kept), 0)
+    if remaining_n and len(remaining):
+        sampled = remaining.sample(n=min(remaining_n, len(remaining)), random_state=42)
+        train_sample = pd.concat([kept, sampled], ignore_index=True)
+    else:
+        train_sample = kept.copy()
+    return PreparedData(
+        users=_data.users,
+        merchants=_data.merchants,
+        orders_train=train_sample,
+        orders_test=_data.orders_test,
+        test_interactions=_data.test_interactions,
+        spus=_data.spus,
+    )
+
+
+@st.cache_resource(show_spinner=False)
+def load_model(strategy: str, data_key: str, _data: PreparedData) -> object:
+    factories = {
+        "UserOnly": UserOnlyRecommender,
+        "Ours-Balanced": OursBalancedRecommender,
+        "Ours-Full": OursFullRecommender,
     }
+    return factories[strategy]().fit(_data)
 
 
 def pct(value: float) -> str:
@@ -128,11 +161,11 @@ def recommendation_card(row: pd.Series, selected: bool = False) -> str:
 
 
 data = load_data()
-models = load_models(data)
 user_ids = data.user_ids
 user_set = set(user_ids)
 default_user = "8" if "8" in user_set else user_ids[0]
 case_options = demo_user_cases(data.users)
+demo_max_orders = int(os.environ.get("FOODFLOW_DEMO_MAX_ORDERS", "150000"))
 
 with st.sidebar:
     st.header("演示参数")
@@ -151,10 +184,18 @@ with st.sidebar:
     strategy_name = st.selectbox("推荐策略", ["Ours-Full", "Ours-Balanced", "UserOnly"], index=0)
     top_k = st.slider("推荐数量", min_value=5, max_value=12, value=10, step=1)
 
-model = models[strategy_name]
+interactive_data = build_interactive_data(user_id, demo_max_orders, tuple(case_options.values()), data)
+model_data_key = f"orders={len(interactive_data.orders_train)};user={user_id};max={demo_max_orders}"
+if len(interactive_data.orders_train) < len(data.orders_train):
+    st.caption(
+        f"交互推荐模型使用 {len(interactive_data.orders_train):,} 条训练订单；完整实验指标仍来自全量 TRD 输出。"
+    )
+
+with st.spinner(f"正在加载 {strategy_name} 推荐模型，首次运行会建立缓存..."):
+    model = load_model(strategy_name, model_data_key, interactive_data)
 rec_result = model.recommend([user_id], top_k, {user_id: period})
 recs = rec_result.recommendations[user_id]
-rec_df = build_recommendation_frame(data, model, user_id, recs, period)
+rec_df = build_recommendation_frame(interactive_data, model, user_id, recs, period)
 
 users_df = data.users.set_index("user_id", drop=False)
 merchants = data.merchants.set_index("wm_poi_id", drop=False)
@@ -209,46 +250,52 @@ with tab_case:
                 st.markdown(recommendation_card(row), unsafe_allow_html=True)
 
     st.subheader("同一用户的策略对比")
-    strategy_rows = []
-    for name, candidate_model in models.items():
-        candidate_recs = candidate_model.recommend([user_id], top_k, {user_id: period}).recommendations[user_id]
-        candidate_frame = build_recommendation_frame(data, candidate_model, user_id, candidate_recs, period)
-        strategy_rows.append(
-            {
-                "策略": name,
-                "Top3 商家": " / ".join(candidate_frame["merchant_name"].head(3).astype(str).tolist()),
-                "平均用户偏好": candidate_frame["user_score"].mean(),
-                "平均商家公平": candidate_frame["fairness"].mean(),
-                "平均 ETA": candidate_frame["eta_minutes"].mean(),
-                "平均供给": candidate_frame["supply"].mean(),
-                "与当前策略重合数": len(set(candidate_recs).intersection(set(recs))),
-            }
-        )
-    strategy_df = pd.DataFrame(strategy_rows)
-    compare_left, compare_right = st.columns([1.2, 1])
-    with compare_left:
-        st.dataframe(
-            strategy_df,
-            use_container_width=True,
-            hide_index=True,
-            column_config={
-                "平均用户偏好": st.column_config.NumberColumn(format="%.3f"),
-                "平均商家公平": st.column_config.NumberColumn(format="%.3f"),
-                "平均 ETA": st.column_config.NumberColumn(format="%.1f"),
-                "平均供给": st.column_config.NumberColumn(format="%.3f"),
-            },
-        )
-    with compare_right:
-        strategy_chart = px.bar(
-            strategy_df,
-            x="策略",
-            y=["平均用户偏好", "平均商家公平", "平均供给"],
-            barmode="group",
-            title="策略侧重点对比",
-            color_discrete_sequence=["#2563eb", "#0f766e", "#7c3aed"],
-        )
-        strategy_chart.update_layout(height=300, margin=dict(l=8, r=8, t=48, b=8), xaxis_title="")
-        st.plotly_chart(strategy_chart, use_container_width=True)
+    run_strategy_compare = st.checkbox("计算三策略对比", value=False)
+    if run_strategy_compare:
+        strategy_rows = []
+        for name in ["UserOnly", "Ours-Balanced", "Ours-Full"]:
+            with st.spinner(f"加载 {name} 并生成对比..."):
+                candidate_model = load_model(name, model_data_key, interactive_data)
+                candidate_recs = candidate_model.recommend([user_id], top_k, {user_id: period}).recommendations[user_id]
+                candidate_frame = build_recommendation_frame(interactive_data, candidate_model, user_id, candidate_recs, period)
+            strategy_rows.append(
+                {
+                    "策略": name,
+                    "Top3 商家": " / ".join(candidate_frame["merchant_name"].head(3).astype(str).tolist()),
+                    "平均用户偏好": candidate_frame["user_score"].mean(),
+                    "平均商家公平": candidate_frame["fairness"].mean(),
+                    "平均 ETA": candidate_frame["eta_minutes"].mean(),
+                    "平均供给": candidate_frame["supply"].mean(),
+                    "与当前策略重合数": len(set(candidate_recs).intersection(set(recs))),
+                }
+            )
+        strategy_df = pd.DataFrame(strategy_rows)
+        compare_left, compare_right = st.columns([1.2, 1])
+        with compare_left:
+            st.dataframe(
+                strategy_df,
+                use_container_width=True,
+                hide_index=True,
+                column_config={
+                    "平均用户偏好": st.column_config.NumberColumn(format="%.3f"),
+                    "平均商家公平": st.column_config.NumberColumn(format="%.3f"),
+                    "平均 ETA": st.column_config.NumberColumn(format="%.1f"),
+                    "平均供给": st.column_config.NumberColumn(format="%.3f"),
+                },
+            )
+        with compare_right:
+            strategy_chart = px.bar(
+                strategy_df,
+                x="策略",
+                y=["平均用户偏好", "平均商家公平", "平均供给"],
+                barmode="group",
+                title="策略侧重点对比",
+                color_discrete_sequence=["#2563eb", "#0f766e", "#7c3aed"],
+            )
+            strategy_chart.update_layout(height=300, margin=dict(l=8, r=8, t=48, b=8), xaxis_title="")
+            st.plotly_chart(strategy_chart, use_container_width=True)
+    else:
+        st.caption("为保证首屏打开速度，三策略对比默认不预计算；需要展示时勾选即可。")
 
     option_labels = [
         f"TOP {int(row.rank)} · {row.merchant_name} · ID {row.merchant_id}" for row in rec_df.itertuples(index=False)
@@ -416,78 +463,83 @@ with tab_case:
 
 with tab_peak:
     st.subheader("午餐高峰仿真回放")
-    trace_df = build_peak_trace(
-        data,
-        {
-            "UserOnly + MinETA": (models["UserOnly"], "min_eta"),
-            "Ours-Balanced": (models["Ours-Balanced"], "load_aware"),
-            "Ours-Full": (models["Ours-Full"], "load_aware"),
-        },
-        seed=33,
-        steps=6,
-        requests_per_step=8,
-        top_k=top_k,
-    )
-    if trace_df.empty:
-        st.warning("当前数据没有可用于仿真的测试用户。")
+    run_peak_replay = st.checkbox("运行高峰回放", value=False)
+    if run_peak_replay:
+        with st.spinner("正在运行轻量午餐高峰回放..."):
+            trace_df = build_peak_trace(
+                data,
+                {
+                    "UserOnly + MinETA": (load_model("UserOnly", model_data_key, interactive_data), "min_eta"),
+                    "Ours-Balanced": (load_model("Ours-Balanced", model_data_key, interactive_data), "load_aware"),
+                    "Ours-Full": (load_model("Ours-Full", model_data_key, interactive_data), "load_aware"),
+                },
+                seed=33,
+                steps=6,
+                requests_per_step=8,
+                top_k=top_k,
+            )
+        if trace_df.empty:
+            st.warning("当前数据没有可用于仿真的测试用户。")
+        else:
+            final_trace = trace_df.sort_values("step").groupby("policy", as_index=False).tail(1)
+            p1, p2, p3, p4 = st.columns(4)
+            best_eta_trace = final_trace.sort_values("avg_eta").iloc[0]
+            best_timeout_trace = final_trace.sort_values("timeout_rate").iloc[0]
+            p1.metric("回放订单数", int(final_trace["completed_orders"].max()))
+            p2.metric("最低累计 Avg ETA", f"{best_eta_trace['avg_eta']:.1f}", str(best_eta_trace["policy"]))
+            p3.metric("最低累计超时率", f"{best_timeout_trace['timeout_rate']:.3f}", str(best_timeout_trace["policy"]))
+            p4.metric("仿真步数", int(trace_df["step"].max()))
+
+            t1, t2 = st.columns(2)
+            with t1:
+                order_fig = px.line(
+                    trace_df,
+                    x="step",
+                    y="completed_orders",
+                    color="policy",
+                    markers=True,
+                    title="累计完成订单",
+                )
+                order_fig.update_layout(height=330, margin=dict(l=8, r=8, t=48, b=8), xaxis_title="时间步")
+                st.plotly_chart(order_fig, use_container_width=True)
+
+                eta_line = px.line(
+                    trace_df,
+                    x="step",
+                    y="avg_eta",
+                    color="policy",
+                    markers=True,
+                    title="累计平均 ETA",
+                )
+                eta_line.update_layout(height=330, margin=dict(l=8, r=8, t=48, b=8), xaxis_title="时间步", yaxis_title="分钟")
+                st.plotly_chart(eta_line, use_container_width=True)
+
+            with t2:
+                timeout_line = px.line(
+                    trace_df,
+                    x="step",
+                    y="timeout_rate",
+                    color="policy",
+                    markers=True,
+                    title="累计超时率",
+                )
+                timeout_line.update_layout(height=330, margin=dict(l=8, r=8, t=48, b=8), xaxis_title="时间步")
+                st.plotly_chart(timeout_line, use_container_width=True)
+
+                rider_line = px.line(
+                    trace_df,
+                    x="step",
+                    y="rider_load_std",
+                    color="policy",
+                    markers=True,
+                    title="骑手接单负载波动",
+                )
+                rider_line.update_layout(height=330, margin=dict(l=8, r=8, t=48, b=8), xaxis_title="时间步")
+                st.plotly_chart(rider_line, use_container_width=True)
+
+            st.dataframe(trace_df, use_container_width=True, hide_index=True)
     else:
-        final_trace = trace_df.sort_values("step").groupby("policy", as_index=False).tail(1)
-        p1, p2, p3, p4 = st.columns(4)
-        best_eta_trace = final_trace.sort_values("avg_eta").iloc[0]
-        best_timeout_trace = final_trace.sort_values("timeout_rate").iloc[0]
-        p1.metric("回放订单数", int(final_trace["completed_orders"].max()))
-        p2.metric("最低累计 Avg ETA", f"{best_eta_trace['avg_eta']:.1f}", str(best_eta_trace["policy"]))
-        p3.metric("最低累计超时率", f"{best_timeout_trace['timeout_rate']:.3f}", str(best_timeout_trace["policy"]))
-        p4.metric("仿真步数", int(trace_df["step"].max()))
-
-        t1, t2 = st.columns(2)
-        with t1:
-            order_fig = px.line(
-                trace_df,
-                x="step",
-                y="completed_orders",
-                color="policy",
-                markers=True,
-                title="累计完成订单",
-            )
-            order_fig.update_layout(height=330, margin=dict(l=8, r=8, t=48, b=8), xaxis_title="时间步")
-            st.plotly_chart(order_fig, use_container_width=True)
-
-            eta_line = px.line(
-                trace_df,
-                x="step",
-                y="avg_eta",
-                color="policy",
-                markers=True,
-                title="累计平均 ETA",
-            )
-            eta_line.update_layout(height=330, margin=dict(l=8, r=8, t=48, b=8), xaxis_title="时间步", yaxis_title="分钟")
-            st.plotly_chart(eta_line, use_container_width=True)
-
-        with t2:
-            timeout_line = px.line(
-                trace_df,
-                x="step",
-                y="timeout_rate",
-                color="policy",
-                markers=True,
-                title="累计超时率",
-            )
-            timeout_line.update_layout(height=330, margin=dict(l=8, r=8, t=48, b=8), xaxis_title="时间步")
-            st.plotly_chart(timeout_line, use_container_width=True)
-
-            rider_line = px.line(
-                trace_df,
-                x="step",
-                y="rider_load_std",
-                color="policy",
-                markers=True,
-                title="骑手接单负载波动",
-            )
-            rider_line.update_layout(height=330, margin=dict(l=8, r=8, t=48, b=8), xaxis_title="时间步")
-            st.plotly_chart(rider_line, use_container_width=True)
-
-        st.dataframe(trace_df, use_container_width=True, hide_index=True)
+        st.caption("高峰回放涉及多策略推荐和骑手匹配，默认不随首屏预运行；需要展示动态过程时勾选即可。")
 
 offline_path = Path("outputs/results/offline_metrics.csv")
 sim_path = Path("outputs/results/simulation_metrics.csv")
