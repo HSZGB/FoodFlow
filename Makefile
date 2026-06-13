@@ -10,7 +10,7 @@ SMOKE_RESULTS ?= outputs/smoke/results
 SMOKE_FIGURES ?= outputs/smoke/figures
 SMOKE_REPORT ?= outputs/smoke/report.md
 
-.PHONY: setup conda-setup conda-test conda-smoke download mock preprocess preprocess-full eval simulate audit figures report demo test smoke clean
+.PHONY: setup conda-setup conda-test conda-smoke download mock preprocess preprocess-full eval simulate audit figures report demo demo-full test smoke clean
 
 setup:
 	python3 -m venv .venv
@@ -64,6 +64,11 @@ demo:
 	@echo "Starting FoodFlow demo..."
 	@echo "Open http://localhost:8501 after Streamlit starts. Press Ctrl+C to stop."
 	$(STREAMLIT) run app.py $(STREAMLIT_FLAGS)
+
+demo-full:
+	@echo "Starting FoodFlow demo with full processed train orders..."
+	@echo "Open http://localhost:8501 after Streamlit starts. Press Ctrl+C to stop."
+	FOODFLOW_DEMO_MAX_ORDERS=0 $(STREAMLIT) run app.py $(STREAMLIT_FLAGS)
 
 test:
 	$(PYTHON) -m pytest -q

@@ -175,7 +175,7 @@ user_ids = data.user_ids
 user_set = set(user_ids)
 default_user = "8" if "8" in user_set else user_ids[0]
 case_options = demo_user_cases(data.users)
-demo_max_orders = int(os.environ.get("FOODFLOW_DEMO_MAX_ORDERS", "150000"))
+demo_max_orders = int(os.environ.get("FOODFLOW_DEMO_MAX_ORDERS", "30000"))
 
 with st.sidebar:
     st.header("演示参数")
