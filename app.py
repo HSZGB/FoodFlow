@@ -206,7 +206,7 @@ rec_df = build_recommendation_frame(interactive_data, model, user_id, recs, peri
 users_df = data.users.set_index("user_id", drop=False)
 merchants = data.merchants.set_index("wm_poi_id", drop=False)
 user_row = users_df.loc[user_id]
-riders = generate_riders(data.merchants, n_riders=60, seed=7)
+riders = generate_riders(data.merchants, n_riders=160, seed=7)
 
 tab_case, tab_peak, tab_metrics, tab_figures = st.tabs(["推荐工作台", "高峰仿真回放", "指标故事线", "图表材料"])
 
@@ -386,6 +386,33 @@ with tab_case:
         map_fig = go.Figure()
         map_fig.add_trace(
             go.Scatter(
+                x=pd.to_numeric(riders["lng"], errors="coerce"),
+                y=pd.to_numeric(riders["lat"], errors="coerce"),
+                mode="markers",
+                name="骑手供给",
+                text=riders["rider_id"],
+                marker=dict(
+                    size=7,
+                    color=pd.to_numeric(riders["load"], errors="coerce"),
+                    colorscale=[[0, "#cbd5e1"], [0.5, "#94a3b8"], [1, "#475569"]],
+                    opacity=0.42,
+                    line=dict(width=0),
+                ),
+                hovertemplate="骑手 %{text}<br>经度 %{x:.4f}<br>纬度 %{y:.4f}<extra></extra>",
+            )
+        )
+        map_fig.add_trace(
+            go.Scatter(
+                x=[float(rider_point["lng"]), float(merchant_row.get("lng", 116.40)), float(user_row.get("lng", 116.40))],
+                y=[float(rider_point["lat"]), float(merchant_row.get("lat", 39.92)), float(user_row.get("lat", 39.92))],
+                mode="lines",
+                name="履约路径",
+                line=dict(color="#0f766e", width=3, dash="dot"),
+                hoverinfo="skip",
+            )
+        )
+        map_fig.add_trace(
+            go.Scatter(
                 x=[float(user_row.get("lng", 116.40))],
                 y=[float(user_row.get("lat", 39.92))],
                 mode="markers+text",
@@ -429,13 +456,17 @@ with tab_case:
             )
         )
         map_fig.update_layout(
-            title="空间分布：用户、推荐商家与匹配骑手",
+            title="空间供需：骑手池、推荐商家与履约路径",
             height=340,
             xaxis_title="经度",
             yaxis_title="纬度",
             margin=dict(l=8, r=8, t=52, b=8),
+            plot_bgcolor="#f8fafc",
+            paper_bgcolor="#ffffff",
             legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0),
         )
+        map_fig.update_xaxes(showgrid=True, gridcolor="#e2e8f0", zeroline=False)
+        map_fig.update_yaxes(showgrid=True, gridcolor="#e2e8f0", zeroline=False, scaleanchor="x", scaleratio=1)
         st.plotly_chart(map_fig, use_container_width=True)
 
     st.subheader("推荐明细")
@@ -499,50 +530,80 @@ with tab_peak:
 
             t1, t2 = st.columns(2)
             with t1:
-                order_fig = px.line(
-                    trace_df,
-                    x="step",
+                order_fig = px.bar(
+                    final_trace.sort_values("completed_orders", ascending=False),
+                    x="policy",
                     y="completed_orders",
                     color="policy",
-                    markers=True,
-                    title="累计完成订单",
+                    title="最终完成订单对比",
+                    color_discrete_sequence=["#2563eb", "#0f766e", "#dc6803", "#7c3aed"],
                 )
-                order_fig.update_layout(height=330, margin=dict(l=8, r=8, t=48, b=8), xaxis_title="时间步")
+                order_fig.update_layout(
+                    height=330,
+                    margin=dict(l=8, r=8, t=48, b=8),
+                    xaxis_title="",
+                    showlegend=False,
+                    plot_bgcolor="#f8fafc",
+                    paper_bgcolor="#ffffff",
+                )
+                order_fig.update_xaxes(tickangle=20, showgrid=False)
+                order_fig.update_yaxes(gridcolor="#e2e8f0")
                 st.plotly_chart(order_fig, use_container_width=True)
 
-                eta_line = px.line(
-                    trace_df,
-                    x="step",
-                    y="avg_eta",
-                    color="policy",
-                    markers=True,
-                    title="累计平均 ETA",
+                eta_heat = trace_df.pivot(index="policy", columns="step", values="avg_eta")
+                eta_fig = px.imshow(
+                    eta_heat,
+                    text_auto=".1f",
+                    aspect="auto",
+                    color_continuous_scale=["#ecfeff", "#0f766e", "#164e63"],
+                    title="平均 ETA 热力图",
                 )
-                eta_line.update_layout(height=330, margin=dict(l=8, r=8, t=48, b=8), xaxis_title="时间步", yaxis_title="分钟")
-                st.plotly_chart(eta_line, use_container_width=True)
+                eta_fig.update_layout(
+                    height=330,
+                    margin=dict(l=8, r=8, t=48, b=8),
+                    xaxis_title="时间步",
+                    yaxis_title="",
+                    coloraxis_colorbar=dict(title="min"),
+                )
+                st.plotly_chart(eta_fig, use_container_width=True)
 
             with t2:
-                timeout_line = px.line(
-                    trace_df,
-                    x="step",
+                timeout_fig = px.bar(
+                    final_trace.sort_values("timeout_rate"),
+                    x="policy",
                     y="timeout_rate",
                     color="policy",
-                    markers=True,
-                    title="累计超时率",
+                    title="最终超时率对比",
+                    color_discrete_sequence=["#0f766e", "#2563eb", "#dc6803", "#7c3aed"],
                 )
-                timeout_line.update_layout(height=330, margin=dict(l=8, r=8, t=48, b=8), xaxis_title="时间步")
-                st.plotly_chart(timeout_line, use_container_width=True)
+                timeout_fig.update_layout(
+                    height=330,
+                    margin=dict(l=8, r=8, t=48, b=8),
+                    xaxis_title="",
+                    showlegend=False,
+                    plot_bgcolor="#f8fafc",
+                    paper_bgcolor="#ffffff",
+                )
+                timeout_fig.update_xaxes(tickangle=20, showgrid=False)
+                timeout_fig.update_yaxes(gridcolor="#e2e8f0", tickformat=".0%")
+                st.plotly_chart(timeout_fig, use_container_width=True)
 
-                rider_line = px.line(
-                    trace_df,
-                    x="step",
-                    y="rider_load_std",
-                    color="policy",
-                    markers=True,
-                    title="骑手接单负载波动",
+                load_heat = trace_df.pivot(index="policy", columns="step", values="rider_load_std")
+                load_fig = px.imshow(
+                    load_heat,
+                    text_auto=".2f",
+                    aspect="auto",
+                    color_continuous_scale=["#f8fafc", "#f59e0b", "#7c2d12"],
+                    title="骑手负载波动热力图",
                 )
-                rider_line.update_layout(height=330, margin=dict(l=8, r=8, t=48, b=8), xaxis_title="时间步")
-                st.plotly_chart(rider_line, use_container_width=True)
+                load_fig.update_layout(
+                    height=330,
+                    margin=dict(l=8, r=8, t=48, b=8),
+                    xaxis_title="时间步",
+                    yaxis_title="",
+                    coloraxis_colorbar=dict(title="std"),
+                )
+                st.plotly_chart(load_fig, use_container_width=True)
 
             st.dataframe(trace_df, use_container_width=True, hide_index=True)
     else:
