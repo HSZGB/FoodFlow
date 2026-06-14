@@ -191,6 +191,7 @@ demo 默认展示用户 `8`，也提供复购活跃型、高消费型、价格�
 ```text
 outputs/results/offline_metrics.csv       # 离线推荐指标
 outputs/results/simulation_metrics.csv    # 动态履约仿真指标
+outputs/results/tripartite_frontier.csv   # 推荐准确性、曝光公平和履约效用的 Pareto 前沿表
 outputs/results/data_audit.json           # TRD 完整性与抽样审计
 outputs/figures/*.png                     # 实验图表
 docs/DATA_AUDIT.md                        # 数据审计 Markdown

@@ -6,6 +6,7 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import seaborn as sns
 
+from .frontier import build_tripartite_frontier
 from .io import ensure_dir
 
 
@@ -124,6 +125,72 @@ def _save_tripartite_summary(offline: pd.DataFrame, sim: pd.DataFrame, path: Pat
             ax.text(value + xmax * 0.02, y_pos, f"{value:.4f}", va="center", fontsize=8.5, color="#334155")
 
     fig.suptitle("FoodFlow tripartite scorecard", fontsize=16, fontweight="bold", color=TEXT_COLOR)
+    fig.tight_layout()
+    fig.savefig(path, dpi=190, facecolor="white")
+    plt.close(fig)
+
+
+def _save_frontier_plot(frontier: pd.DataFrame, path: Path) -> None:
+    if frontier.empty:
+        return
+    fig, ax = plt.subplots(figsize=(9.4, 5.8))
+    plot_df = frontier[(frontier["Recall@20"] >= 0.35) | (frontier["platform_utility"] >= 0.45)].copy()
+    dominated = plot_df[~plot_df["is_frontier"]]
+    front = plot_df[plot_df["is_frontier"]]
+    if not dominated.empty:
+        ax.scatter(
+            dominated["Recall@20"],
+            dominated["platform_utility"],
+            s=(dominated["on_time_rate"] * 300 + 60),
+            marker="x",
+            linewidths=2.0,
+            color="#CBD5E1",
+            label="Dominated",
+            zorder=2,
+        )
+    for _, row in front.iterrows():
+        ax.scatter(
+            float(row["Recall@20"]),
+            float(row["platform_utility"]),
+            s=float(row["on_time_rate"]) * 320 + 80,
+            color=_color_for(str(row["policy"])),
+            edgecolor="white",
+            linewidth=1.4,
+            label=str(row["policy"]),
+            zorder=3,
+        )
+    selected_labels = {
+        "Seq-xQuAD-Tripartite": (8, 12),
+        "Seq-xQuAD + MinETA": (8, -18),
+        "Seq-Tripartite": (8, 7),
+        "Ours-Full": (8, -16),
+    }
+    for _, row in plot_df.iterrows():
+        label = str(row["policy"])
+        if label not in selected_labels:
+            continue
+        ax.annotate(
+            label,
+            (float(row["Recall@20"]), float(row["platform_utility"])),
+            xytext=selected_labels[label],
+            textcoords="offset points",
+            fontsize=8.8,
+            color=TEXT_COLOR,
+            bbox=dict(boxstyle="round,pad=0.22", fc="white", ec=GRID_COLOR, alpha=0.92),
+        )
+    ax.set_title("Pareto view: accuracy vs platform utility", fontsize=14, fontweight="bold", loc="left")
+    ax.set_xlabel("Recall@20")
+    ax.set_ylabel("Platform utility")
+    ax.grid(color=GRID_COLOR)
+    ax.text(
+        0.01,
+        0.02,
+        "Circle size: on-time rate. Grey x: dominated strategy.",
+        transform=ax.transAxes,
+        fontsize=8.5,
+        color="#475569",
+    )
+    ax.legend(frameon=False, bbox_to_anchor=(1.02, 1), loc="upper left", fontsize=8.5)
     fig.tight_layout()
     fig.savefig(path, dpi=190, facecolor="white")
     plt.close(fig)
@@ -250,6 +317,12 @@ def generate_figures(results_dir: Path, figures_dir: Path) -> list[Path]:
             "policy",
             "platform_utility",
         }.issubset(sim.columns):
+            frontier = build_tripartite_frontier(offline, sim)
+            if not frontier.empty:
+                frontier.to_csv(results_dir / "tripartite_frontier.csv", index=False)
+                out = figures_dir / "pareto_recall_utility.png"
+                _save_frontier_plot(frontier, out)
+                made.append(out)
             out = figures_dir / "tripartite_scorecard.png"
             _save_tripartite_summary(offline, sim, out)
             made.append(out)

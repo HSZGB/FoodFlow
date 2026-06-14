@@ -182,12 +182,14 @@ list_score = relevance + category_coverage + long_tail_gain
 
 - `simulation_avg_eta.png`
 - `simulation_platform_utility.png`
+- `pareto_recall_utility.png`
 
 建议可补充：
 
 - `simulation_timeout_rate.png`
 - `simulation_rider_load_std.png`
 - `simulation_exposure_gini.png`
+- `tradeoff_eta_utility.png`
 
 必须出现的文本：
 
@@ -197,10 +199,12 @@ list_score = relevance + category_coverage + long_tail_gain
 - Ours-Full：Avg ETA = 50.85，Timeout Rate = 0.5714，Utility = 0.5246
 - Seq-xQuAD-Tripartite：Avg ETA = 50.33，Timeout Rate = 0.5319，Utility = 0.5264
 - Seq-xQuAD-Tripartite 平台综合效用最高
+- Pareto 视角：Seq-xQuAD 是离线准确率前沿，Seq-xQuAD-Tripartite 是平台效用前沿
 
 视觉布局：
 
 - 上方放两个主图：平均 ETA、平台效用。
+- 右侧或下方补 `pareto_recall_utility.png`，展示准确性与平台效用前沿。
 - 下方放小表格，列出三条关键策略的 ETA、超时率、效用。
 - 用正式红突出 Seq-xQuAD-Tripartite 的 `0.5264`。
 

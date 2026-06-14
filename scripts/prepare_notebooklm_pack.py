@@ -34,6 +34,7 @@ OPTIONAL_SOURCE_FILES = [
 RESULT_FILES = [
     ROOT / "outputs" / "results" / "offline_metrics.csv",
     ROOT / "outputs" / "results" / "simulation_metrics.csv",
+    ROOT / "outputs" / "results" / "tripartite_frontier.csv",
     ROOT / "outputs" / "results" / "data_audit.json",
 ]
 
@@ -50,6 +51,7 @@ FIGURE_FILES = [
     ROOT / "outputs" / "figures" / "simulation_platform_utility.png",
     ROOT / "outputs" / "figures" / "simulation_exposure_gini.png",
     ROOT / "outputs" / "figures" / "tradeoff_eta_utility.png",
+    ROOT / "outputs" / "figures" / "pareto_recall_utility.png",
     ROOT / "outputs" / "figures" / "tripartite_scorecard.png",
 ]
 

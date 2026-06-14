@@ -93,7 +93,7 @@
    展示午餐高峰多时间步、推荐列表产生订单、订单推荐/匹配给骑手、状态更新闭环。
 
 8. **三方策略的系统级指标**  
-   使用 `simulation_avg_eta.png` 和 `simulation_platform_utility.png`，也可补充超时率和骑手负载。强调 Seq-xQuAD-Tripartite 的系统级优势，同时说明 Ours-Full 是接近最优的三方对照。
+   使用 `simulation_avg_eta.png`、`simulation_platform_utility.png` 和 `pareto_recall_utility.png`，也可补充超时率和骑手负载。强调 Seq-xQuAD-Tripartite 的系统级优势，同时说明 Seq-xQuAD 是离线准确率前沿、Ours-Full 是接近最优的三方对照。
 
 9. **案例解释：一次推荐如何兼顾三方**  
    用一个案例串起用户画像、Top-K 商家推荐、推荐解释、下单、骑手匹配、ETA/超时风险。

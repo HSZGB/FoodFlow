@@ -19,6 +19,7 @@ from foodflow.demo_support import (
     streamlit_image_width_kwargs,
     user_category_profile,
 )
+from foodflow.frontier import POLICY_MODEL_MAP, build_tripartite_frontier
 from foodflow.recommenders import (
     OursBalancedRecommender,
     OursFullRecommender,
@@ -687,23 +688,11 @@ with tab_metrics:
     if offline_path.exists() and sim_path.exists():
         offline = pd.read_csv(offline_path)
         sim = pd.read_csv(sim_path)
-        policy_model_map = {
-            "Popular + Nearest": "Popular",
-            "UserOnly + Nearest": "UserOnly",
-            "UserOnly + MinETA": "UserOnly",
-            "Seq-Hybrid + MinETA": "Seq-Hybrid",
-            "Seq-Hybrid + LoadAware": "Seq-Hybrid",
-            "Seq-xQuAD + MinETA": "Seq-xQuAD",
-            "Seq-Tripartite": "Seq-Tripartite",
-            "Seq-xQuAD-Tripartite": "Seq-xQuAD-Tripartite",
-            "Ours-Balanced": "Ours-Balanced",
-            "Ours w/o Fairness": "UserOnly",
-            "Ours-Full": "Ours-Full",
-        }
+        frontier = build_tripartite_frontier(offline, sim, POLICY_MODEL_MAP)
         user_best = offline.sort_values("Recall@20", ascending=False).iloc[0]
         utility_best = sim.sort_values("platform_utility", ascending=False).iloc[0]
         eta_best = sim.sort_values("avg_eta").iloc[0]
-        utility_model_name = policy_model_map.get(str(utility_best["policy"]), str(utility_best["policy"]))
+        utility_model_name = POLICY_MODEL_MAP.get(str(utility_best["policy"]), str(utility_best["policy"]))
         utility_model_match = offline[offline["model"].astype(str) == utility_model_name]
         utility_model = utility_model_match.iloc[0] if not utility_model_match.empty else user_best
 
@@ -713,33 +702,24 @@ with tab_metrics:
         k3.metric("最低 Avg ETA", f"{eta_best['avg_eta']:.2f}", str(eta_best["policy"]))
         k4.metric("最高平台效用", f"{utility_best['platform_utility']:.4f}", str(utility_best["policy"]))
 
-        offline_index = offline.set_index("model", drop=False)
-        frontier_rows = []
-        for _, sim_row in sim.iterrows():
-            policy = str(sim_row["policy"])
-            model_name = policy_model_map.get(policy)
-            if model_name not in offline_index.index:
-                continue
-            off_row = offline_index.loc[model_name]
-            frontier_rows.append(
-                {
-                    "策略": policy,
-                    "推荐模型": model_name,
-                    "Recall@20": float(off_row["Recall@20"]),
-                    "NDCG@20": float(off_row["NDCG@20"]),
-                    "曝光Gini": float(off_row["ExposureGini"]),
-                    "Avg ETA": float(sim_row["avg_eta"]),
-                    "超时率": float(sim_row["timeout_rate"]),
-                    "平台效用": float(sim_row["platform_utility"]),
-                }
-            )
-        frontier_df = pd.DataFrame(frontier_rows).sort_values("平台效用", ascending=False)
+        frontier_df = frontier.rename(
+            columns={
+                "policy": "策略",
+                "model": "推荐模型",
+                "ExposureGini": "曝光Gini",
+                "avg_eta": "Avg ETA",
+                "timeout_rate": "超时率",
+                "platform_utility": "平台效用",
+                "is_frontier": "Pareto前沿",
+            }
+        ).sort_values("平台效用", ascending=False)
         st.markdown("#### 三方权衡摘要")
         st.dataframe(
-            frontier_df.head(7),
+            frontier_df[["策略", "推荐模型", "Pareto前沿", "Recall@20", "NDCG@20", "曝光Gini", "Avg ETA", "超时率", "平台效用"]].head(7),
             use_container_width=True,
             hide_index=True,
             column_config={
+                "Pareto前沿": st.column_config.CheckboxColumn(),
                 "Recall@20": st.column_config.NumberColumn(format="%.4f"),
                 "NDCG@20": st.column_config.NumberColumn(format="%.4f"),
                 "曝光Gini": st.column_config.NumberColumn(format="%.4f"),
@@ -748,6 +728,32 @@ with tab_metrics:
                 "平台效用": st.column_config.NumberColumn(format="%.4f"),
             },
         )
+
+        pareto_fig = px.scatter(
+            frontier,
+            x="Recall@20",
+            y="platform_utility",
+            color="policy",
+            symbol="is_frontier",
+            size="on_time_rate",
+            hover_data=["model", "NDCG@20", "ExposureGini", "avg_eta", "timeout_rate"],
+            title="Pareto 视角：推荐准确性与平台效用",
+            color_discrete_map=demo_color_map(frontier["policy"]),
+        )
+        pareto_front = frontier[frontier["is_frontier"]].sort_values("Recall@20")
+        if len(pareto_front) >= 2:
+            pareto_fig.add_trace(
+                go.Scatter(
+                    x=pareto_front["Recall@20"],
+                    y=pareto_front["platform_utility"],
+                    mode="lines",
+                    line=dict(color="#B5121B", width=2),
+                    name="Pareto 前沿",
+                    hoverinfo="skip",
+                )
+            )
+        pareto_fig.update_layout(height=360, margin=dict(l=8, r=8, t=48, b=8))
+        st.plotly_chart(pareto_fig, use_container_width=True)
 
         c1, c2 = st.columns(2)
         with c1:

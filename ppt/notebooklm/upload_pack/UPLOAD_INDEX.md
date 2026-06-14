@@ -9,6 +9,7 @@ Then paste `prompts/notebooklm_master_prompt.md` as the generation prompt.
 - `figures/offline_exposure_gini.png`
 - `figures/offline_ndcg20.png`
 - `figures/offline_recall20.png`
+- `figures/pareto_recall_utility.png`
 - `figures/simulation_avg_eta.png`
 - `figures/simulation_exposure_gini.png`
 - `figures/simulation_platform_utility.png`
@@ -26,6 +27,7 @@ Then paste `prompts/notebooklm_master_prompt.md` as the generation prompt.
 - `results/data_audit.json`
 - `results/offline_metrics.csv`
 - `results/simulation_metrics.csv`
+- `results/tripartite_frontier.csv`
 - `sources/DATA_AUDIT.md`
 - `sources/DATA_SOURCE.md`
 - `sources/IMPROVEMENT_RESEARCH.md`
