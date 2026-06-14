@@ -128,6 +128,7 @@ list_score = relevance + category_coverage + long_tail_gain
 
 - `offline_recall20.png`
 - `tradeoff_ndcg_gini.png`
+- `offline_category_jsd20.png`
 
 建议可补充：
 
@@ -137,7 +138,7 @@ list_score = relevance + category_coverage + long_tail_gain
 
 必须出现的文本：
 
-- Seq-xQuAD Recall@20 = 0.4447，NDCG@20 = 0.3538
+- Seq-xQuAD Recall@20 = 0.4447，NDCG@20 = 0.3538，CategoryJSD@20 = 0.0151
 - Seq-Hybrid Recall@20 = 0.4441，NDCG@20 = 0.3513
 - UserOnly Recall@20 = 0.4287，NDCG@20 = 0.3423
 - Repeat Recall@20 = 0.4062，体现外卖复购特征
@@ -148,11 +149,12 @@ list_score = relevance + category_coverage + long_tail_gain
 
 - 左侧放 `offline_recall20.png`。
 - 右侧放 `tradeoff_ndcg_gini.png`。
+- 底部或角落补 `offline_category_jsd20.png`，说明越低越贴近用户历史品类偏好。
 - 底部放一句结论带：推荐有效，但只看 Recall 会漏掉商家曝光和履约风险。
 
 演讲备注：
 
-离线结果显示，Seq-xQuAD 的 Recall@20 和 NDCG@20 最高，说明外卖复购序列和列表级覆盖重排有效；Repeat 也很强，符合外卖复购规律。Seq-xQuAD-Tripartite 的离线准确率有所下降，但 NDCG@20 仍略高于 UserOnly，它的价值要结合三方履约指标继续判断。
+离线结果显示，Seq-xQuAD 的 Recall@20 和 NDCG@20 最高，同时 CategoryJSD@20 最低，说明外卖复购序列和列表级覆盖重排有效，并没有明显偏离用户历史品类偏好。Seq-xQuAD-Tripartite 的离线准确率有所下降，但 NDCG@20 仍略高于 UserOnly，它的价值要结合三方履约指标继续判断。
 
 ## Slide 7：动态履约仿真设计
 

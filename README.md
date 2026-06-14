@@ -209,7 +209,7 @@ python3 scripts/prepare_notebooklm_pack.py
 
 当前提交的结果已经使用完整 TRD `orders_train.txt`，数据审计显示原始训练订单 `1,068,495` 条，处理后训练订单 `1,068,495` 条，训练订单使用比例 `1.0000`。
 
-离线推荐中，`Seq-xQuAD` 的 Recall@20 最高，为 `0.4447`，NDCG@20 为 `0.3538`，HitRate@20 为 `0.5967`；相比原先最强的 `UserOnly`，Recall@20 从 `0.4287` 提升到 `0.4447`。`Seq-xQuAD-Tripartite` 的 NDCG@20 为 `0.3440`，Exposure Gini 为 `0.8882`，低于纯 `Seq-xQuAD`，说明接入三方约束会牺牲一部分离线命中，但能改善后续履约表现。
+离线推荐中，`Seq-xQuAD` 的 Recall@20 最高，为 `0.4447`，NDCG@20 为 `0.3538`，HitRate@20 为 `0.5967`，CategoryJSD@20 最低，为 `0.0151`；相比原先最强的 `UserOnly`，Recall@20 从 `0.4287` 提升到 `0.4447`，同时保持更好的品类校准。`Seq-xQuAD-Tripartite` 的 NDCG@20 为 `0.3440`，Exposure Gini 为 `0.8882`，低于纯 `Seq-xQuAD`，说明接入三方约束会牺牲一部分离线命中，但能改善后续履约表现。
 
 动态履约仿真中，`Seq-xQuAD-Tripartite` 取得最低平均 ETA、最低超时率和最高平台综合效用：
 

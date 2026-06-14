@@ -43,6 +43,7 @@ FIGURE_FILES = [
     ROOT / "outputs" / "figures" / "offline_ndcg20.png",
     ROOT / "outputs" / "figures" / "offline_coverage20.png",
     ROOT / "outputs" / "figures" / "offline_exposure_gini.png",
+    ROOT / "outputs" / "figures" / "offline_category_jsd20.png",
     ROOT / "outputs" / "figures" / "tradeoff_ndcg_gini.png",
     ROOT / "outputs" / "figures" / "tradeoff_recall_coverage.png",
     ROOT / "outputs" / "figures" / "simulation_avg_eta.png",

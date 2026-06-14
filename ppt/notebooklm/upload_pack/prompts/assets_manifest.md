@@ -38,6 +38,7 @@ NotebookLM 上传时建议保留原文件名。图表页要优先使用 PNG 作�
 | `figures/offline_ndcg20.png` | Slide 6 | 可作为补充图，展示 NDCG@20 |
 | `figures/offline_coverage20.png` | Slide 6 | 可作为商家覆盖率证据 |
 | `figures/offline_exposure_gini.png` | Slide 6 | 可作为曝光集中度证据 |
+| `figures/offline_category_jsd20.png` | Slide 6 | 可作为品类校准证据，越低越好 |
 | `figures/tradeoff_ndcg_gini.png` | Slide 6 | 推荐准确性与曝光公平 trade-off |
 | `figures/tradeoff_recall_coverage.png` | Slide 6 | 推荐召回与商家覆盖率 trade-off |
 | `figures/simulation_avg_eta.png` | Slide 8 | 主图，展示平均 ETA |
@@ -52,6 +53,7 @@ NotebookLM 上传时建议保留原文件名。图表页要优先使用 PNG 作�
 ## 图片使用规则
 
 - 第 6 页至少使用 `offline_recall20.png` 和 `tradeoff_ndcg_gini.png`。
+- 如果第 6 页空间允许，加入 `offline_category_jsd20.png`，说明 Seq-xQuAD 兼顾命中与用户历史品类校准。
 - 第 8 页至少使用 `simulation_avg_eta.png` 和 `simulation_platform_utility.png`。
 - 如果第 8 页空间允许，优先加入 `pareto_recall_utility.png`，说明 Seq-xQuAD 是离线准确率前沿、Seq-xQuAD-Tripartite 是平台效用前沿。
 - 第 10 页可以使用 `tripartite_scorecard.png` 总结三方贡献。

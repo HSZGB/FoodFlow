@@ -39,7 +39,7 @@
 
 - `UserOnly`：Recall@20 = `0.4287`，NDCG@20 = `0.3423`，HitRate@20 = `0.5733`。
 - `Seq-Hybrid`：Recall@20 = `0.4441`，NDCG@20 = `0.3513`，HitRate@20 = `0.5933`。
-- `Seq-xQuAD`：Recall@20 = `0.4447`，NDCG@20 = `0.3538`，HitRate@20 = `0.5967`。
+- `Seq-xQuAD`：Recall@20 = `0.4447`，NDCG@20 = `0.3538`，HitRate@20 = `0.5967`，CategoryJSD@20 = `0.0151`。
 - `Seq-xQuAD-Tripartite`：Recall@20 = `0.4180`，NDCG@20 = `0.3440`，HitRate@20 = `0.5733`。
 - `Repeat`：Recall@20 = `0.4062`，NDCG@20 = `0.3348`。
 - `Ours-Balanced`：Recall@20 = `0.4097`，NDCG@20 = `0.3346`，HitRate@20 = `0.5633`。
@@ -87,7 +87,7 @@
    对比 Random、Popular、Repeat、ItemCF、BPR-MF、UserOnly、Seq-Hybrid、Seq-xQuAD、Seq-xQuAD-Tripartite、Ours-Full；展示 Seq-xQuAD-Tripartite 的三方重排拆解。
 
 6. **离线推荐指标结果**  
-   使用 `offline_recall20.png` 和 `tradeoff_ndcg_gini.png`，也可引用 `offline_metrics.csv` 生成小表。说明标准推荐指标与商家曝光指标。
+   使用 `offline_recall20.png`、`tradeoff_ndcg_gini.png` 和 `offline_category_jsd20.png`，也可引用 `offline_metrics.csv` 生成小表。说明标准推荐指标、商家曝光指标与品类校准指标。
 
 7. **动态履约仿真设计**  
    展示午餐高峰多时间步、推荐列表产生订单、订单推荐/匹配给骑手、状态更新闭环。

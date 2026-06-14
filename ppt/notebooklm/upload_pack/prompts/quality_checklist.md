@@ -30,7 +30,7 @@
 
 - [ ] `UserOnly`：Recall@20 = `0.4287`，NDCG@20 = `0.3423`，HitRate@20 = `0.5733`。
 - [ ] `Seq-Hybrid`：Recall@20 = `0.4441`，NDCG@20 = `0.3513`，HitRate@20 = `0.5933`。
-- [ ] `Seq-xQuAD`：Recall@20 = `0.4447`，NDCG@20 = `0.3538`，HitRate@20 = `0.5967`。
+- [ ] `Seq-xQuAD`：Recall@20 = `0.4447`，NDCG@20 = `0.3538`，HitRate@20 = `0.5967`，CategoryJSD@20 = `0.0151`。
 - [ ] `Seq-xQuAD-Tripartite`：Recall@20 = `0.4180`，NDCG@20 = `0.3440`，HitRate@20 = `0.5733`。
 - [ ] `Ours-Balanced`：Recall@20 = `0.4097`，NDCG@20 = `0.3346`，HitRate@20 = `0.5633`。
 - [ ] `Ours-Full`：Recall@20 = `0.4055`，NDCG@20 = `0.3320`，HitRate@20 = `0.5633`。

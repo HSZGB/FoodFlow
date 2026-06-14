@@ -5,6 +5,7 @@ Then paste `prompts/notebooklm_master_prompt.md` as the generation prompt.
 
 ## Files
 
+- `figures/offline_category_jsd20.png`
 - `figures/offline_coverage20.png`
 - `figures/offline_exposure_gini.png`
 - `figures/offline_ndcg20.png`

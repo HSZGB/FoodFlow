@@ -220,10 +220,18 @@ def generate_figures(results_dir: Path, figures_dir: Path) -> list[Path]:
             ("NDCG@20", "offline_ndcg20.png", "Offline recommendation NDCG@20"),
             ("Coverage@20", "offline_coverage20.png", "Provider coverage@20"),
             ("ExposureGini", "offline_exposure_gini.png", "Merchant exposure Gini"),
+            ("CategoryJSD@20", "offline_category_jsd20.png", "Category calibration JSD@20"),
         ]:
             if metric in offline.columns:
                 out = figures_dir / filename
-                _save_bar(offline, "model", metric, title, out, higher_better=metric != "ExposureGini")
+                _save_bar(
+                    offline,
+                    "model",
+                    metric,
+                    title,
+                    out,
+                    higher_better=metric not in {"ExposureGini", "CategoryJSD@20"},
+                )
                 made.append(out)
 
         if {"NDCG@20", "ExposureGini"}.issubset(offline.columns):

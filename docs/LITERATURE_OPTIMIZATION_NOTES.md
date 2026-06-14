@@ -13,6 +13,7 @@ FoodFlow 当前最值得增强的方向不是直接堆大模型，而是把外�
 | 会话/短序列推荐 | Neural Attentive Session-based Recommendation, CIKM 2017；SR-GNN, AAAI 2019 | 最近行为在短期意图中权重更高 | `Seq-Hybrid` 使用快/慢两个时间衰减复购分 |
 | 时间上下文推荐 | Déjà vu: Contextualized Temporal Attention for Sequential Recommendation, 2020 | 重复消费需要显式建模时间与上下文 | 加入时段、最近订单和时间衰减特征 |
 | 多目标推荐 | Multi-Objective Recommender Systems: Survey and Challenges, 2022 | 准确率、覆盖、公平、履约并非单一目标 | 保留 `Seq-Hybrid` 作为准确性上界，同时用 `Ours-Full` 讲系统级收益 |
+| 校准推荐 | Calibrated Recommendations, RecSys 2018 | 推荐列表的品类分布应贴近用户历史偏好，避免看似多样但偏离兴趣 | 新增 `CategoryJSD@20`，用 Jensen-Shannon divergence 衡量推荐品类校准 |
 | 曝光公平 | Burke, Multisided Fairness for Recommendation, 2017；Joint Multisided Exposure Fairness, SIGIR 2022 | 推荐平台要同时考虑消费者和供给侧曝光 | `Ours-Full` 和图表继续展示 Coverage、Long-tail Exposure、Exposure Gini |
 | 多样性重排 | YouTube DPP reranking, CIKM 2018；MMR/xQuAD 思路 | 排序后可做多样性、覆盖和供给约束重排 | 新增 `Seq-xQuAD`，在序列相关性后做品类覆盖和长尾曝光的列表级重排 |
 | 即时配送派单 | Matching Algorithm with Reinforcement Learning and Decoupling Strategy for Order Dispatching in On-Demand Food Delivery, TST 2023 | 推荐产生订单后，派单和 ETA 会反过来影响平台体验 | 新增 `Seq-xQuAD-Tripartite`，把列表级重排和 ETA/供给/负载感知派单串成闭环 |
@@ -55,14 +56,14 @@ list_score =
 
 ## 当前指标收益
 
-完整 TRD 处理结果上，`Seq-xQuAD` 成为离线推荐指标最强策略：
+完整 TRD 处理结果上，`Seq-xQuAD` 成为离线推荐指标最强策略，同时 `CategoryJSD@20` 最低，说明它在提升命中的同时没有明显偏离用户历史品类偏好：
 
-| 模型 | Recall@20 | NDCG@20 | HitRate@20 |
-|---|---:|---:|---:|
-| UserOnly | 0.4287 | 0.3423 | 0.5733 |
-| Seq-Hybrid | 0.4441 | 0.3513 | 0.5933 |
-| Seq-xQuAD | 0.4447 | 0.3538 | 0.5967 |
-| Seq-xQuAD-Tripartite | 0.4180 | 0.3440 | 0.5733 |
+| 模型 | Recall@20 | NDCG@20 | HitRate@20 | CategoryJSD@20 |
+|---|---:|---:|---:|---:|
+| UserOnly | 0.4287 | 0.3423 | 0.5733 | 0.0156 |
+| Seq-Hybrid | 0.4441 | 0.3513 | 0.5933 | 0.0152 |
+| Seq-xQuAD | 0.4447 | 0.3538 | 0.5967 | 0.0151 |
+| Seq-xQuAD-Tripartite | 0.4180 | 0.3440 | 0.5733 | 0.0158 |
 
 本轮继续实现了 `Seq-Tripartite`：在 `Seq-Hybrid` 的序列偏好底座上轻量加入公平、ETA 和供给约束。它的 NDCG@20 和 HitRate@20 高于 UserOnly，仿真平台效用也高于 `Seq-Hybrid + MinETA`，说明序列准确性可以和三方约束结合。
 

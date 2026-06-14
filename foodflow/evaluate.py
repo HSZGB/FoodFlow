@@ -32,7 +32,7 @@ def run_offline_eval(
         fit_done = perf_counter()
         result = recommender.recommend(users, max(ks), periods)
         rec_done = perf_counter()
-        metrics = evaluate_recommendations(result.recommendations, truth, data.merchants, ks)
+        metrics = evaluate_recommendations(result.recommendations, truth, data.merchants, ks, data.history_by_user())
         metrics["model"] = result.name
         rows.append(metrics)
         print(

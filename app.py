@@ -692,15 +692,19 @@ with tab_metrics:
         user_best = offline.sort_values("Recall@20", ascending=False).iloc[0]
         utility_best = sim.sort_values("platform_utility", ascending=False).iloc[0]
         eta_best = sim.sort_values("avg_eta").iloc[0]
+        calibration_best = (
+            offline.sort_values("CategoryJSD@20").iloc[0] if "CategoryJSD@20" in offline.columns else user_best
+        )
         utility_model_name = POLICY_MODEL_MAP.get(str(utility_best["policy"]), str(utility_best["policy"]))
         utility_model_match = offline[offline["model"].astype(str) == utility_model_name]
         utility_model = utility_model_match.iloc[0] if not utility_model_match.empty else user_best
 
-        k1, k2, k3, k4 = st.columns(4)
+        k1, k2, k3, k4, k5 = st.columns(5)
         k1.metric("最高 Recall@20", f"{user_best['Recall@20']:.4f}", str(user_best["model"]))
         k2.metric("最高效用模型 Recall@20", f"{utility_model['Recall@20']:.4f}", utility_model_name)
-        k3.metric("最低 Avg ETA", f"{eta_best['avg_eta']:.2f}", str(eta_best["policy"]))
-        k4.metric("最高平台效用", f"{utility_best['platform_utility']:.4f}", str(utility_best["policy"]))
+        k3.metric("最佳品类校准", f"{calibration_best.get('CategoryJSD@20', 0.0):.4f}", str(calibration_best["model"]))
+        k4.metric("最低 Avg ETA", f"{eta_best['avg_eta']:.2f}", str(eta_best["policy"]))
+        k5.metric("最高平台效用", f"{utility_best['platform_utility']:.4f}", str(utility_best["policy"]))
 
         frontier_df = frontier.rename(
             columns={

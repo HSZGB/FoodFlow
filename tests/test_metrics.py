@@ -1,7 +1,16 @@
 import pandas as pd
 
 from foodflow.frontier import build_tripartite_frontier, is_pareto_frontier
-from foodflow.metrics import gini, hitrate_at_k, mrr_at_k, ndcg_at_k, recall_at_k
+from foodflow.metrics import (
+    category_jsd_at_k,
+    evaluate_recommendations,
+    gini,
+    hitrate_at_k,
+    jensen_shannon_divergence,
+    mrr_at_k,
+    ndcg_at_k,
+    recall_at_k,
+)
 
 
 def test_ranking_metrics():
@@ -17,6 +26,33 @@ def test_gini_edges():
     assert gini([0, 0, 0]) == 0.0
     assert gini([1, 1, 1]) == 0.0
     assert gini([0, 0, 10]) > 0.6
+
+
+def test_category_calibration_metric():
+    assert jensen_shannon_divergence({"a": 1.0}, {"a": 1.0}) == 0.0
+    left_right = jensen_shannon_divergence({"a": 0.8, "b": 0.2}, {"a": 0.2, "b": 0.8})
+    right_left = jensen_shannon_divergence({"a": 0.2, "b": 0.8}, {"a": 0.8, "b": 0.2})
+    assert left_right == right_left
+    category_by_merchant = {"m1": "food", "m2": "food", "m3": "drink", "m4": "drink"}
+    assert category_jsd_at_k(["m1", "m2"], ["m1", "m2"], category_by_merchant, 2) == 0.0
+    assert category_jsd_at_k(["m3", "m4"], ["m1", "m2"], category_by_merchant, 2) > 0.0
+
+    merchants = pd.DataFrame(
+        [
+            {"wm_poi_id": "m1", "order_count": 10, "primary_first_tag_id": "food"},
+            {"wm_poi_id": "m2", "order_count": 5, "primary_first_tag_id": "food"},
+            {"wm_poi_id": "m3", "order_count": 2, "primary_first_tag_id": "drink"},
+        ]
+    )
+    metrics = evaluate_recommendations(
+        {"u1": ["m1", "m3"]},
+        {"u1": {"m1"}},
+        merchants,
+        [2],
+        {"u1": ["m1", "m2"]},
+    )
+    assert "CategoryJSD@2" in metrics
+    assert metrics["CategoryJSD@2"] > 0.0
 
 
 def test_tripartite_frontier_marks_dominated_rows():

@@ -112,7 +112,7 @@ def build_report(
 
 {offline_table}
 
-推荐侧指标使用 Recall@K、NDCG@K、MRR@K 和 HitRate@K；商家侧指标使用 Coverage、Long-tail Exposure 和 Exposure Gini。这样既能看推荐是否命中真实下单，也能看曝光是否过度集中。全量 TRD 结果中，Seq-xQuAD 的 Recall@20、NDCG@20、MRR@20 和 HitRate@20 最高，说明外卖推荐既受最近订单和复购序列影响，也能从列表级多样性重排中获益；Seq-xQuAD-Tripartite 的离线准确性低于纯 Seq-xQuAD，但 Exposure Gini 更低，并且 NDCG@20 仍略高于 UserOnly；Ours-Balanced 和 Ours-Full 离线准确率较低，但引入了履约和供给约束，因此后续需要结合仿真指标判断。
+推荐侧指标使用 Recall@K、NDCG@K、MRR@K 和 HitRate@K；商家侧指标使用 Coverage、Long-tail Exposure 和 Exposure Gini；校准侧指标使用 CategoryJSD@20，衡量推荐列表品类分布与用户历史品类分布的 Jensen-Shannon divergence，数值越低越贴近用户习惯。这样既能看推荐是否命中真实下单，也能看曝光是否过度集中，以及列表是否偏离用户长期品类偏好。全量 TRD 结果中，Seq-xQuAD 的 Recall@20、NDCG@20、MRR@20、HitRate@20 和 CategoryJSD@20 最优，说明外卖推荐既受最近订单和复购序列影响，也能从列表级多样性重排中获益，同时保持较好的用户品类校准；Seq-xQuAD-Tripartite 的离线准确性低于纯 Seq-xQuAD，但 Exposure Gini 更低，并且 NDCG@20 仍略高于 UserOnly；Ours-Balanced 和 Ours-Full 离线准确率较低，但引入了履约和供给约束，因此后续需要结合仿真指标判断。
 
 ## 5. 动态履约仿真结果
 
