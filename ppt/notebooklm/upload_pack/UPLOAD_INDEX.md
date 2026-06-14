@@ -32,6 +32,7 @@ Then paste `prompts/notebooklm_master_prompt.md` as the generation prompt.
 - `sources/DATA_AUDIT.md`
 - `sources/DATA_SOURCE.md`
 - `sources/IMPROVEMENT_RESEARCH.md`
+- `sources/SEQ_TUNED_SEARCH.md`
 - `sources/WEIGHT_SENSITIVITY.md`
 - `sources/ppt_outline.md`
 - `sources/slide_07_local_draft_prompt.md`

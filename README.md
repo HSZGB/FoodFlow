@@ -253,5 +253,6 @@ python3 scripts/prepare_notebooklm_pack.py
 - 项目计划：`PROJECT_PLAN.md`
 - 数据来源说明：`docs/DATA_SOURCE.md`
 - 权重敏感性分析：`docs/WEIGHT_SENSITIVITY.md`
+- Seq-Tuned 权重搜索：`docs/SEQ_TUNED_SEARCH.md`
 - 实验报告：`report/实验报告.md`
 - PPT 生成材料：`ppt/notebooklm/`

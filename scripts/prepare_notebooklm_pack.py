@@ -22,6 +22,7 @@ SOURCE_FILES = [
     (ROOT / "docs" / "DATA_AUDIT.md", "DATA_AUDIT.md"),
     (ROOT / "docs" / "IMPROVEMENT_RESEARCH.md", "IMPROVEMENT_RESEARCH.md"),
     (ROOT / "docs" / "WEIGHT_SENSITIVITY.md", "WEIGHT_SENSITIVITY.md"),
+    (ROOT / "docs" / "SEQ_TUNED_SEARCH.md", "SEQ_TUNED_SEARCH.md"),
     (ROOT / "ppt" / "FoodFlow" / "outline.md", "ppt_outline.md"),
     (ROOT / "作业要求.md", "作业要求.md"),
     (ROOT / "硬性要求.md", "硬性要求.md"),
