@@ -70,6 +70,45 @@ st.markdown(
         background: #f8fafc;
         font-size: 0.76rem;
     }
+    .ff-ops-grid {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 0.75rem;
+        margin: 0.45rem 0 1rem;
+    }
+    .ff-ops-card {
+        border: 1px solid #d9e2ec;
+        border-left: 5px solid var(--accent);
+        border-radius: 8px;
+        padding: 0.72rem 0.8rem;
+        background: #ffffff;
+        min-height: 132px;
+    }
+    .ff-ops-title {
+        color: #0f172a;
+        font-size: 0.86rem;
+        font-weight: 760;
+        line-height: 1.25;
+        min-height: 2.1rem;
+    }
+    .ff-ops-rank {
+        color: #64748b;
+        font-size: 0.74rem;
+        font-weight: 680;
+        margin-bottom: 0.18rem;
+    }
+    .ff-ops-line {
+        display: flex;
+        justify-content: space-between;
+        gap: 0.45rem;
+        color: #475569;
+        font-size: 0.78rem;
+        margin-top: 0.35rem;
+    }
+    .ff-ops-value { color: #0f172a; font-weight: 760; }
+    @media (max-width: 900px) {
+        .ff-ops-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
     </style>
     """,
     unsafe_allow_html=True,
@@ -161,6 +200,22 @@ def demo_color(name: object) -> str:
 
 def demo_color_map(values) -> dict[str, str]:
     return {str(value): demo_color(value) for value in values}
+
+
+def peak_policy_card(row: pd.Series, rank: int) -> str:
+    policy = html.escape(str(row["policy"]))
+    color = demo_color(row["policy"])
+    on_time = 1.0 - float(row["timeout_rate"])
+    return f"""
+    <div class="ff-ops-card" style="--accent:{color};">
+      <div class="ff-ops-rank">策略排名 {rank}</div>
+      <div class="ff-ops-title">{policy}</div>
+      <div class="ff-ops-line"><span>累计订单</span><span class="ff-ops-value">{int(row['completed_orders'])}</span></div>
+      <div class="ff-ops-line"><span>Avg ETA</span><span class="ff-ops-value">{float(row['avg_eta']):.1f} min</span></div>
+      <div class="ff-ops-line"><span>准时率</span><span class="ff-ops-value">{on_time:.1%}</span></div>
+      <div class="ff-ops-line"><span>活跃骑手</span><span class="ff-ops-value">{int(row['active_riders'])}</span></div>
+    </div>
+    """
 
 
 def recommendation_card(row: pd.Series, selected: bool = False) -> str:
@@ -598,6 +653,15 @@ with tab_peak:
             p3.metric("最低累计超时率", f"{best_timeout_trace['timeout_rate']:.3f}", str(best_timeout_trace["policy"]))
             p4.metric("仿真步数", int(trace_df["step"].max()))
 
+            ops_board = final_trace.assign(on_time_rate=1.0 - final_trace["timeout_rate"]).sort_values(
+                ["on_time_rate", "avg_eta", "completed_orders"], ascending=[False, True, False]
+            )
+            cards = "".join(
+                peak_policy_card(row, rank)
+                for rank, (_, row) in enumerate(ops_board.head(4).iterrows(), start=1)
+            )
+            st.markdown(f'<div class="ff-ops-grid">{cards}</div>', unsafe_allow_html=True)
+
             t1, t2 = st.columns(2)
             with t1:
                 order_fig = px.bar(
@@ -620,13 +684,13 @@ with tab_peak:
                 order_fig.update_yaxes(gridcolor="#e2e8f0")
                 st.plotly_chart(order_fig, use_container_width=True)
 
-                eta_heat = trace_df.pivot(index="policy", columns="step", values="avg_eta")
+                eta_heat = trace_df.pivot(index="policy", columns="step", values="step_avg_eta")
                 eta_fig = px.imshow(
                     eta_heat,
                     text_auto=".1f",
                     aspect="auto",
                     color_continuous_scale=["#ecfeff", "#0f766e", "#164e63"],
-                    title="平均 ETA 热力图",
+                    title="当步 ETA 热力图",
                 )
                 eta_fig.update_layout(
                     height=330,
@@ -658,20 +722,20 @@ with tab_peak:
                 timeout_fig.update_yaxes(gridcolor="#e2e8f0", tickformat=".0%")
                 st.plotly_chart(timeout_fig, use_container_width=True)
 
-                load_heat = trace_df.pivot(index="policy", columns="step", values="rider_load_std")
+                load_heat = trace_df.pivot(index="policy", columns="step", values="step_timeout_rate")
                 load_fig = px.imshow(
                     load_heat,
-                    text_auto=".2f",
+                    text_auto=".0%",
                     aspect="auto",
                     color_continuous_scale=["#f8fafc", "#f59e0b", "#7c2d12"],
-                    title="骑手负载波动热力图",
+                    title="当步超时率热力图",
                 )
                 load_fig.update_layout(
                     height=330,
                     margin=dict(l=8, r=8, t=48, b=8),
                     xaxis_title="时间步",
                     yaxis_title="",
-                    coloraxis_colorbar=dict(title="std"),
+                    coloraxis_colorbar=dict(title="rate"),
                 )
                 st.plotly_chart(load_fig, use_container_width=True)
 

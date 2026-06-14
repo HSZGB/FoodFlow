@@ -254,6 +254,9 @@ def build_peak_trace(
             request_users = random.choice(eval_users, size=sample_size, replace=False).tolist()
             periods = {user_id: "lunch" for user_id in request_users}
             rec_result = model.recommend(request_users, top_k, periods)
+            step_etas: list[float] = []
+            step_completed = 0
+            step_timeout = 0
 
             for user_id in request_users:
                 recs = rec_result.recommendations.get(user_id, [])
@@ -278,8 +281,12 @@ def build_peak_trace(
                     continue
                 update_rider_after_assignment(riders, rider_id, eta, current_time)
                 completed += 1
+                step_completed += 1
                 etas.append(float(eta))
-                timeout += int(float(eta) > 45.0)
+                step_etas.append(float(eta))
+                is_timeout = int(float(eta) > 45.0)
+                timeout += is_timeout
+                step_timeout += is_timeout
 
             assigned = riders[pd.to_numeric(riders["assigned"], errors="coerce").fillna(0) > 0]
             rows.append(
@@ -287,6 +294,9 @@ def build_peak_trace(
                     "policy": policy_name,
                     "step": step + 1,
                     "minute": current_time,
+                    "step_completed_orders": step_completed,
+                    "step_avg_eta": float(np.mean(step_etas)) if step_etas else 0.0,
+                    "step_timeout_rate": float(step_timeout / step_completed) if step_completed else 0.0,
                     "completed_orders": completed,
                     "avg_eta": float(np.mean(etas)) if etas else 0.0,
                     "timeout_rate": float(timeout / completed) if completed else 0.0,

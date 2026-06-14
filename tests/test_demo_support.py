@@ -78,3 +78,5 @@ def test_demo_recommendation_and_rider_frames(tmp_path: Path):
     assert set(trace["policy"]) == {"UserOnly + MinETA", "Ours-Full"}
     assert trace["step"].max() == 3
     assert trace["completed_orders"].max() > 0
+    assert {"step_completed_orders", "step_avg_eta", "step_timeout_rate"}.issubset(trace.columns)
+    assert trace["step_completed_orders"].ge(0).all()
