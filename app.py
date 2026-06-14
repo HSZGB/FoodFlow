@@ -14,6 +14,7 @@ from foodflow.data import PreparedData
 from foodflow.demo_support import (
     build_recommendation_frame,
     build_peak_trace,
+    build_rider_candidate_frame,
     build_rider_policy_frame,
     clamp01,
     demo_user_cases,
@@ -557,6 +558,7 @@ with tab_case:
     with left:
         st.markdown(recommendation_card(chosen_row, selected=True), unsafe_allow_html=True)
         rider_compare = build_rider_policy_frame(user_row, merchant_row, riders, period)
+        rider_candidates = build_rider_candidate_frame(user_row, merchant_row, riders, period, top_n=10)
         load_aware = rider_compare[rider_compare["policy_key"] == "load_aware"].iloc[0]
         c1, c2, c3 = st.columns(3)
         c1.metric("匹配骑手", str(load_aware["rider_id"]))
@@ -596,6 +598,73 @@ with tab_case:
         )
         eta_fig.update_layout(showlegend=False, height=270, margin=dict(l=8, r=8, t=48, b=8), yaxis_title="分钟")
         st.plotly_chart(eta_fig, use_container_width=True)
+
+    candidate_left, candidate_right = st.columns([1.1, 1])
+    if not rider_candidates.empty:
+        candidate_view = rider_candidates.copy()
+        candidate_view["status"] = [
+            "已派单" if str(rider_id) == str(load_aware["rider_id"]) else "候选"
+            for rider_id in candidate_view["rider_id"]
+        ]
+        with candidate_left:
+            st.subheader("订单推荐给骑手候选榜")
+            rider_table = candidate_view[
+                ["rank", "status", "rider_id", "score", "eta", "pickup_distance_km", "load", "reliability", "reason"]
+            ].rename(
+                columns={
+                    "rank": "排名",
+                    "status": "状态",
+                    "rider_id": "骑手",
+                    "score": "派单分",
+                    "eta": "ETA",
+                    "pickup_distance_km": "取餐距离km",
+                    "load": "当前负载",
+                    "reliability": "可靠性",
+                    "reason": "排序依据",
+                }
+            )
+            st.dataframe(
+                rider_table,
+                use_container_width=True,
+                hide_index=True,
+                column_config={
+                    "派单分": st.column_config.NumberColumn(format="%.3f"),
+                    "ETA": st.column_config.NumberColumn(format="%.1f"),
+                    "取餐距离km": st.column_config.NumberColumn(format="%.2f"),
+                    "可靠性": st.column_config.NumberColumn(format="%.2f"),
+                },
+            )
+        with candidate_right:
+            candidate_plot = candidate_view.sort_values("score", ascending=True)
+            score_fig = px.bar(
+                candidate_plot,
+                x="score",
+                y="rider_id",
+                orientation="h",
+                color="status",
+                title="候选骑手派单分",
+                color_discrete_map={"已派单": "#7c3aed", "候选": "#94a3b8"},
+                custom_data=["eta", "load", "reliability", "pickup_distance_km"],
+            )
+            score_fig.update_traces(
+                hovertemplate=(
+                    "骑手 %{y}<br>派单分 %{x:.3f}<br>ETA %{customdata[0]:.1f} min"
+                    "<br>负载 %{customdata[1]}<br>可靠性 %{customdata[2]:.2f}"
+                    "<br>取餐距离 %{customdata[3]:.2f} km<extra></extra>"
+                )
+            )
+            score_fig.update_layout(
+                height=315,
+                margin=dict(l=8, r=8, t=48, b=8),
+                xaxis_title="负载感知得分",
+                yaxis_title="",
+                plot_bgcolor="#f8fafc",
+                paper_bgcolor="#ffffff",
+                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0),
+            )
+            score_fig.update_xaxes(gridcolor="#e2e8f0", range=[0, max(float(candidate_plot["score"].max()) * 1.08, 0.1)])
+            score_fig.update_yaxes(showgrid=False)
+            st.plotly_chart(score_fig, use_container_width=True)
 
     flow_col, map_col = st.columns([0.9, 1.25])
     with flow_col:
@@ -697,6 +766,29 @@ with tab_case:
                 hovertemplate="骑手 %{text}<br>负载 %{customdata[0]}<br>可靠性 %{customdata[1]:.2f}<extra></extra>",
             )
         )
+        if not rider_candidates.empty:
+            map_fig.add_trace(
+                go.Scatter(
+                    x=rider_candidates["lng"],
+                    y=rider_candidates["lat"],
+                    mode="markers+text",
+                    name="Top 候选骑手",
+                    text=rider_candidates["rank"].astype(int).map(lambda value: f"R{value}"),
+                    customdata=rider_candidates[["rider_id", "score", "eta", "load"]].to_numpy(),
+                    textposition="top center",
+                    marker=dict(
+                        size=(12 - rider_candidates["rank"].clip(upper=8) * 0.45).clip(lower=8),
+                        color="#7c3aed",
+                        opacity=0.86,
+                        symbol="circle-open-dot",
+                        line=dict(width=1.4, color="#7c3aed"),
+                    ),
+                    hovertemplate=(
+                        "骑手 %{customdata[0]}<br>派单分 %{customdata[1]:.3f}"
+                        "<br>ETA %{customdata[2]:.1f} min<br>负载 %{customdata[3]}<extra></extra>"
+                    ),
+                )
+            )
         map_fig.add_trace(
             go.Scatter(
                 x=[rider_lng, merchant_lng],
@@ -772,6 +864,8 @@ with tab_case:
         focus_lat = [user_lat, merchant_lat, rider_lat] + rec_df["lat"].dropna().astype(float).tolist()
         focus_lng += nearby_riders["lng"].dropna().astype(float).tolist()
         focus_lat += nearby_riders["lat"].dropna().astype(float).tolist()
+        focus_lng += rider_candidates["lng"].dropna().astype(float).tolist()
+        focus_lat += rider_candidates["lat"].dropna().astype(float).tolist()
         map_fig.update_layout(
             title="空间供需调度图：候选骑手、取餐圈与配送路径",
             height=390,

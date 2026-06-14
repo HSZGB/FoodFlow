@@ -4,6 +4,7 @@ from foodflow.data import PreparedData
 from foodflow.demo_support import (
     build_recommendation_frame,
     build_peak_trace,
+    build_rider_candidate_frame,
     build_rider_policy_frame,
     demo_user_cases,
     streamlit_image_width_kwargs,
@@ -60,9 +61,26 @@ def test_demo_recommendation_and_rider_frames(tmp_path: Path):
     merchants = data.merchants.set_index("wm_poi_id", drop=False)
     riders = generate_riders(data.merchants, n_riders=8, seed=456)
     rider_frame = build_rider_policy_frame(users.loc[user_id], merchants.loc[recs[0]], riders, "lunch")
+    candidate_frame = build_rider_candidate_frame(users.loc[user_id], merchants.loc[recs[0]], riders, "lunch", top_n=8)
 
     assert set(rider_frame["policy_key"]) == {"nearest", "min_eta", "load_aware"}
     assert rider_frame["eta"].min() > 0
+    assert len(candidate_frame) == 8
+    assert candidate_frame["rank"].tolist() == list(range(1, 9))
+    assert candidate_frame["score"].iloc[0] >= candidate_frame["score"].iloc[-1]
+    assert candidate_frame["eta"].min() > 0
+    assert {
+        "rider_id",
+        "score",
+        "eta_score",
+        "pickup_distance_km",
+        "load_score",
+        "reason",
+    }.issubset(candidate_frame.columns)
+    load_aware = rider_frame[rider_frame["policy_key"] == "load_aware"].iloc[0]
+    chosen_candidate = candidate_frame[candidate_frame["rider_id"].astype(str) == str(load_aware["rider_id"])]
+    assert not chosen_candidate.empty
+    assert abs(float(chosen_candidate.iloc[0]["score"]) - float(candidate_frame["score"].max())) < 1e-12
 
     trace = build_peak_trace(
         data,

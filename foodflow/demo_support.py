@@ -9,7 +9,7 @@ import pandas as pd
 
 from .data import PreparedData
 from .rerank import estimate_user_merchant_eta, fairness_scores, haversine_km, supply_score_for_merchant
-from .rider_sim import assign_order, generate_riders, update_rider_after_assignment
+from .rider_sim import assign_order, estimate_order_eta, generate_riders, rider_score, update_rider_after_assignment
 
 
 def streamlit_image_width_kwargs(image_func: Callable) -> dict[str, object]:
@@ -220,6 +220,74 @@ def build_rider_policy_frame(
             }
         )
     return pd.DataFrame(rows)
+
+
+def rider_candidate_reason(row: pd.Series) -> str:
+    reasons = []
+    if float(row["eta"]) <= 35:
+        reasons.append("ETA 短")
+    if float(row["pickup_distance_km"]) <= 2.5:
+        reasons.append("取餐近")
+    if int(row["load"]) == 0:
+        reasons.append("低负载")
+    if float(row["reliability"]) >= 0.92:
+        reasons.append("可靠性高")
+    return " / ".join(reasons[:3]) if reasons else "综合得分靠前"
+
+
+def build_rider_candidate_frame(
+    user_row: pd.Series,
+    merchant_row: pd.Series,
+    riders: pd.DataFrame,
+    period: str,
+    current_time: int = 0,
+    top_n: int = 8,
+) -> pd.DataFrame:
+    columns = [
+        "rank",
+        "rider_id",
+        "score",
+        "eta",
+        "eta_score",
+        "pickup_distance_km",
+        "load",
+        "load_score",
+        "reliability",
+        "available_at",
+        "lng",
+        "lat",
+        "reason",
+    ]
+    if riders.empty or top_n <= 0:
+        return pd.DataFrame(columns=columns)
+
+    candidates = riders.copy()
+    candidates["rider_id"] = candidates["rider_id"].astype(str)
+    candidates["lng"] = pd.to_numeric(candidates["lng"], errors="coerce").fillna(116.40)
+    candidates["lat"] = pd.to_numeric(candidates["lat"], errors="coerce").fillna(39.92)
+    candidates["load"] = pd.to_numeric(candidates["load"], errors="coerce").fillna(0).astype(int)
+    candidates["available_at"] = pd.to_numeric(candidates["available_at"], errors="coerce").fillna(0).astype(int)
+    candidates["reliability"] = pd.to_numeric(candidates["reliability"], errors="coerce").fillna(0.88)
+    candidates["eta"] = candidates.apply(
+        lambda row: estimate_order_eta(user_row, merchant_row, row, period, current_time), axis=1
+    )
+    candidates["eta_score"] = 1.0 - (pd.to_numeric(candidates["eta"], errors="coerce") / 80.0).clip(upper=1.0)
+    candidates["load_score"] = 1.0 / (1.0 + candidates["load"].astype(float))
+    candidates["score"] = candidates.apply(lambda row: rider_score(float(row["eta"]), row), axis=1)
+    candidates["pickup_distance_km"] = candidates.apply(
+        lambda row: haversine_km(
+            float(row["lng"]),
+            float(row["lat"]),
+            float(merchant_row.get("lng", 116.40)),
+            float(merchant_row.get("lat", 39.92)),
+        ),
+        axis=1,
+    )
+    candidates = candidates.sort_values(["score", "eta", "pickup_distance_km"], ascending=[False, True, True]).head(top_n)
+    candidates = candidates.reset_index(drop=True)
+    candidates["rank"] = np.arange(1, len(candidates) + 1)
+    candidates["reason"] = candidates.apply(rider_candidate_reason, axis=1)
+    return candidates[columns]
 
 
 def build_peak_trace(
