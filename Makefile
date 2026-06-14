@@ -11,7 +11,7 @@ SMOKE_FIGURES ?= outputs/smoke/figures
 SMOKE_REPORT ?= outputs/smoke/report.md
 SEQ_SEARCH_RESULTS ?= outputs/experiments/seq_weight_search_smoke.csv
 
-.PHONY: setup conda-setup conda-test conda-smoke seq-tune-smoke download mock preprocess preprocess-full eval simulate audit figures report demo demo-full test smoke clean
+.PHONY: setup conda-setup conda-test conda-smoke seq-tune-smoke download mock preprocess preprocess-full eval simulate audit figures report demo demo-full demo-check test smoke clean
 
 setup:
 	python3 -m venv .venv
@@ -64,14 +64,28 @@ figures:
 report:
 	$(PYTHON) -m foodflow.cli report --results-dir outputs/results --figures-dir outputs/figures --output report/实验报告.md --data-audit outputs/results/data_audit.json
 
+demo-check:
+	@printf "\nChecking common Streamlit ports...\n"
+	@if command -v lsof >/dev/null 2>&1; then \
+		lsof -nP -iTCP:8501 -sTCP:LISTEN || true; \
+		lsof -nP -iTCP:8502 -sTCP:LISTEN || true; \
+	else \
+		printf "lsof is not installed; skip port listing.\n"; \
+	fi
+	@printf "If the browser still shows an old page, stop the old Streamlit terminal or rerun demo on another port.\n\n"
+
 demo:
+	@$(MAKE) --no-print-directory demo-check
 	@printf "\nFoodFlow demo is a long-running Streamlit web server, not a batch command.\n"
-	@printf "Keep this terminal open, then visit http://localhost:8501 . Press Ctrl+C here to stop.\n\n"
+	@printf "Keep this terminal open, then visit the Streamlit Local URL below. Default is http://localhost:8501 .\n"
+	@printf "Press Ctrl+C here to stop.\n\n"
 	$(STREAMLIT) run app.py --server.headless true $(STREAMLIT_FLAGS)
 
 demo-full:
+	@$(MAKE) --no-print-directory demo-check
 	@printf "\nFoodFlow demo-full uses all processed train orders and may take longer on first load.\n"
-	@printf "Keep this terminal open, then visit http://localhost:8501 . Press Ctrl+C here to stop.\n\n"
+	@printf "Keep this terminal open, then visit the Streamlit Local URL below. Default is http://localhost:8501 .\n"
+	@printf "Press Ctrl+C here to stop.\n\n"
 	FOODFLOW_DEMO_MAX_ORDERS=0 $(STREAMLIT) run app.py --server.headless true $(STREAMLIT_FLAGS)
 
 test:

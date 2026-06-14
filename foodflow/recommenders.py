@@ -667,11 +667,8 @@ class OursFullRecommender(TripartiteRerankRecommender):
 def build_recommenders(seed: int = 42) -> list[BaseRecommender]:
     return [
         PopularRecommender(),
-        RepeatRecommender(),
         BPRMFRecommender(seed=seed),
         UserOnlyRecommender(),
         SeqTunedRecommender(),
-        SeqTunedXQuadRecommender(),
         SeqXQuadTripartiteRecommender(),
-        OursFullRecommender(),
     ]

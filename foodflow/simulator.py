@@ -11,10 +11,8 @@ import pandas as pd
 from .data import PreparedData
 from .metrics import gini
 from .recommenders import (
-    OursFullRecommender,
     PopularRecommender,
     SeqTunedRecommender,
-    SeqTunedXQuadRecommender,
     SeqXQuadTripartiteRecommender,
     UserOnlyRecommender,
 )
@@ -33,9 +31,7 @@ DEFAULT_POLICIES = [
     SimulationPolicy("Popular + Nearest", "popular", "nearest"),
     SimulationPolicy("UserOnly + MinETA", "useronly", "min_eta"),
     SimulationPolicy("Seq-Tuned + MinETA", "seq_tuned", "min_eta"),
-    SimulationPolicy("Seq-Tuned-xQuAD + MinETA", "seq_tuned_xquad", "min_eta"),
     SimulationPolicy("Seq-xQuAD-Tripartite", "seq_xquad_tripartite", "load_aware", fairness=True),
-    SimulationPolicy("Ours-Full", "ours", "load_aware", fairness=True),
 ]
 
 
@@ -46,12 +42,8 @@ def _select_recommender(data: PreparedData, name: str, seed: int):
         return UserOnlyRecommender().fit(data)
     if name == "seq_tuned":
         return SeqTunedRecommender().fit(data)
-    if name == "seq_tuned_xquad":
-        return SeqTunedXQuadRecommender().fit(data)
     if name == "seq_xquad_tripartite":
         return SeqXQuadTripartiteRecommender().fit(data)
-    if name == "ours":
-        return OursFullRecommender().fit(data)
     raise ValueError(name)
 
 

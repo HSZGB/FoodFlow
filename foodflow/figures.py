@@ -11,14 +11,11 @@ from .io import ensure_dir
 
 
 HIGHLIGHT = {
-    "Seq-Tuned-xQuAD": "#0E7490",
+    "Popular": "#64748B",
+    "BPR-MF": "#94A3B8",
+    "UserOnly": "#2563EB",
     "Seq-Tuned": "#B45309",
     "Seq-xQuAD-Tripartite": "#B5121B",
-    "Seq-xQuAD": "#2563EB",
-    "Seq-Hybrid": "#60A5FA",
-    "Seq-Tripartite": "#0F766E",
-    "Ours-Full": "#DC6803",
-    "Ours-Balanced": "#7C3AED",
 }
 DEFAULT_COLOR = "#CBD5E1"
 TEXT_COLOR = "#0F172A"
@@ -34,14 +31,11 @@ def _color_for(label: str) -> str:
 
 def _annotate_highlights(ax, df: pd.DataFrame, x: str, y: str, label_col: str) -> None:
     offsets = {
-        "Seq-Tuned-xQuAD": (8, -16),
+        "Popular": (8, -10),
+        "BPR-MF": (8, 8),
+        "UserOnly": (8, -12),
         "Seq-Tuned": (8, 16),
         "Seq-xQuAD-Tripartite": (8, 13),
-        "Ours-Full": (8, -13),
-        "Seq-xQuAD": (8, 8),
-        "Seq-Hybrid": (8, -10),
-        "Seq-Tripartite": (8, 10),
-        "Ours-Balanced": (8, -10),
     }
     for _, row in df.iterrows():
         label = str(row[label_col])
@@ -164,12 +158,10 @@ def _save_frontier_plot(frontier: pd.DataFrame, path: Path) -> None:
             zorder=3,
         )
     selected_labels = {
+        "Popular + Nearest": (8, -14),
+        "UserOnly + MinETA": (8, -14),
         "Seq-Tuned + MinETA": (8, 16),
-        "Seq-Tuned-xQuAD + MinETA": (8, -16),
         "Seq-xQuAD-Tripartite": (8, 12),
-        "Seq-xQuAD + MinETA": (8, -18),
-        "Seq-Tripartite": (8, 7),
-        "Ours-Full": (8, -16),
     }
     for _, row in plot_df.iterrows():
         label = str(row["policy"])

@@ -102,25 +102,25 @@ def build_report(
 
 ## 3. 方法设计
 
-默认实验只保留代表性策略集合：Popular、Repeat、BPR-MF、UserOnly、Seq-Tuned、Seq-Tuned-xQuAD、Seq-xQuAD-Tripartite 和 Ours-Full。Popular 是基础热度对照；Repeat 反映外卖复购特征；BPR-MF 是传统隐式反馈排序基线；UserOnly 使用品类、复购、价格、时段和商家质量；Seq-Tuned 借鉴 FPMC/下一篮子推荐和会话推荐思想，在同一组可解释序列特征上增强复购和商家转移信号，用作离线准确率前沿；Seq-Tuned-xQuAD 在高准确序列模型后做列表级覆盖与长尾曝光重排；Seq-xQuAD-Tripartite 把列表级覆盖、商家公平、ETA 和供给约束接到同一个重排器；Ours-Full 作为原始三方加权重排对照。
+默认实验只保留 5 个代表策略：Popular、BPR-MF、UserOnly、Seq-Tuned 和 Seq-xQuAD-Tripartite。Popular 是基础热度对照；BPR-MF 是传统隐式反馈排序基线；UserOnly 使用品类、复购、价格、时段和商家质量；Seq-Tuned 借鉴 FPMC/下一篮子推荐和会话推荐思想，在同一组可解释序列特征上增强复购和商家转移信号，用作离线准确率前沿；Seq-xQuAD-Tripartite 把列表级覆盖、商家公平、ETA 和供给约束接到同一个重排器，用来回答三方推荐是否真的改善履约。
 
-项目代码中保留了若干历史消融类，便于复现实验过程；但默认结果和 demo 不再铺开所有候选，答辩主线聚焦为：基础对照 -> 传统排序 -> 用户画像 -> 高准确序列推荐 -> 曝光/校准重排 -> 三方履约重排。
+项目代码中仍保留若干历史消融类，便于追溯实验过程；但默认结果和 demo 不再铺开所有候选，答辩主线聚焦为：基础对照 -> 传统排序 -> 用户画像 -> 高准确序列推荐 -> 三方履约重排。
 
-三方仿真保留 6 条代表链路：Popular + Nearest、UserOnly + MinETA、Seq-Tuned + MinETA、Seq-Tuned-xQuAD + MinETA、Seq-xQuAD-Tripartite 和 Ours-Full。每轮模拟午餐高峰的一批用户请求，推荐列表经过选择模型产生订单，再由最近骑手、最小 ETA 或负载感知策略派单。
+三方仿真保留 4 条代表链路：Popular + Nearest、UserOnly + MinETA、Seq-Tuned + MinETA 和 Seq-xQuAD-Tripartite。每轮模拟午餐高峰的一批用户请求，推荐列表经过选择模型产生订单，再由最近骑手、最小 ETA 或负载感知策略派单。
 
 ## 4. 离线推荐结果
 
 {offline_table}
 
-推荐侧指标使用 Recall@K、NDCG@K、MRR@K 和 HitRate@K；商家侧指标使用 Coverage、Long-tail Exposure 和 Exposure Gini；校准侧指标使用 CategoryJSD@20，衡量推荐列表品类分布与用户历史品类分布的 Jensen-Shannon divergence，数值越低越贴近用户习惯。这样既能看推荐是否命中真实下单，也能看曝光是否过度集中，以及列表是否偏离用户长期品类偏好。全量 TRD 结果中，Seq-Tuned 通常代表离线准确率前沿，说明外卖推荐强烈受复购序列和商家转移影响；Seq-Tuned-xQuAD 在保持高 Recall 的同时改善曝光集中和品类校准；Seq-xQuAD-Tripartite 的离线准确性低于纯用户侧序列模型，但 Exposure Gini 更低，并且后续需要结合仿真指标判断其系统级收益。
+推荐侧指标使用 Recall@K、NDCG@K、MRR@K 和 HitRate@K；商家侧指标使用 Coverage、Long-tail Exposure 和 Exposure Gini；校准侧指标使用 CategoryJSD@20，衡量推荐列表品类分布与用户历史品类分布的 Jensen-Shannon divergence，数值越低越贴近用户习惯。这样既能看推荐是否命中真实下单，也能看曝光是否过度集中，以及列表是否偏离用户长期品类偏好。全量 TRD 结果中，Seq-Tuned 通常代表离线准确率前沿，说明外卖推荐强烈受复购序列和商家转移影响；Seq-xQuAD-Tripartite 的离线准确性低于纯用户侧序列模型，但它把商家曝光和履约约束纳入同一条链路，需要结合仿真指标判断系统级收益。
 
 ## 5. 动态履约仿真结果
 
 {simulation_table}
 
-履约侧指标包括完成订单数、平均 ETA、超时率、骑手负载标准差和平台综合效用。多目标推荐的目标不是所有单项指标都最大，而是在准确性、公平性和履约可行性之间取得更适合外卖平台的折中。全量 TRD 仿真中，Seq-Tuned 和 Seq-Tuned-xQuAD 提升了离线推荐准确性，但进入派单后平台效用仍要与 ETA、超时率和骑手负载一起判断；Seq-xQuAD-Tripartite 展示了把列表级重排与三方履约约束结合的系统级价值。
+履约侧指标包括完成订单数、平均 ETA、超时率、骑手负载标准差和平台综合效用。多目标推荐的目标不是所有单项指标都最大，而是在准确性、公平性和履约可行性之间取得更适合外卖平台的折中。全量 TRD 仿真中，Seq-Tuned 提升了离线推荐准确性，但进入派单后平台效用仍要与 ETA、超时率和骑手负载一起判断；Seq-xQuAD-Tripartite 展示了把列表级重排与三方履约约束结合的系统级价值。
 
-为避免只展示单点权重，图表中额外生成 `pareto_recall_utility.png` 和 `tripartite_frontier.csv`，把 Recall@20、Exposure Gini、平均 ETA、超时率和平台效用合并为非支配前沿视角。答辩时可以用这张图说明：Seq-Tuned / Seq-Tuned-xQuAD 代表离线准确率前沿，Seq-xQuAD-Tripartite 代表系统效用前沿，它们共同构成三方推荐的权衡边界。
+为避免只展示单点权重，图表中额外生成 `pareto_recall_utility.png` 和 `tripartite_frontier.csv`，把 Recall@20、Exposure Gini、平均 ETA、超时率和平台效用合并为非支配前沿视角。答辩时可以用这张图说明：Seq-Tuned 代表离线准确率前沿，Seq-xQuAD-Tripartite 代表系统效用前沿，它们共同构成三方推荐的权衡边界。
 
 ## 6. 图表展示
 

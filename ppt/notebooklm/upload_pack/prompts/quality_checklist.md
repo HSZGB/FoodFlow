@@ -29,16 +29,11 @@
 ## 必须保留的关键数字
 
 - [ ] `UserOnly`：Recall@20 = `0.4287`，NDCG@20 = `0.3423`，HitRate@20 = `0.5733`。
-- [ ] `Seq-Hybrid`：Recall@20 = `0.4441`，NDCG@20 = `0.3513`，HitRate@20 = `0.5933`。
 - [ ] `Seq-Tuned`：Recall@20 = `0.4675`，NDCG@20 = `0.3652`，HitRate@20 = `0.6267`。
-- [ ] `Seq-Tuned-xQuAD`：Recall@20 = `0.4670`，NDCG@20 = `0.3613`，HitRate@20 = `0.6200`，CategoryJSD@20 = `0.0140`。
-- [ ] `Seq-xQuAD`：Recall@20 = `0.4447`，NDCG@20 = `0.3538`，HitRate@20 = `0.5967`。
 - [ ] `Seq-xQuAD-Tripartite`：Recall@20 = `0.4180`，NDCG@20 = `0.3440`，HitRate@20 = `0.5733`。
-- [ ] `Ours-Balanced`：Recall@20 = `0.4097`，NDCG@20 = `0.3346`，HitRate@20 = `0.5633`。
-- [ ] `Ours-Full`：Recall@20 = `0.4055`，NDCG@20 = `0.3320`，HitRate@20 = `0.5633`。
-- [ ] `Repeat`：Recall@20 = `0.4062`，NDCG@20 = `0.3348`。
-- [ ] `UserOnly + Nearest`：Avg ETA = `86.54`，Timeout Rate = `0.8721`，Utility = `0.3998`。
+- [ ] `BPR-MF`：Recall@20 = `0.1620`，NDCG@20 = `0.1068`，HitRate@20 = `0.2433`。
+- [ ] `Popular`：Recall@20 = `0.0470`，NDCG@20 = `0.0210`，HitRate@20 = `0.0900`。
+- [ ] `Popular + Nearest`：Avg ETA = `84.71`，Timeout Rate = `0.7903`，Utility = `0.3365`。
 - [ ] `UserOnly + MinETA`：Avg ETA = `55.33`，Timeout Rate = `0.6701`，Utility = `0.4831`。
-- [ ] `Seq-Tripartite`：Avg ETA = `52.15`，Timeout Rate = `0.6364`，Utility = `0.4963`。
+- [ ] `Seq-Tuned + MinETA`：Avg ETA = `54.74`，Timeout Rate = `0.7320`，Utility = `0.4664`。
 - [ ] `Seq-xQuAD-Tripartite`：Avg ETA = `50.33`，Timeout Rate = `0.5319`，Utility = `0.5264`。
-- [ ] `Ours-Full`：Avg ETA = `50.85`，Timeout Rate = `0.5714`，Utility = `0.5246`。

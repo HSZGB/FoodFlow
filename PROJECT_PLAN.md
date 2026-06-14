@@ -7,10 +7,10 @@
 - [x] 工程骨架、数据管道、算法、仿真、报告和 PPT 大纲已实现。
 - [x] 真实 TRD 必需 txt 文件已下载并通过 md5 校验；正式指标和报告已由完整 TRD `orders_train.txt` 生成。
 - [x] `make smoke` 已改为隔离目录，不会覆盖真实 TRD raw/processed/outputs。
-- [x] 新增 conda 环境、数据审计、Ours-Balanced 权重敏感策略和三方可视化看板。
-- [x] 新增 Seq-Tuned 与 Seq-Tuned-xQuAD，当前离线 Recall@20 提升到 `0.4675`，并已重生成指标、图表、报告和 NotebookLM 上传包。
-- [x] 新增可复现的 `scripts/search_seq_weights.py` 和 `docs/SEQ_TUNED_SEARCH.md`，用于说明 Seq-Tuned 权重来源。
-- [x] 完成 Tuned 序列底座接入三方重排的消融记录，确认默认系统效用前沿仍为 `Seq-xQuAD-Tripartite`。
+- [x] 新增 conda 环境、数据审计、三方可视化看板和历史消融记录。
+- [x] 当前默认主线已收敛为 5 个离线策略：Popular、BPR-MF、UserOnly、Seq-Tuned、Seq-xQuAD-Tripartite。
+- [x] 当前默认仿真已收敛为 4 条链路：Popular + Nearest、UserOnly + MinETA、Seq-Tuned + MinETA、Seq-xQuAD-Tripartite。
+- [x] 保留 `scripts/search_seq_weights.py` 和消融文档作为过程记录，但 PPT 与 demo 不再展开全部历史候选。
 - [x] `simulate` CLI 增加策略级进度日志和耗时统计，长任务不再无反馈。
 - [ ] PPT 最终图片页和 `.pptx` 等待 `codex-ppt` 审批门禁。
 
@@ -57,11 +57,10 @@
 
 ### 阶段 3：推荐与指标
 
-- [x] Random、Popular、Repeat、ItemCF、BPR-MF、UserOnly、Ours-Full
-- [x] Ours-Balanced，用于展示准确性、商家公平和履约约束的权衡路径
+- [x] 默认评估 Popular、BPR-MF、UserOnly、Seq-Tuned、Seq-xQuAD-Tripartite
 - [x] Recall@K、NDCG@K、MRR@K、HitRate@K
 - [x] Coverage、Long-tail Exposure、Exposure Gini
-- [x] Seq-Hybrid、Seq-xQuAD、Seq-Tuned、Seq-Tuned-xQuAD、Seq-Tripartite、Seq-xQuAD-Tripartite，用于展示序列复购、列表重排、校准和三方约束。
+- [x] 历史消融类保留在代码中，默认输出不再铺开。
 - 验收命令：`make eval`
 
 ### 阶段 4：三方仿真

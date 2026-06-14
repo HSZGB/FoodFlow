@@ -25,7 +25,7 @@ Slide 4: 系统总体架构
 - Required source images: none。
 
 Slide 5: 推荐算法与三方重排
-- Key points: Random/Popular/Repeat/ItemCF/BPR-MF/UserOnly/Ours-Full；Ours-Full 在用户偏好外加入公平、ETA 和供给分；解释只引用真实参与打分的特征。
+- Key points: Popular/BPR-MF/UserOnly/Seq-Tuned/Seq-xQuAD-Tripartite；Seq-xQuAD-Tripartite 在用户偏好外加入列表覆盖、商家公平、ETA 和供给分；解释只引用真实参与打分的特征。
 - Visual idea: 打分公式拆解和模型对照表。
 - Layout role and intent: method comparison。
 - Required source images: none。
@@ -50,7 +50,7 @@ Slide 7: 动态履约仿真设计
 - Required source images: none。
 
 Slide 8: 三方策略的系统级指标
-- Key points: 对比 Popular + Nearest、UserOnly + Nearest、UserOnly + MinETA、Ours w/o Fairness、Ours-Full；展示 ETA、超时率、骑手负载和平台效用。
+- Key points: 对比 Popular + Nearest、UserOnly + MinETA、Seq-Tuned + MinETA、Seq-xQuAD-Tripartite；展示 ETA、超时率、骑手负载和平台效用。
 - Visual idea: 仿真指标四联图。
 - Layout role and intent: data evidence。
 - Required source images:

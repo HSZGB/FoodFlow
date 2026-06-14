@@ -44,3 +44,8 @@ ppt/notebooklm/upload_pack/
 3. 先粘贴 `upload_pack/prompts/notebooklm_master_prompt.md`，要求生成完整 PPT。
 4. 如果 NotebookLM 只输出文字大纲，就让它按 `slide_by_slide_prompt.md` 逐页输出“页面内容 + 视觉布局 + 讲稿”。
 5. 生成后用 `quality_checklist.md` 检查每页，尤其是第 3、6、8、9 页。
+
+## 与两个 PPT 技能的关系
+
+- `codex-ppt` 的正式流程需要先确认大纲、视觉风格、图片后端和 1 页样张，再生成全套图片页、讲稿和 `.pptx`。当前 NotebookLM 包是因为本地暂时不能生成图片时的备用路径。
+- `image-to-editable-ppt` 不用于从零创作本 PPT。它适合后续已经有图片页、PDF 或截图后，再把页面重建成对象级可编辑 `.pptx`。

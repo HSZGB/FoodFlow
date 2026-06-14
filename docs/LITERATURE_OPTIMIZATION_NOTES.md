@@ -1,5 +1,7 @@
 # FoodFlow 论文调研与可落地优化点
 
+> 说明：本文记录模型扩展和消融探索，包含 Seq-Hybrid、Seq-Tuned-xQuAD、Ours-Full 等历史候选；当前默认运行、demo、报告和 PPT 主线已收敛为 Popular、BPR-MF、UserOnly、Seq-Tuned、Seq-xQuAD-Tripartite。
+
 ## 调研结论
 
 FoodFlow 当前最值得增强的方向不是直接堆大模型，而是把外卖场景的“重复消费、短序列下一单、多目标重排、即时履约”讲清楚并落到可运行代码。外卖推荐和电影/新闻推荐不同，用户经常复购同一商家，也会受最近一次订单、午晚高峰、距离和骑手供给影响。

@@ -6,7 +6,7 @@
 
 ## 项目亮点
 
-- 用户侧推荐：默认实验聚焦 Popular、Repeat、BPR-MF、UserOnly、Seq-Tuned、Seq-Tuned-xQuAD、Seq-xQuAD-Tripartite、Ours-Full 八类代表性策略。
+- 用户侧推荐：默认实验聚焦 Popular、BPR-MF、UserOnly、Seq-Tuned、Seq-xQuAD-Tripartite 五类代表性策略。
 - 商家侧公平：在重排中引入商家曝光公平、长尾曝光与 Exposure Gini 等指标。
 - 骑手侧履约：模拟订单-骑手匹配，比较最近骑手、最小 ETA、负载感知三类策略。
 - 动态仿真：模拟午餐高峰多时间步请求，持续更新骑手状态和订单履约结果。
@@ -40,9 +40,9 @@ TRD 数据下载与清洗
   -> 指标、图表、报告与 demo
 ```
 
-`Seq-Tuned` 借鉴 FPMC/下一篮子推荐和会话推荐思想，把外卖复购、最近订单时间衰减和商家转移概率加入排序，是当前离线准确率最强策略；`Seq-Tuned-xQuAD` 继续借鉴 xQuAD/MMR 的列表级重排思想，在高命中基础上改善曝光集中和品类校准。`Seq-xQuAD-Tripartite` 则把列表级覆盖、商家公平、ETA 和供给约束接到同一个重排器中，是当前仿真平台效用最强策略。
+`Seq-Tuned` 借鉴 FPMC/下一篮子推荐和会话推荐思想，把外卖复购、最近订单时间衰减和商家转移概率加入排序，是当前离线准确率最强策略。`Seq-xQuAD-Tripartite` 则把列表级覆盖、商家公平、ETA 和供给约束接到同一个重排器中，是当前仿真平台效用最强策略。
 
-Ours-Full 推荐分数采用可解释加权重排：
+三方重排分数采用可解释加权：
 
 ```text
 score = 0.62 * user_score
@@ -197,7 +197,13 @@ make STREAMLIT=".venv/bin/streamlit" demo
 make STREAMLIT_FLAGS="--server.port 8502" demo
 ```
 
-demo 默认展示用户 `8`，也提供复购活跃型、高消费型、价格敏感型等快速案例；侧边栏可手动输入其它用户 ID，并在 `UserOnly`、`Seq-Tuned`、`Seq-Tuned-xQuAD`、`Seq-xQuAD-Tripartite`、`Ours-Full` 五个主线策略之间切换。当前界面包含推荐商家、用户品类偏好、主线策略对比、分数组成、骑手候选榜、当前订单路径、午餐高峰回放、方法说明和结果解读。
+如果页面迟迟没有变化，或者仍然看到旧版裸 HTML，先检查是否有旧的 Streamlit 进程占着端口：
+
+```bash
+make demo-check
+```
+
+demo 默认展示用户 `8`，也提供复购活跃型、高消费型、价格敏感型等快速案例；侧边栏可手动输入其它用户 ID，并在 `UserOnly`、`Seq-Tuned`、`Seq-xQuAD-Tripartite` 三个主线策略之间切换。当前界面包含推荐商家、用户品类偏好、主线策略对比、分数组成、骑手候选榜、当前订单路径、午餐高峰回放、方法说明和结果解读。
 当前 demo 首屏会先给出用户、策略、Top1 商家、平均 ETA 和在线骑手数。空间图聚焦当前订单附近，展示附近用户样本、附近商家样本、近场骑手、Top 派单候选、两个 2.5km 参考圈、取餐段和配送段。高峰回放默认 12 个时间步，也可以在页面里调长或调短。
 
 ## 主要输出
@@ -223,7 +229,7 @@ python3 scripts/prepare_notebooklm_pack.py
 
 当前提交的结果已经使用完整 TRD `orders_train.txt`，数据审计显示原始训练订单 `1,068,495` 条，处理后训练订单 `1,068,495` 条，训练订单使用比例 `1.0000`。
 
-离线推荐中，`Seq-Tuned` 的 Recall@20 最高，为 `0.4675`，NDCG@20 为 `0.3652`，HitRate@20 为 `0.6267`。`Seq-Tuned-xQuAD` 的 Recall@20 为 `0.4670`，Exposure Gini 为 `0.8664`，CategoryJSD@20 为 `0.0140`，说明在保持高命中的同时可以缓解曝光集中并改善品类校准。`Seq-xQuAD-Tripartite` 的离线准确性低于纯用户侧序列模型，但能改善后续履约表现。
+离线推荐中，`Seq-Tuned` 的 Recall@20 最高，为 `0.4675`，NDCG@20 为 `0.3652`，HitRate@20 为 `0.6267`。`Seq-xQuAD-Tripartite` 的离线准确性低于纯用户侧序列模型，但能改善后续履约表现。
 
 动态履约仿真中，`Seq-xQuAD-Tripartite` 取得最低平均 ETA、最低超时率和最高平台综合效用：
 
@@ -232,11 +238,9 @@ python3 scripts/prepare_notebooklm_pack.py
 | Popular + Nearest | 84.71 | 0.7903 | 0.3365 |
 | UserOnly + MinETA | 55.33 | 0.6701 | 0.4831 |
 | Seq-Tuned + MinETA | 54.74 | 0.7320 | 0.4664 |
-| Seq-Tuned-xQuAD + MinETA | 54.67 | 0.6875 | 0.4685 |
 | Seq-xQuAD-Tripartite | 50.33 | 0.5319 | 0.5264 |
-| Ours-Full | 50.85 | 0.5714 | 0.5246 |
 
-结论不是“单一模型在所有指标上最优”，而是：`Seq-Tuned` 取得最强离线推荐准确性；`Seq-Tuned-xQuAD` 是高准确率与商家曝光/品类校准之间的折中；`Seq-xQuAD-Tripartite` 牺牲一部分离线准确性，换取更低超时率和更高平台综合效用，更符合外卖平台的多主体优化目标。
+结论不是“单一模型在所有指标上最优”，而是：`Seq-Tuned` 取得最强离线推荐准确性；`Seq-xQuAD-Tripartite` 牺牲一部分离线准确性，换取更低超时率和更高平台综合效用，更符合外卖平台的多主体优化目标。
 
 ## 图表示例
 

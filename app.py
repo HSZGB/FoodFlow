@@ -22,9 +22,8 @@ from foodflow.demo_support import (
 )
 from foodflow.frontier import POLICY_MODEL_MAP, build_tripartite_frontier
 from foodflow.recommenders import (
-    OursFullRecommender,
+    PopularRecommender,
     SeqTunedRecommender,
-    SeqTunedXQuadRecommender,
     SeqXQuadTripartiteRecommender,
     UserOnlyRecommender,
 )
@@ -35,6 +34,9 @@ st.set_page_config(page_title="FoodFlow", layout="wide")
 
 st.title("FoodFlow 外卖推荐与配送仿真")
 st.caption("把一次下单拆开看：用户看到哪些商家，商家拿到多少曝光，订单最后派给哪位骑手。")
+
+DEMO_STRATEGIES = ["UserOnly", "Seq-Tuned", "Seq-xQuAD-Tripartite"]
+PEAK_POLICIES = ["Popular + Nearest", "UserOnly + MinETA", "Seq-Tuned + MinETA", "Seq-xQuAD-Tripartite"]
 
 processed_dir = Path("data/processed")
 if not (processed_dir / "users.csv").exists():
@@ -81,11 +83,10 @@ def build_interactive_data(
 @st.cache_resource(show_spinner=False)
 def load_model(strategy: str, data_key: str, _data: PreparedData) -> object:
     factories = {
+        "Popular": PopularRecommender,
         "UserOnly": UserOnlyRecommender,
         "Seq-Tuned": SeqTunedRecommender,
-        "Seq-Tuned-xQuAD": SeqTunedXQuadRecommender,
         "Seq-xQuAD-Tripartite": SeqXQuadTripartiteRecommender,
-        "Ours-Full": OursFullRecommender,
     }
     return factories[strategy]().fit(_data)
 
@@ -98,13 +99,13 @@ def load_peak_trace(
     requests_per_step: int,
     _data: PreparedData,
 ) -> pd.DataFrame:
-    policies = {
+    all_policies = {
+        "Popular + Nearest": (load_model("Popular", data_key, _data), "nearest"),
         "UserOnly + MinETA": (load_model("UserOnly", data_key, _data), "min_eta"),
         "Seq-Tuned + MinETA": (load_model("Seq-Tuned", data_key, _data), "min_eta"),
-        "Seq-Tuned-xQuAD + MinETA": (load_model("Seq-Tuned-xQuAD", data_key, _data), "min_eta"),
         "Seq-xQuAD-Tripartite": (load_model("Seq-xQuAD-Tripartite", data_key, _data), "load_aware"),
-        "Ours-Full": (load_model("Ours-Full", data_key, _data), "load_aware"),
     }
+    policies = {name: all_policies[name] for name in PEAK_POLICIES}
     return build_peak_trace(
         _data,
         policies,
@@ -116,10 +117,9 @@ def load_peak_trace(
 
 
 DEMO_COLORS = {
-    "Seq-Tuned-xQuAD": "#0E7490",
+    "Popular": "#64748B",
     "Seq-Tuned": "#B45309",
     "Seq-xQuAD-Tripartite": "#B5121B",
-    "Ours-Full": "#DC6803",
     "UserOnly": "#2563EB",
 }
 
@@ -235,14 +235,8 @@ with st.sidebar:
     period = period_map[period_label]
     strategy_name = st.selectbox(
         "推荐策略",
-        [
-            "Seq-Tuned",
-            "Seq-Tuned-xQuAD",
-            "Seq-xQuAD-Tripartite",
-            "Ours-Full",
-            "UserOnly",
-        ],
-        index=0,
+        DEMO_STRATEGIES,
+        index=DEMO_STRATEGIES.index("Seq-xQuAD-Tripartite"),
     )
     top_k = st.slider("推荐数量", min_value=8, max_value=20, value=12, step=1)
 
@@ -342,13 +336,7 @@ with tab_case:
     run_strategy_compare = st.checkbox("计算主线策略对比", value=False)
     if run_strategy_compare:
         strategy_rows = []
-        for name in [
-            "UserOnly",
-            "Seq-Tuned",
-            "Seq-Tuned-xQuAD",
-            "Seq-xQuAD-Tripartite",
-            "Ours-Full",
-        ]:
+        for name in DEMO_STRATEGIES:
             with st.spinner(f"加载 {name} 并生成对比..."):
                 candidate_model = load_model(name, model_data_key, interactive_data)
                 candidate_recs = candidate_model.recommend([user_id], top_k, {user_id: period}).recommendations[user_id]
@@ -937,22 +925,16 @@ with tab_method:
 
     method_rows = [
         (
+            "用户画像",
+            "UserOnly：先把用户习惯讲清楚",
+            "用品类、复购、价格、时段和商家质量做排序，是后面三方策略的用户侧底座。",
+            model_metric_text("UserOnly", "Recall@20", "Recall@20"),
+        ),
+        (
             "短序列推荐",
             "Seq-Tuned：把复购放在更前面",
             "外卖用户常常反复点熟悉的店，所以这里更看重最近订单、复购次数和商家转移。",
             model_metric_text("Seq-Tuned", "Recall@20", "Recall@20"),
-        ),
-        (
-            "列表重排",
-            "Seq-Tuned-xQuAD：别让列表全是同一类店",
-            "先保证命中，再给品类覆盖和长尾商家留一点位置。",
-            model_metric_text("Seq-Tuned-xQuAD", "ExposureGini", "Exposure Gini"),
-        ),
-        (
-            "品类校准",
-            "CategoryJSD：推荐列表像不像这个用户",
-            "这个数越低，说明推荐品类越接近用户平时真的会点的品类。",
-            model_metric_text("Seq-Tuned-xQuAD", "CategoryJSD@20", "CategoryJSD@20"),
         ),
         (
             "商家侧",
@@ -977,7 +959,6 @@ with tab_method:
         pd.DataFrame(
             [
                 {"问题": "用户到底爱点什么", "项目做法": "用最近订单、复购次数和店铺转移来排商家", "对应模块": "Seq-Tuned"},
-                {"问题": "列表太集中", "项目做法": "在排序后留出一些品类覆盖和长尾曝光", "对应模块": "Seq-Tuned-xQuAD"},
                 {"问题": "只看用户会忽略商家", "项目做法": "把曝光公平、ETA 和供给情况接到重排里", "对应模块": "Seq-xQuAD-Tripartite"},
                 {"问题": "推荐完还要能送到", "项目做法": "模拟骑手候选排序和负载感知派单", "对应模块": "骑手仿真"},
             ]

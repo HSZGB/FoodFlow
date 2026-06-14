@@ -69,7 +69,13 @@ def test_tripartite_frontier_marks_dominated_rows():
     offline = pd.DataFrame(
         [
             {"model": "UserOnly", "Recall@20": 0.4, "NDCG@20": 0.3, "ExposureGini": 0.8, "Coverage@20": 0.2},
-            {"model": "Ours-Full", "Recall@20": 0.35, "NDCG@20": 0.28, "ExposureGini": 0.7, "Coverage@20": 0.25},
+            {
+                "model": "Seq-xQuAD-Tripartite",
+                "Recall@20": 0.35,
+                "NDCG@20": 0.28,
+                "ExposureGini": 0.7,
+                "Coverage@20": 0.25,
+            },
         ]
     )
     simulation = pd.DataFrame(
@@ -83,7 +89,7 @@ def test_tripartite_frontier_marks_dominated_rows():
                 "platform_utility": 0.45,
             },
             {
-                "policy": "Ours-Full",
+                "policy": "Seq-xQuAD-Tripartite",
                 "avg_eta": 50.0,
                 "timeout_rate": 0.5,
                 "on_time_rate": 0.5,

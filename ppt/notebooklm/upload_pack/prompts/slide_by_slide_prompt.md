@@ -75,7 +75,7 @@
 
 - 数据下载与清洗
 - 用户/商家/菜品特征
-- 多路推荐基线
+- 代表性推荐策略
 - 三方重排
 - 订单-骑手匹配
 - 午餐高峰动态仿真
@@ -97,10 +97,9 @@
 
 必须出现的文本：
 
-- Baselines：Random、Popular、Repeat、ItemCF、BPR-MF
+- Baselines：Popular、BPR-MF
 - UserOnly：品类偏好 + 复购 + 价格匹配 + 时段偏好 + 商家质量
-- Seq-Hybrid：复购序列 + 最近订单衰减 + 商家转移概率
-- Seq-xQuAD：序列相关性 + 品类覆盖 + 长尾曝光
+- Seq-Tuned：复购序列 + 最近订单衰减 + 商家转移概率
 - Seq-xQuAD-Tripartite：列表级覆盖 + 商家公平 + ETA + 供给分
 - 可解释输出只引用真实参与打分的特征
 
@@ -118,7 +117,7 @@ list_score = relevance + category_coverage + long_tail_gain
 
 演讲备注：
 
-基线覆盖随机、热门、复购、协同过滤和矩阵分解。Seq-Hybrid 把外卖复购和最近订单序列建进去；Seq-xQuAD 在此基础上做列表级覆盖；Seq-xQuAD-Tripartite 再加入商家公平、ETA 和供给分。这样推荐列表不只对用户排序，也把商家和履约约束纳入排序。
+基线保留热门推荐和 BPR-MF，避免模型清单过长。UserOnly 先把用户画像特征讲清楚，Seq-Tuned 再把外卖复购和最近订单序列建进去；Seq-xQuAD-Tripartite 进一步加入商家公平、ETA 和供给分。这样推荐列表不只对用户排序，也把商家和履约约束纳入排序。
 
 ## Slide 6：离线推荐指标结果
 
@@ -139,11 +138,9 @@ list_score = relevance + category_coverage + long_tail_gain
 必须出现的文本：
 
 - Seq-Tuned Recall@20 = 0.4675，NDCG@20 = 0.3652，HitRate@20 = 0.6267
-- Seq-Tuned-xQuAD Recall@20 = 0.4670，NDCG@20 = 0.3613，CategoryJSD@20 = 0.0140
-- Seq-xQuAD Recall@20 = 0.4447，NDCG@20 = 0.3538
 - UserOnly Recall@20 = 0.4287，NDCG@20 = 0.3423
-- Repeat Recall@20 = 0.4062，体现外卖复购特征
 - Seq-xQuAD-Tripartite Recall@20 = 0.4180，NDCG@20 = 0.3440
+- BPR-MF Recall@20 = 0.1620，Popular Recall@20 = 0.0470
 - Seq-xQuAD-Tripartite 不是追求单一 Recall 最大，而是在准确性、公平性和履约之间折中
 
 视觉布局：
@@ -155,7 +152,7 @@ list_score = relevance + category_coverage + long_tail_gain
 
 演讲备注：
 
-离线结果显示，Seq-xQuAD 的 Recall@20 和 NDCG@20 最高，同时 CategoryJSD@20 最低，说明外卖复购序列和列表级覆盖重排有效，并没有明显偏离用户历史品类偏好。Seq-xQuAD-Tripartite 的离线准确率有所下降，但 NDCG@20 仍略高于 UserOnly，它的价值要结合三方履约指标继续判断。
+离线结果显示，Seq-Tuned 的 Recall@20 和 NDCG@20 最高，说明外卖复购序列和商家转移特征很重要。Seq-xQuAD-Tripartite 的离线准确率有所下降，但它把商家公平、ETA 和供给分纳入排序，所以价值要结合三方履约指标继续判断。
 
 ## Slide 7：动态履约仿真设计
 
@@ -196,13 +193,12 @@ list_score = relevance + category_coverage + long_tail_gain
 
 必须出现的文本：
 
-- UserOnly + Nearest：Avg ETA = 86.54，Timeout Rate = 0.8721，Utility = 0.3998
+- Popular + Nearest：Avg ETA = 84.71，Timeout Rate = 0.7903，Utility = 0.3365
 - UserOnly + MinETA：Avg ETA = 55.33，Timeout Rate = 0.6701，Utility = 0.4831
-- Seq-Tripartite：Avg ETA = 52.15，Timeout Rate = 0.6364，Utility = 0.4963
-- Ours-Full：Avg ETA = 50.85，Timeout Rate = 0.5714，Utility = 0.5246
+- Seq-Tuned + MinETA：Avg ETA = 54.74，Timeout Rate = 0.7320，Utility = 0.4664
 - Seq-xQuAD-Tripartite：Avg ETA = 50.33，Timeout Rate = 0.5319，Utility = 0.5264
 - Seq-xQuAD-Tripartite 平台综合效用最高
-- Pareto 视角：Seq-Tuned / Seq-Tuned-xQuAD 是离线准确率前沿，Seq-xQuAD-Tripartite 是平台效用前沿
+- Pareto 视角：Seq-Tuned 是离线准确率前沿，Seq-xQuAD-Tripartite 是平台效用前沿
 
 视觉布局：
 
@@ -213,7 +209,7 @@ list_score = relevance + category_coverage + long_tail_gain
 
 演讲备注：
 
-仿真结果说明，单纯 UserOnly 加最近骑手会造成很高 ETA 和超时率。改为最小 ETA 派单后明显改善；继续加入列表级覆盖、履约感知和三方重排后，Seq-xQuAD-Tripartite 平均 ETA、超时率和平台效用最好，证明推荐策略需要接受履约结果检验。
+仿真结果说明，热门推荐加最近骑手会造成较高 ETA 和超时率。改为用户偏好推荐和最小 ETA 派单后明显改善；继续加入列表级覆盖、履约感知和三方重排后，Seq-xQuAD-Tripartite 平均 ETA、超时率和平台效用最好，证明推荐策略需要接受履约结果检验。
 
 ## Slide 9：案例解释：一次推荐如何兼顾三方
 
@@ -255,11 +251,11 @@ list_score = relevance + category_coverage + long_tail_gain
 
 - 上方三个结论卡片。
 - 下方一个“局限与后续”横条。
-- 右侧放关键数字摘要：Seq-Tuned Recall@20 0.4675、Seq-Tuned-xQuAD CategoryJSD@20 0.0140、Seq-xQuAD-Tripartite Avg ETA 50.33、Utility 0.5264。
+- 右侧放关键数字摘要：Seq-Tuned Recall@20 0.4675、UserOnly Recall@20 0.4287、Seq-xQuAD-Tripartite Avg ETA 50.33、Utility 0.5264。
 
 演讲备注：
 
-项目完成了可运行的推荐与履约仿真闭环。离线指标证明推荐不是随机有效，Seq-xQuAD 把离线排序指标继续推高；Seq-xQuAD-Tripartite 让商家公平和履约可行性进入排序，系统级仿真显示它的平台效用最高。局限也很明确：骑手数据是 proxy，后续应接入真实派单并做更充分的敏感性分析。
+项目完成了可运行的推荐与履约仿真闭环。离线指标证明推荐不是随机有效，Seq-Tuned 把离线排序指标继续推高；Seq-xQuAD-Tripartite 让商家公平和履约可行性进入排序，系统级仿真显示它的平台效用最高。局限也很明确：骑手数据是 proxy，后续应接入真实派单并做更充分的敏感性分析。
 
 ## Slide 11：Q&A
 

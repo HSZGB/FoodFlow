@@ -11,7 +11,7 @@ from foodflow.demo_support import (
 )
 from foodflow.mock_data import make_mock_trd
 from foodflow.preprocess import preprocess
-from foodflow.recommenders import OursFullRecommender, SeqXQuadTripartiteRecommender, UserOnlyRecommender
+from foodflow.recommenders import SeqTunedRecommender, SeqXQuadTripartiteRecommender, UserOnlyRecommender
 from foodflow.rider_sim import generate_riders
 
 
@@ -37,25 +37,26 @@ def test_demo_recommendation_and_rider_frames(tmp_path: Path):
     assert cases
     assert set(cases.values()).issubset(set(data.user_ids))
 
-    model = OursFullRecommender().fit(data)
     user_model = UserOnlyRecommender().fit(data)
+    seq_model = SeqTunedRecommender().fit(data)
     bridge_model = SeqXQuadTripartiteRecommender().fit(data)
     user_id = data.user_ids[0]
-    recs = model.recommend([user_id], 5, {user_id: "lunch"}).recommendations[user_id]
-    rec_frame = build_recommendation_frame(data, model, user_id, recs, "lunch")
+    recs = bridge_model.recommend([user_id], 5, {user_id: "lunch"}).recommendations[user_id]
+    rec_frame = build_recommendation_frame(data, bridge_model, user_id, recs, "lunch")
     user_recs = user_model.recommend([user_id], 5, {user_id: "lunch"}).recommendations[user_id]
     user_frame = build_recommendation_frame(data, user_model, user_id, user_recs, "lunch")
-    bridge_recs = bridge_model.recommend([user_id], 5, {user_id: "lunch"}).recommendations[user_id]
-    bridge_frame = build_recommendation_frame(data, bridge_model, user_id, bridge_recs, "lunch")
+    seq_recs = seq_model.recommend([user_id], 5, {user_id: "lunch"}).recommendations[user_id]
+    seq_frame = build_recommendation_frame(data, seq_model, user_id, seq_recs, "lunch")
 
     assert len(rec_frame) == 5
     assert {"merchant_name", "final_score", "reason", "eta_minutes"}.issubset(rec_frame.columns)
     assert len(user_frame) == 5
     assert user_frame["fairness_contrib"].eq(0).all()
     assert user_frame["eta_contrib"].eq(0).all()
-    assert len(bridge_frame) == 5
-    assert bridge_frame["fairness_contrib"].gt(0).any()
-    assert bridge_frame["eta_contrib"].gt(0).any()
+    assert len(seq_frame) == 5
+    assert len(rec_frame) == 5
+    assert rec_frame["fairness_contrib"].gt(0).any()
+    assert rec_frame["eta_contrib"].gt(0).any()
 
     users = data.users.set_index("user_id", drop=False)
     merchants = data.merchants.set_index("wm_poi_id", drop=False)
@@ -86,14 +87,14 @@ def test_demo_recommendation_and_rider_frames(tmp_path: Path):
         data,
         {
             "UserOnly + MinETA": (user_model, "min_eta"),
-            "Ours-Full": (model, "load_aware"),
+            "Seq-xQuAD-Tripartite": (bridge_model, "load_aware"),
         },
         seed=456,
         steps=3,
         requests_per_step=4,
         top_k=5,
     )
-    assert set(trace["policy"]) == {"UserOnly + MinETA", "Ours-Full"}
+    assert set(trace["policy"]) == {"UserOnly + MinETA", "Seq-xQuAD-Tripartite"}
     assert trace["step"].max() == 3
     assert trace["completed_orders"].max() > 0
     assert {"step_completed_orders", "step_avg_eta", "step_timeout_rate"}.issubset(trace.columns)
