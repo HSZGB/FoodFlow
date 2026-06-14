@@ -279,10 +279,10 @@ if not rec_df.empty:
         st.metric("首位商家", str(top_row["merchant_name"]))
         st.caption(f"TOP1 分数 {float(top_row['final_score']):.3f}")
     with summary_cols[3]:
-        st.metric("推荐履约", f"{avg_eta:.1f} min")
+        st.metric("预计送达", f"{avg_eta:.1f} min")
         st.caption(f"商家公平均值 {avg_fairness:.2f}")
     with summary_cols[4]:
-        st.metric("骑手供给", f"{len(riders)}")
+        st.metric("在线骑手", f"{len(riders)}")
         st.caption("合成在线骑手")
 
 offline_path = Path("outputs/results/offline_metrics.csv")
@@ -384,7 +384,7 @@ with tab_case:
                 x="策略",
                 y=["平均用户偏好", "平均商家公平", "平均供给"],
                 barmode="group",
-                title="策略侧重点对比",
+                title="几个策略偏向什么",
                 color_discrete_sequence=["#2563eb", "#0f766e", "#7c3aed"],
             )
             strategy_chart.update_layout(height=300, margin=dict(l=8, r=8, t=48, b=8), xaxis_title="")
@@ -401,7 +401,7 @@ with tab_case:
     chosen_id = str(chosen_row["merchant_id"])
     merchant_row = merchants.loc[chosen_id]
 
-    st.subheader("三方链路拆解")
+    st.subheader("这单怎么派出去")
     left, right = st.columns([1.05, 1.35])
     with left:
         render_recommendation_card(chosen_row, selected=True)
@@ -430,7 +430,7 @@ with tab_case:
             x="component",
             y="weighted_score",
             color="component",
-            title=f"{strategy_name} 加权分数组成",
+            title=f"{strategy_name} 为什么把这家店排上来",
             color_discrete_sequence=["#2563eb", "#0f766e", "#dc6803", "#7c3aed"],
         )
         contrib_fig.update_layout(showlegend=False, height=280, margin=dict(l=8, r=8, t=48, b=8))
@@ -455,7 +455,7 @@ with tab_case:
             for rider_id in candidate_view["rider_id"]
         ]
         with candidate_left:
-            st.subheader("订单推荐给骑手候选榜")
+            st.subheader("这单会优先派给谁")
             rider_table = candidate_view[
                 ["rank", "status", "rider_id", "score", "eta", "pickup_distance_km", "load", "reliability", "reason"]
             ].rename(
@@ -490,7 +490,7 @@ with tab_case:
                 y="rider_id",
                 orientation="h",
                 color="status",
-                title="候选骑手派单分",
+                title="骑手派单排序分",
                 color_discrete_map={"已派单": "#7c3aed", "候选": "#94a3b8"},
                 custom_data=["eta", "load", "reliability", "pickup_distance_km"],
             )
@@ -535,7 +535,7 @@ with tab_case:
                 )
             ]
         )
-        flow_fig.update_layout(title="用户 -> 商家 -> 骑手", height=340, margin=dict(l=8, r=8, t=52, b=8))
+        flow_fig.update_layout(title="这单的路径", height=340, margin=dict(l=8, r=8, t=52, b=8))
         st.plotly_chart(flow_fig, use_container_width=True)
 
     with map_col:
@@ -797,7 +797,7 @@ with tab_case:
     st.dataframe(display_df, use_container_width=True, hide_index=True)
 
 with tab_peak:
-    st.subheader("午餐高峰仿真回放")
+    st.subheader("午餐高峰怎么变化")
     replay_c1, replay_c2 = st.columns(2)
     with replay_c1:
         replay_steps = st.slider("回放时间步", min_value=8, max_value=24, value=12, step=2)
@@ -840,7 +840,7 @@ with tab_peak:
                     x="policy",
                     y="completed_orders",
                     color="policy",
-                    title="最终完成订单对比",
+                    title="最后完成了多少单",
                     color_discrete_sequence=["#2563eb", "#0f766e", "#dc6803", "#7c3aed"],
                 )
                 order_fig.update_layout(
@@ -861,7 +861,7 @@ with tab_peak:
                     text_auto=".1f",
                     aspect="auto",
                     color_continuous_scale=["#ecfeff", "#0f766e", "#164e63"],
-                    title="当步 ETA 热力图",
+                    title="每个时间段的 ETA",
                 )
                 eta_fig.update_layout(
                     height=330,
@@ -878,7 +878,7 @@ with tab_peak:
                     x="policy",
                     y="timeout_rate",
                     color="policy",
-                    title="最终超时率对比",
+                    title="最后超时率",
                     color_discrete_sequence=["#0f766e", "#2563eb", "#dc6803", "#7c3aed"],
                 )
                 timeout_fig.update_layout(
@@ -899,7 +899,7 @@ with tab_peak:
                     text_auto=".0%",
                     aspect="auto",
                     color_continuous_scale=["#f8fafc", "#f59e0b", "#7c2d12"],
-                    title="当步超时率热力图",
+                    title="每个时间段的超时率",
                 )
                 load_fig.update_layout(
                     height=330,
@@ -963,7 +963,7 @@ with tab_method:
         (
             "骑手侧",
             "订单派给骑手：看时间，也看负载",
-            "用户选店之后继续模拟派单，用超时率和平台效用看策略好不好。",
+            "用户选店之后继续模拟派单，用超时率和平台综合分看策略好不好。",
             policy_metric_text("Seq-xQuAD-Tripartite", "platform_utility", "Platform Utility"),
         ),
     ]
@@ -1005,8 +1005,8 @@ with tab_method:
 
         p1, p2, p3, p4 = st.columns(4)
         p1.metric("准确率优先", f"{user_best['Recall@20']:.4f}", str(user_best["model"]))
-        p2.metric("排序质量优先", f"{ndcg_best['NDCG@20']:.4f}", str(ndcg_best["model"]))
-        p3.metric("履约效用优先", f"{utility_best['platform_utility']:.4f}", str(utility_best["policy"]))
+        p2.metric("排序更靠前", f"{ndcg_best['NDCG@20']:.4f}", str(ndcg_best["model"]))
+        p3.metric("平台综合分最高", f"{utility_best['platform_utility']:.4f}", str(utility_best["policy"]))
         p4.metric("最快履约", f"{eta_best['avg_eta']:.2f} min", str(eta_best["policy"]))
 
         playbook_rows = [
@@ -1023,7 +1023,7 @@ with tab_method:
                 "取舍": "解释性更强，但仍偏用户侧",
             },
             {
-                "场景": "三方平台效用",
+                "场景": "平台整体表现",
                 "建议策略": str(utility_best["policy"]),
                 "证据": f"Utility={float(utility_best['platform_utility']):.4f}, Timeout={float(utility_best['timeout_rate']):.4f}",
                 "取舍": "牺牲少量离线命中，换取履约和平台收益",
@@ -1064,7 +1064,7 @@ with tab_metrics:
         k2.metric("最高效用模型 Recall@20", f"{utility_model['Recall@20']:.4f}", utility_model_name)
         k3.metric("最佳品类校准", f"{calibration_best.get('CategoryJSD@20', 0.0):.4f}", str(calibration_best["model"]))
         k4.metric("最低 Avg ETA", f"{eta_best['avg_eta']:.2f}", str(eta_best["policy"]))
-        k5.metric("最高平台效用", f"{utility_best['platform_utility']:.4f}", str(utility_best["policy"]))
+        k5.metric("最高平台综合分", f"{utility_best['platform_utility']:.4f}", str(utility_best["policy"]))
 
         frontier_df = frontier.rename(
             columns={
@@ -1073,13 +1073,13 @@ with tab_metrics:
                 "ExposureGini": "曝光Gini",
                 "avg_eta": "Avg ETA",
                 "timeout_rate": "超时率",
-                "platform_utility": "平台效用",
+                "platform_utility": "平台综合分",
                 "is_frontier": "未被压过",
             }
-        ).sort_values("平台效用", ascending=False)
+        ).sort_values("平台综合分", ascending=False)
         st.subheader("哪些策略值得拿出来比较")
         st.dataframe(
-            frontier_df[["策略", "推荐模型", "未被压过", "Recall@20", "NDCG@20", "曝光Gini", "Avg ETA", "超时率", "平台效用"]].head(7),
+            frontier_df[["策略", "推荐模型", "未被压过", "Recall@20", "NDCG@20", "曝光Gini", "Avg ETA", "超时率", "平台综合分"]].head(7),
             use_container_width=True,
             hide_index=True,
             column_config={
@@ -1089,7 +1089,7 @@ with tab_metrics:
                 "曝光Gini": st.column_config.NumberColumn(format="%.4f"),
                 "Avg ETA": st.column_config.NumberColumn(format="%.2f"),
                 "超时率": st.column_config.NumberColumn(format="%.4f"),
-                "平台效用": st.column_config.NumberColumn(format="%.4f"),
+                "平台综合分": st.column_config.NumberColumn(format="%.4f"),
             },
         )
 
@@ -1101,7 +1101,7 @@ with tab_metrics:
             symbol="is_frontier",
             size="on_time_rate",
             hover_data=["model", "NDCG@20", "ExposureGini", "avg_eta", "timeout_rate"],
-            title="准确率和平台效用的取舍",
+            title="准确率和平台综合分的取舍",
             color_discrete_map=demo_color_map(frontier["policy"]),
         )
         pareto_front = frontier[frontier["is_frontier"]].sort_values("Recall@20")
@@ -1154,7 +1154,7 @@ with tab_metrics:
                 y="platform_utility",
                 color="policy",
                 size="completed_orders",
-                title="履约侧：ETA 与平台效用",
+                title="履约侧：ETA 和平台综合分",
                 color_discrete_map=demo_color_map(sim["policy"]),
             )
             sim_fig.update_layout(height=360, margin=dict(l=8, r=8, t=48, b=8))
@@ -1168,7 +1168,7 @@ with tab_metrics:
                 y="timeout_rate",
                 color="policy",
                 text="timeout_rate",
-                title="超时率越低，平台效用越容易提升",
+                title="超时少一点，平台综合分通常会好一些",
                 color_discrete_map=demo_color_map(timeout_sorted["policy"]),
             )
             timeout_fig.update_layout(height=360, margin=dict(l=8, r=8, t=48, b=8), xaxis_title="")
