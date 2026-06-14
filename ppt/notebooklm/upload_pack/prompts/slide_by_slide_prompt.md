@@ -138,8 +138,9 @@ list_score = relevance + category_coverage + long_tail_gain
 
 必须出现的文本：
 
-- Seq-xQuAD Recall@20 = 0.4447，NDCG@20 = 0.3538，CategoryJSD@20 = 0.0151
-- Seq-Hybrid Recall@20 = 0.4441，NDCG@20 = 0.3513
+- Seq-Tuned Recall@20 = 0.4675，NDCG@20 = 0.3652，HitRate@20 = 0.6267
+- Seq-Tuned-xQuAD Recall@20 = 0.4670，NDCG@20 = 0.3613，CategoryJSD@20 = 0.0140
+- Seq-xQuAD Recall@20 = 0.4447，NDCG@20 = 0.3538
 - UserOnly Recall@20 = 0.4287，NDCG@20 = 0.3423
 - Repeat Recall@20 = 0.4062，体现外卖复购特征
 - Seq-xQuAD-Tripartite Recall@20 = 0.4180，NDCG@20 = 0.3440
@@ -201,7 +202,7 @@ list_score = relevance + category_coverage + long_tail_gain
 - Ours-Full：Avg ETA = 50.85，Timeout Rate = 0.5714，Utility = 0.5246
 - Seq-xQuAD-Tripartite：Avg ETA = 50.33，Timeout Rate = 0.5319，Utility = 0.5264
 - Seq-xQuAD-Tripartite 平台综合效用最高
-- Pareto 视角：Seq-xQuAD 是离线准确率前沿，Seq-xQuAD-Tripartite 是平台效用前沿
+- Pareto 视角：Seq-Tuned / Seq-Tuned-xQuAD 是离线准确率前沿，Seq-xQuAD-Tripartite 是平台效用前沿
 
 视觉布局：
 
@@ -254,7 +255,7 @@ list_score = relevance + category_coverage + long_tail_gain
 
 - 上方三个结论卡片。
 - 下方一个“局限与后续”横条。
-- 右侧放关键数字摘要：Seq-xQuAD Recall@20 0.4447、Seq-xQuAD-Tripartite Avg ETA 50.33、Utility 0.5264。
+- 右侧放关键数字摘要：Seq-Tuned Recall@20 0.4675、Seq-Tuned-xQuAD CategoryJSD@20 0.0140、Seq-xQuAD-Tripartite Avg ETA 50.33、Utility 0.5264。
 
 演讲备注：
 

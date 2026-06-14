@@ -11,6 +11,8 @@ from .io import ensure_dir
 
 
 HIGHLIGHT = {
+    "Seq-Tuned-xQuAD": "#0E7490",
+    "Seq-Tuned": "#B45309",
     "Seq-xQuAD-Tripartite": "#B5121B",
     "Seq-xQuAD": "#2563EB",
     "Seq-Hybrid": "#60A5FA",
@@ -32,6 +34,8 @@ def _color_for(label: str) -> str:
 
 def _annotate_highlights(ax, df: pd.DataFrame, x: str, y: str, label_col: str) -> None:
     offsets = {
+        "Seq-Tuned-xQuAD": (8, -16),
+        "Seq-Tuned": (8, 16),
         "Seq-xQuAD-Tripartite": (8, 13),
         "Ours-Full": (8, -13),
         "Seq-xQuAD": (8, 8),
@@ -160,6 +164,8 @@ def _save_frontier_plot(frontier: pd.DataFrame, path: Path) -> None:
             zorder=3,
         )
     selected_labels = {
+        "Seq-Tuned + MinETA": (8, 16),
+        "Seq-Tuned-xQuAD + MinETA": (8, -16),
         "Seq-xQuAD-Tripartite": (8, 12),
         "Seq-xQuAD + MinETA": (8, -18),
         "Seq-Tripartite": (8, 7),

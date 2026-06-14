@@ -14,6 +14,8 @@ from .recommenders import (
     OursFullRecommender,
     PopularRecommender,
     SeqTripartiteRecommender,
+    SeqTunedRecommender,
+    SeqTunedXQuadRecommender,
     SeqXQuadRecommender,
     SeqXQuadTripartiteRecommender,
     SequentialHybridRecommender,
@@ -36,6 +38,8 @@ DEFAULT_POLICIES = [
     SimulationPolicy("UserOnly + MinETA", "useronly", "min_eta"),
     SimulationPolicy("Seq-Hybrid + MinETA", "seq_hybrid", "min_eta"),
     SimulationPolicy("Seq-xQuAD + MinETA", "seq_xquad", "min_eta"),
+    SimulationPolicy("Seq-Tuned + MinETA", "seq_tuned", "min_eta"),
+    SimulationPolicy("Seq-Tuned-xQuAD + MinETA", "seq_tuned_xquad", "min_eta"),
     SimulationPolicy("Seq-Hybrid + LoadAware", "seq_hybrid", "load_aware"),
     SimulationPolicy("Seq-Tripartite", "seq_tripartite", "load_aware", fairness=True),
     SimulationPolicy("Seq-xQuAD-Tripartite", "seq_xquad_tripartite", "load_aware", fairness=True),
@@ -54,6 +58,10 @@ def _select_recommender(data: PreparedData, name: str, seed: int):
         return SequentialHybridRecommender().fit(data)
     if name == "seq_xquad":
         return SeqXQuadRecommender().fit(data)
+    if name == "seq_tuned":
+        return SeqTunedRecommender().fit(data)
+    if name == "seq_tuned_xquad":
+        return SeqTunedXQuadRecommender().fit(data)
     if name == "seq_tripartite":
         return SeqTripartiteRecommender().fit(data)
     if name == "seq_xquad_tripartite":

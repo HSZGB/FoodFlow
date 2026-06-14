@@ -102,25 +102,25 @@ def build_report(
 
 ## 3. 方法设计
 
-实现的推荐策略包括 Random、Popular、Repeat、ItemCF、BPR-MF、UserOnly、Seq-Hybrid、Seq-xQuAD、Seq-Tripartite、Seq-xQuAD-Tripartite 和 Ours-Full。Random 和 Popular 是基础对照；Repeat 反映外卖复购特征；ItemCF 和 BPR-MF 是传统协同过滤基线；UserOnly 使用品类、复购、价格、时段和商家质量；Seq-Hybrid 借鉴 FPMC/下一篮子推荐和会话推荐思想，加入最近订单时间衰减、复购频率和商家转移概率；Seq-xQuAD 在序列相关性基础上做列表级多样性与长尾曝光重排；Seq-Tripartite 在序列偏好底座上轻量加入公平、ETA 和供给约束；Seq-xQuAD-Tripartite 把列表级覆盖和三方履约约束合到同一个重排器；Ours-Full 在 UserOnly 上加入商家曝光公平、ETA 和供给分。
+实现的推荐策略包括 Random、Popular、Repeat、ItemCF、BPR-MF、UserOnly、Seq-Hybrid、Seq-xQuAD、Seq-Tuned、Seq-Tuned-xQuAD、Seq-Tripartite、Seq-xQuAD-Tripartite 和 Ours-Full。Random 和 Popular 是基础对照；Repeat 反映外卖复购特征；ItemCF 和 BPR-MF 是传统协同过滤基线；UserOnly 使用品类、复购、价格、时段和商家质量；Seq-Hybrid 借鉴 FPMC/下一篮子推荐和会话推荐思想，加入最近订单时间衰减、复购频率和商家转移概率；Seq-Tuned 基于同一组可解释序列特征增强复购和商家转移信号，用作离线准确率前沿；Seq-xQuAD 和 Seq-Tuned-xQuAD 在序列相关性基础上做列表级多样性与长尾曝光重排；Seq-Tripartite 在序列偏好底座上轻量加入公平、ETA 和供给约束；Seq-xQuAD-Tripartite 把列表级覆盖和三方履约约束合到同一个重排器；Ours-Full 在 UserOnly 上加入商家曝光公平、ETA 和供给分。
 
-为增强“不是只给一个手调模型”的可信度，系统还支持 Ours-Balanced，它提高用户偏好权重，同时保留 ETA 与供给约束，用于观察准确性和履约指标之间的权衡。答辩时可以把 Seq-Hybrid、Seq-xQuAD、Seq-xQuAD-Tripartite 和 Ours-Full 作为一条多目标权衡链路：先用序列复购模型把离线准确性拉高，再用列表级重排扩大覆盖，最后把三方履约约束接进去换取更高平台效用。
+为增强“不是只给一个手调模型”的可信度，系统还支持 Ours-Balanced，它提高用户偏好权重，同时保留 ETA 与供给约束，用于观察准确性和履约指标之间的权衡。答辩时可以把 Seq-Hybrid、Seq-Tuned、Seq-Tuned-xQuAD、Seq-xQuAD-Tripartite 和 Ours-Full 作为一条多目标权衡链路：先用序列复购模型把离线准确性拉高，再用列表级重排扩大覆盖，最后把三方履约约束接进去换取更高平台效用。
 
-三方仿真包括 Popular + Nearest、UserOnly + Nearest、UserOnly + MinETA、Seq-Hybrid + MinETA、Seq-xQuAD + MinETA、Seq-Hybrid + LoadAware、Seq-Tripartite、Seq-xQuAD-Tripartite、Ours-Balanced、Ours w/o Fairness 和 Ours-Full。每轮模拟午餐高峰的一批用户请求，推荐列表经过选择模型产生订单，再由最近骑手、最小 ETA 或负载感知策略派单。
+三方仿真包括 Popular + Nearest、UserOnly + Nearest、UserOnly + MinETA、Seq-Hybrid + MinETA、Seq-xQuAD + MinETA、Seq-Tuned + MinETA、Seq-Tuned-xQuAD + MinETA、Seq-Hybrid + LoadAware、Seq-Tripartite、Seq-xQuAD-Tripartite、Ours-Balanced、Ours w/o Fairness 和 Ours-Full。每轮模拟午餐高峰的一批用户请求，推荐列表经过选择模型产生订单，再由最近骑手、最小 ETA 或负载感知策略派单。
 
 ## 4. 离线推荐结果
 
 {offline_table}
 
-推荐侧指标使用 Recall@K、NDCG@K、MRR@K 和 HitRate@K；商家侧指标使用 Coverage、Long-tail Exposure 和 Exposure Gini；校准侧指标使用 CategoryJSD@20，衡量推荐列表品类分布与用户历史品类分布的 Jensen-Shannon divergence，数值越低越贴近用户习惯。这样既能看推荐是否命中真实下单，也能看曝光是否过度集中，以及列表是否偏离用户长期品类偏好。全量 TRD 结果中，Seq-xQuAD 的 Recall@20、NDCG@20、MRR@20、HitRate@20 和 CategoryJSD@20 最优，说明外卖推荐既受最近订单和复购序列影响，也能从列表级多样性重排中获益，同时保持较好的用户品类校准；Seq-xQuAD-Tripartite 的离线准确性低于纯 Seq-xQuAD，但 Exposure Gini 更低，并且 NDCG@20 仍略高于 UserOnly；Ours-Balanced 和 Ours-Full 离线准确率较低，但引入了履约和供给约束，因此后续需要结合仿真指标判断。
+推荐侧指标使用 Recall@K、NDCG@K、MRR@K 和 HitRate@K；商家侧指标使用 Coverage、Long-tail Exposure 和 Exposure Gini；校准侧指标使用 CategoryJSD@20，衡量推荐列表品类分布与用户历史品类分布的 Jensen-Shannon divergence，数值越低越贴近用户习惯。这样既能看推荐是否命中真实下单，也能看曝光是否过度集中，以及列表是否偏离用户长期品类偏好。全量 TRD 结果中，Seq-Tuned 通常代表离线准确率前沿，说明外卖推荐强烈受复购序列和商家转移影响；Seq-Tuned-xQuAD 在保持高 Recall 的同时改善曝光集中和品类校准；Seq-xQuAD-Tripartite 的离线准确性低于纯用户侧序列模型，但 Exposure Gini 更低，并且后续需要结合仿真指标判断其系统级收益。
 
 ## 5. 动态履约仿真结果
 
 {simulation_table}
 
-履约侧指标包括完成订单数、平均 ETA、超时率、骑手负载标准差和平台综合效用。多目标推荐的目标不是所有单项指标都最大，而是在准确性、公平性和履约可行性之间取得更适合外卖平台的折中。全量 TRD 仿真中，Seq-xQuAD 提升了离线推荐准确性，但进入派单后平台效用不一定最高；Seq-xQuAD-Tripartite 取得当前最高平台效用、最低平均 ETA 和最低超时率，说明把列表级重排与三方履约约束结合，比单独追求离线命中更适合外卖平台场景。
+履约侧指标包括完成订单数、平均 ETA、超时率、骑手负载标准差和平台综合效用。多目标推荐的目标不是所有单项指标都最大，而是在准确性、公平性和履约可行性之间取得更适合外卖平台的折中。全量 TRD 仿真中，Seq-Tuned 和 Seq-Tuned-xQuAD 提升了离线推荐准确性，但进入派单后平台效用仍要与 ETA、超时率和骑手负载一起判断；Seq-xQuAD-Tripartite 展示了把列表级重排与三方履约约束结合的系统级价值。
 
-为避免只展示单点权重，图表中额外生成 `pareto_recall_utility.png` 和 `tripartite_frontier.csv`，把 Recall@20、Exposure Gini、平均 ETA、超时率和平台效用合并为非支配前沿视角。答辩时可以用这张图说明：Seq-xQuAD 代表离线准确率前沿，Seq-xQuAD-Tripartite 代表系统效用前沿，两者共同构成三方推荐的权衡边界。
+为避免只展示单点权重，图表中额外生成 `pareto_recall_utility.png` 和 `tripartite_frontier.csv`，把 Recall@20、Exposure Gini、平均 ETA、超时率和平台效用合并为非支配前沿视角。答辩时可以用这张图说明：Seq-Tuned / Seq-Tuned-xQuAD 代表离线准确率前沿，Seq-xQuAD-Tripartite 代表系统效用前沿，它们共同构成三方推荐的权衡边界。
 
 ## 6. 图表展示
 
@@ -128,7 +128,7 @@ def build_report(
 
 ## 7. 结论与局限
 
-FoodFlow 的答辩故事可以概括为三步：第一，公开外卖订单数据上的推荐实验证明模型不是随机的，并用 Seq-xQuAD 把离线排序指标继续推高；第二，显式加入商家曝光、长尾曝光和 Gini 指标，让推荐不再只围绕用户命中率讨论；第三，Seq-xQuAD-Tripartite 和负载感知派单能降低 ETA、超时风险并提升平台效用，从而体现多主体平台的系统级优化。
+FoodFlow 的答辩故事可以概括为三步：第一，公开外卖订单数据上的推荐实验证明模型不是随机的，并用 Seq-Tuned 把离线排序指标继续推高；第二，显式加入商家曝光、长尾曝光、品类校准和 Gini 指标，让推荐不再只围绕用户命中率讨论；第三，Seq-xQuAD-Tripartite 和负载感知派单能降低 ETA、超时风险并提升平台效用，从而体现多主体平台的系统级优化。
 
 局限是骑手数据来自合成仿真，不能替代工业级派单数据；BPR-MF 是轻量实现，未追求大规模深度模型最优性能；平台效用权重是课程项目中的解释性设置，需要结合业务偏好做敏感性分析。
 """

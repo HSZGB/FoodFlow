@@ -11,6 +11,27 @@ from .data import PreparedData
 from .rerank import estimate_user_merchant_eta, fairness_scores, minmax, supply_score_for_merchant
 
 
+SEQ_TUNED_WEIGHTS = {
+    "fast_recency": 0.142601,
+    "slow_recency": 0.093624,
+    "repeat": 0.412158,
+    "transition": 0.247023,
+    "category": 0.091250,
+    "popularity": 0.008945,
+    "quality": 0.004398,
+}
+
+SEQ_TUNED_XQUAD_WEIGHTS = {
+    "fast_recency": 0.270998,
+    "slow_recency": 0.106017,
+    "repeat": 0.279395,
+    "transition": 0.274380,
+    "category": 0.048099,
+    "popularity": 0.005218,
+    "quality": 0.015892,
+}
+
+
 @dataclass
 class RecommendationResult:
     name: str
@@ -340,6 +361,40 @@ class SequentialHybridRecommender(UserOnlyRecommender):
         return recs, {m: scores.get(m, float(self.popular.get(m, 0))) for m in recs}
 
 
+class WeightedSequentialRecommender(SequentialHybridRecommender):
+    name = "Seq-Weighted"
+
+    def __init__(self, name: str = "Seq-Weighted", weights: dict[str, float] | None = None):
+        self.name = name
+        self.seq_weights = weights or SEQ_TUNED_WEIGHTS
+
+    def _sequence_feature_values(self, user_id: str, merchant_id: str) -> dict[str, float]:
+        seq = self.recent_by_user.get(user_id, [])
+        counts = self.user_item_counts.get(user_id, Counter())
+        merchant = self.merchants.loc[merchant_id]
+        category = merchant.get("primary_first_tag_id", "unknown")
+        recency_fast, recency_slow = self._recency_scores(seq, merchant_id)
+        return {
+            "fast_recency": float(recency_fast),
+            "slow_recency": float(recency_slow),
+            "repeat": float(np.log1p(counts.get(merchant_id, 0)) / np.log(5)),
+            "transition": float(self._transition_score(seq, merchant_id)),
+            "category": float(self.user_cat_counts.get(user_id, {}).get(category, 0.0)),
+            "popularity": float(self.pop_log.get(merchant_id, 0.0)),
+            "quality": float(self.quality.get(merchant_id, 0.5)),
+        }
+
+    def user_score(self, user_id: str, merchant_id: str, period: str = "lunch") -> float:
+        values = self._sequence_feature_values(user_id, merchant_id)
+        weight_sum = max(float(sum(self.seq_weights.values())), 1e-12)
+        return float(sum(self.seq_weights[key] * values.get(key, 0.0) for key in self.seq_weights) / weight_sum)
+
+
+class SeqTunedRecommender(WeightedSequentialRecommender):
+    def __init__(self):
+        super().__init__(name="Seq-Tuned", weights=SEQ_TUNED_WEIGHTS)
+
+
 class SeqTripartiteRecommender(SequentialHybridRecommender):
     name = "Seq-Tripartite"
 
@@ -442,6 +497,32 @@ class SeqXQuadRecommender(SequentialHybridRecommender):
         recs = self._rerank_xquad(scores, k)
         recs = self._remove_seen_and_backfill(user_id, recs, k)
         return recs, {m: scores.get(m, float(self.popular.get(m, 0))) for m in recs}
+
+
+class SeqTunedXQuadRecommender(SeqXQuadRecommender):
+    name = "Seq-Tuned-xQuAD"
+
+    def __init__(self, diversity_weight: float = 0.22, tail_weight: float = 0.08):
+        super().__init__(diversity_weight=diversity_weight, tail_weight=tail_weight)
+        self.seq_weights = SEQ_TUNED_XQUAD_WEIGHTS
+
+    def user_score(self, user_id: str, merchant_id: str, period: str = "lunch") -> float:
+        seq = self.recent_by_user.get(user_id, [])
+        counts = self.user_item_counts.get(user_id, Counter())
+        merchant = self.merchants.loc[merchant_id]
+        category = merchant.get("primary_first_tag_id", "unknown")
+        recency_fast, recency_slow = self._recency_scores(seq, merchant_id)
+        values = {
+            "fast_recency": float(recency_fast),
+            "slow_recency": float(recency_slow),
+            "repeat": float(np.log1p(counts.get(merchant_id, 0)) / np.log(5)),
+            "transition": float(self._transition_score(seq, merchant_id)),
+            "category": float(self.user_cat_counts.get(user_id, {}).get(category, 0.0)),
+            "popularity": float(self.pop_log.get(merchant_id, 0.0)),
+            "quality": float(self.quality.get(merchant_id, 0.5)),
+        }
+        weight_sum = max(float(sum(self.seq_weights.values())), 1e-12)
+        return float(sum(self.seq_weights[key] * values.get(key, 0.0) for key in self.seq_weights) / weight_sum)
 
 
 class SeqXQuadTripartiteRecommender(SeqTripartiteRecommender):
@@ -593,6 +674,8 @@ def build_recommenders(seed: int = 42) -> list[BaseRecommender]:
         UserOnlyRecommender(),
         SequentialHybridRecommender(),
         SeqXQuadRecommender(),
+        SeqTunedRecommender(),
+        SeqTunedXQuadRecommender(),
         SeqTripartiteRecommender(),
         SeqXQuadTripartiteRecommender(),
         OursBalancedRecommender(),

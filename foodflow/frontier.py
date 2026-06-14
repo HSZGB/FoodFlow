@@ -10,6 +10,8 @@ POLICY_MODEL_MAP = {
     "Seq-Hybrid + MinETA": "Seq-Hybrid",
     "Seq-Hybrid + LoadAware": "Seq-Hybrid",
     "Seq-xQuAD + MinETA": "Seq-xQuAD",
+    "Seq-Tuned + MinETA": "Seq-Tuned",
+    "Seq-Tuned-xQuAD + MinETA": "Seq-Tuned-xQuAD",
     "Seq-Tripartite": "Seq-Tripartite",
     "Seq-xQuAD-Tripartite": "Seq-xQuAD-Tripartite",
     "Ours-Balanced": "Ours-Balanced",

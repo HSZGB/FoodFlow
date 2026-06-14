@@ -55,7 +55,7 @@ NotebookLM 上传时建议保留原文件名。图表页要优先使用 PNG 作�
 - 第 6 页至少使用 `offline_recall20.png` 和 `tradeoff_ndcg_gini.png`。
 - 如果第 6 页空间允许，加入 `offline_category_jsd20.png`，说明 Seq-xQuAD 兼顾命中与用户历史品类校准。
 - 第 8 页至少使用 `simulation_avg_eta.png` 和 `simulation_platform_utility.png`。
-- 如果第 8 页空间允许，优先加入 `pareto_recall_utility.png`，说明 Seq-xQuAD 是离线准确率前沿、Seq-xQuAD-Tripartite 是平台效用前沿。
+- 如果第 8 页空间允许，优先加入 `pareto_recall_utility.png`，说明 Seq-Tuned / Seq-Tuned-xQuAD 是离线准确率前沿、Seq-xQuAD-Tripartite 是平台效用前沿。
 - 第 10 页可以使用 `tripartite_scorecard.png` 总结三方贡献。
 - 任何图表都必须保留原始坐标轴、图例、模型名称和数值含义。
 - 如果 NotebookLM 重新绘制图表，必须以 CSV 数值为准，并在讲稿中说明图表来自本项目实验输出。

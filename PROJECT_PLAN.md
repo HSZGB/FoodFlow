@@ -8,6 +8,7 @@
 - [x] 真实 TRD 必需 txt 文件已下载并通过 md5 校验；正式指标和报告已由完整 TRD `orders_train.txt` 生成。
 - [x] `make smoke` 已改为隔离目录，不会覆盖真实 TRD raw/processed/outputs。
 - [x] 新增 conda 环境、数据审计、Ours-Balanced 权重敏感策略和三方可视化看板。
+- [x] 新增 Seq-Tuned 与 Seq-Tuned-xQuAD，当前离线 Recall@20 提升到 `0.4675`，并已重生成指标、图表、报告和 NotebookLM 上传包。
 - [ ] PPT 最终图片页和 `.pptx` 等待 `codex-ppt` 审批门禁。
 
 ## 重复执行流程
@@ -57,6 +58,7 @@
 - [x] Ours-Balanced，用于展示准确性、商家公平和履约约束的权衡路径
 - [x] Recall@K、NDCG@K、MRR@K、HitRate@K
 - [x] Coverage、Long-tail Exposure、Exposure Gini
+- [x] Seq-Hybrid、Seq-xQuAD、Seq-Tuned、Seq-Tuned-xQuAD、Seq-Tripartite、Seq-xQuAD-Tripartite，用于展示序列复购、列表重排、校准和三方约束。
 - 验收命令：`make eval`
 
 ### 阶段 4：三方仿真
@@ -73,6 +75,7 @@
 - [x] trade-off 图、三方 scorecard 与 Streamlit 三页看板
 - [x] 实验报告 Markdown
 - [x] Streamlit demo
+- [x] 方法看板、空间供需调度图、NotebookLM 上传包已同步最新指标。
 - 验收命令：`make figures report`
 
 ### 阶段 6：PPT
