@@ -322,7 +322,7 @@ with tab_case:
     else:
         card_df = rec_df.copy()
     if card_df.empty:
-        st.info("这个筛选没命中，先把原来的推荐列表放回来。")
+        st.info("当前筛选无匹配，已显示完整推荐列表。")
         card_df = rec_df.copy()
 
     card_count = min(9, len(card_df))
@@ -389,7 +389,7 @@ with tab_case:
     chosen_id = str(chosen_row["merchant_id"])
     merchant_row = merchants.loc[chosen_id]
 
-    st.subheader("这单派给谁")
+    st.subheader("骑手匹配结果")
     left, right = st.columns([1.05, 1.35])
     with left:
         render_recommendation_card(chosen_row, selected=True)
@@ -418,7 +418,7 @@ with tab_case:
             x="component",
             y="weighted_score",
             color="component",
-            title=f"{strategy_name} 为什么把这家店排上来",
+            title=f"{strategy_name} 分数组成",
             color_discrete_sequence=["#2563eb", "#0f766e", "#dc6803", "#7c3aed"],
         )
         contrib_fig.update_layout(showlegend=False, height=280, margin=dict(l=8, r=8, t=48, b=8))
@@ -443,7 +443,7 @@ with tab_case:
             for rider_id in candidate_view["rider_id"]
         ]
         with candidate_left:
-            st.subheader("这单会优先派给谁")
+            st.subheader("负载感知派单")
             rider_table = candidate_view[
                 ["rank", "status", "rider_id", "score", "eta", "pickup_distance_km", "load", "reliability", "reason"]
             ].rename(
@@ -523,7 +523,7 @@ with tab_case:
                 )
             ]
         )
-        flow_fig.update_layout(title="这单的路径", height=340, margin=dict(l=8, r=8, t=52, b=8))
+        flow_fig.update_layout(title="当前订单路径", height=340, margin=dict(l=8, r=8, t=52, b=8))
         st.plotly_chart(flow_fig, use_container_width=True)
 
     with map_col:
@@ -786,7 +786,7 @@ with tab_case:
     st.dataframe(display_df, use_container_width=True, hide_index=True)
 
 with tab_peak:
-    st.subheader("午餐高峰怎么变化")
+    st.subheader("午餐高峰回放")
     replay_c1, replay_c2 = st.columns(2)
     with replay_c1:
         replay_steps = st.slider("回放时间步", min_value=8, max_value=32, value=16, step=2)
@@ -1108,7 +1108,7 @@ with tab_metrics:
                 x="model",
                 y=["Recall@20", "NDCG@20"],
                 barmode="group",
-                title="用户侧：推荐有没有命中",
+                title="用户侧推荐命中",
                 color_discrete_sequence=["#2563eb", "#0f766e"],
             )
             acc_fig.update_layout(height=360, margin=dict(l=8, r=8, t=48, b=8), xaxis_title="")
