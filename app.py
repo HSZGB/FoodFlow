@@ -268,6 +268,14 @@ def viewport_range(values: list[float], padding_ratio: float = 0.18) -> list[flo
     return [low - padding, high + padding]
 
 
+def bounded_env_int(name: str, default: int, min_value: int, max_value: int) -> int:
+    try:
+        value = int(os.environ.get(name, str(default)))
+    except ValueError:
+        value = default
+    return max(min_value, min(value, max_value))
+
+
 def control_card(label: str, value: str, note: str, color: str) -> str:
     return f"""
     <div class="ff-control-card ff-control-accent" style="--accent:{color};">
@@ -342,7 +350,8 @@ user_ids = data.user_ids
 user_set = set(user_ids)
 default_user = "8" if "8" in user_set else user_ids[0]
 case_options = demo_user_cases(data.users)
-demo_max_orders = int(os.environ.get("FOODFLOW_DEMO_MAX_ORDERS", "30000"))
+demo_max_orders = bounded_env_int("FOODFLOW_DEMO_MAX_ORDERS", 30000, 0, 2_000_000)
+demo_rider_count = bounded_env_int("FOODFLOW_DEMO_RIDERS", 720, 80, 1600)
 
 with st.sidebar:
     st.header("演示参数")
@@ -391,7 +400,7 @@ rec_df = build_recommendation_frame(interactive_data, model, user_id, recs, peri
 users_df = data.users.set_index("user_id", drop=False)
 merchants = data.merchants.set_index("wm_poi_id", drop=False)
 user_row = users_df.loc[user_id]
-riders = generate_riders(data.merchants, n_riders=420, seed=7)
+riders = generate_riders(data.merchants, n_riders=demo_rider_count, seed=7)
 
 if not rec_df.empty:
     top_row = rec_df.iloc[0]
@@ -704,7 +713,8 @@ with tab_case:
         rider_plot["pickup_distance"] = (
             (rider_plot["lng"] - merchant_lng).pow(2) + (rider_plot["lat"] - merchant_lat).pow(2)
         )
-        nearby_riders = rider_plot.nsmallest(min(180, len(rider_plot)), "pickup_distance")
+        nearby_count = min(320, len(rider_plot))
+        nearby_riders = rider_plot.nsmallest(nearby_count, "pickup_distance")
         merchant_circle_x, merchant_circle_y = geo_circle(merchant_lng, merchant_lat, 2.5)
         user_circle_x, user_circle_y = geo_circle(user_lng, user_lat, 2.5)
 
@@ -749,7 +759,7 @@ with tab_case:
             )
         )
         map_fig.add_trace(
-            go.Scatter(
+            go.Scattergl(
                 x=nearby_riders["lng"],
                 y=nearby_riders["lat"],
                 mode="markers",
@@ -757,10 +767,10 @@ with tab_case:
                 text=nearby_riders["rider_id"],
                 customdata=nearby_riders[["load", "reliability"]].to_numpy(),
                 marker=dict(
-                    size=7,
+                    size=6.2,
                     color=pd.to_numeric(nearby_riders["load"], errors="coerce"),
                     colorscale=[[0, "#d9e2ec"], [0.5, "#94a3b8"], [1, "#334155"]],
-                    opacity=0.46,
+                    opacity=0.42,
                     line=dict(width=0.4, color="#ffffff"),
                 ),
                 hovertemplate="骑手 %{text}<br>负载 %{customdata[0]}<br>可靠性 %{customdata[1]:.2f}<extra></extra>",
@@ -867,19 +877,23 @@ with tab_case:
         focus_lng += rider_candidates["lng"].dropna().astype(float).tolist()
         focus_lat += rider_candidates["lat"].dropna().astype(float).tolist()
         map_fig.update_layout(
-            title="空间供需调度图：候选骑手、取餐圈与配送路径",
-            height=390,
-            xaxis_title="经度",
-            yaxis_title="纬度",
+            title=f"空间供需调度图：{nearby_count} 名近场骑手、Top{len(rider_candidates)} 派单候选与配送路径",
+            height=430,
             margin=dict(l=8, r=8, t=52, b=8),
-            plot_bgcolor="#f8fafc",
+            plot_bgcolor="#f6f8fb",
             paper_bgcolor="#ffffff",
             legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0, font=dict(size=10)),
+            dragmode="pan",
         )
-        map_fig.update_xaxes(showgrid=True, gridcolor="#e2e8f0", zeroline=False, range=viewport_range(focus_lng))
+        map_fig.update_xaxes(
+            visible=False,
+            showgrid=False,
+            zeroline=False,
+            range=viewport_range(focus_lng),
+        )
         map_fig.update_yaxes(
-            showgrid=True,
-            gridcolor="#e2e8f0",
+            visible=False,
+            showgrid=False,
             zeroline=False,
             range=viewport_range(focus_lat),
             scaleanchor="x",
