@@ -5,17 +5,10 @@ import pandas as pd
 
 POLICY_MODEL_MAP = {
     "Popular + Nearest": "Popular",
-    "UserOnly + Nearest": "UserOnly",
     "UserOnly + MinETA": "UserOnly",
-    "Seq-Hybrid + MinETA": "Seq-Hybrid",
-    "Seq-Hybrid + LoadAware": "Seq-Hybrid",
-    "Seq-xQuAD + MinETA": "Seq-xQuAD",
     "Seq-Tuned + MinETA": "Seq-Tuned",
     "Seq-Tuned-xQuAD + MinETA": "Seq-Tuned-xQuAD",
-    "Seq-Tripartite": "Seq-Tripartite",
     "Seq-xQuAD-Tripartite": "Seq-xQuAD-Tripartite",
-    "Ours-Balanced": "Ours-Balanced",
-    "Ours w/o Fairness": "UserOnly",
     "Ours-Full": "Ours-Full",
 }
 

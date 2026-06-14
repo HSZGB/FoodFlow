@@ -23,14 +23,10 @@ from foodflow.demo_support import (
 )
 from foodflow.frontier import POLICY_MODEL_MAP, build_tripartite_frontier
 from foodflow.recommenders import (
-    OursBalancedRecommender,
     OursFullRecommender,
-    SeqTripartiteRecommender,
     SeqTunedRecommender,
     SeqTunedXQuadRecommender,
-    SeqXQuadRecommender,
     SeqXQuadTripartiteRecommender,
-    SequentialHybridRecommender,
     UserOnlyRecommender,
 )
 from foodflow.rider_sim import generate_riders
@@ -45,23 +41,6 @@ st.markdown(
     h1, h2, h3 { letter-spacing: 0; }
     .ff-title { font-size: 2rem; font-weight: 760; margin-bottom: 0.1rem; }
     .ff-subtitle { color: #4b5563; font-size: 0.98rem; margin-bottom: 1rem; }
-    .ff-control-strip {
-        display: grid;
-        grid-template-columns: repeat(5, minmax(0, 1fr));
-        gap: 0.7rem;
-        margin: 0.25rem 0 1rem;
-    }
-    .ff-control-card {
-        border: 1px solid #d9e2ec;
-        border-radius: 8px;
-        padding: 0.68rem 0.76rem;
-        background: #ffffff;
-        min-height: 92px;
-    }
-    .ff-control-accent { border-top: 3px solid var(--accent); }
-    .ff-control-label { color: #64748b; font-size: 0.74rem; font-weight: 700; }
-    .ff-control-value { color: #0f172a; font-size: 1.08rem; font-weight: 780; margin-top: 0.18rem; }
-    .ff-control-note { color: #64748b; font-size: 0.76rem; margin-top: 0.22rem; line-height: 1.25; }
     .ff-card {
         border: 1px solid #d9e2ec;
         border-radius: 8px;
@@ -146,7 +125,6 @@ st.markdown(
     .ff-method-body { color: #475569; font-size: 0.76rem; margin-top: 0.45rem; line-height: 1.35; }
     .ff-method-metric { color: #0f172a; font-size: 0.78rem; font-weight: 760; margin-top: 0.5rem; }
     @media (max-width: 900px) {
-        .ff-control-strip { grid-template-columns: repeat(2, minmax(0, 1fr)); }
         .ff-ops-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
         .ff-method-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     }
@@ -207,13 +185,9 @@ def build_interactive_data(
 def load_model(strategy: str, data_key: str, _data: PreparedData) -> object:
     factories = {
         "UserOnly": UserOnlyRecommender,
-        "Seq-Hybrid": SequentialHybridRecommender,
-        "Seq-xQuAD": SeqXQuadRecommender,
         "Seq-Tuned": SeqTunedRecommender,
         "Seq-Tuned-xQuAD": SeqTunedXQuadRecommender,
-        "Seq-Tripartite": SeqTripartiteRecommender,
         "Seq-xQuAD-Tripartite": SeqXQuadTripartiteRecommender,
-        "Ours-Balanced": OursBalancedRecommender,
         "Ours-Full": OursFullRecommender,
     }
     return factories[strategy]().fit(_data)
@@ -227,11 +201,8 @@ DEMO_COLORS = {
     "Seq-Tuned-xQuAD": "#0E7490",
     "Seq-Tuned": "#B45309",
     "Seq-xQuAD-Tripartite": "#B5121B",
-    "Seq-xQuAD": "#2563EB",
-    "Seq-Hybrid": "#60A5FA",
-    "Seq-Tripartite": "#0F766E",
     "Ours-Full": "#DC6803",
-    "Ours-Balanced": "#7C3AED",
+    "UserOnly": "#2563EB",
 }
 
 
@@ -274,16 +245,6 @@ def bounded_env_int(name: str, default: int, min_value: int, max_value: int) -> 
     except ValueError:
         value = default
     return max(min_value, min(value, max_value))
-
-
-def control_card(label: str, value: str, note: str, color: str) -> str:
-    return f"""
-    <div class="ff-control-card ff-control-accent" style="--accent:{color};">
-      <div class="ff-control-label">{html.escape(label)}</div>
-      <div class="ff-control-value">{html.escape(value)}</div>
-      <div class="ff-control-note">{html.escape(note)}</div>
-    </div>
-    """
 
 
 def method_card(source: str, title: str, body: str, metric: str, color: str) -> str:
@@ -372,12 +333,8 @@ with st.sidebar:
         [
             "Seq-Tuned",
             "Seq-Tuned-xQuAD",
-            "Seq-xQuAD",
             "Seq-xQuAD-Tripartite",
-            "Seq-Hybrid",
-            "Seq-Tripartite",
             "Ours-Full",
-            "Ours-Balanced",
             "UserOnly",
         ],
         index=0,
@@ -406,41 +363,22 @@ if not rec_df.empty:
     top_row = rec_df.iloc[0]
     avg_eta = float(rec_df["eta_minutes"].mean())
     avg_fairness = float(rec_df["fairness"].mean())
-    strip_html = "".join(
-        [
-            control_card(
-                "当前用户",
-                str(user_id),
-                f"历史 {int(user_row.get('history_orders', 0))} 单，偏好 {str(user_row.get('favorite_category', 'unknown'))}",
-                "#2563eb",
-            ),
-            control_card(
-                "推荐策略",
-                strategy_name,
-                "先排用户偏好，再接商家曝光和履约约束",
-                demo_color(strategy_name),
-            ),
-            control_card(
-                "首位商家",
-                str(top_row["merchant_name"]),
-                f"TOP1 分数 {float(top_row['final_score']):.3f}，品类 {top_row['category']}",
-                "#0f766e",
-            ),
-            control_card(
-                "推荐履约",
-                f"{avg_eta:.1f} min",
-                f"Top{len(rec_df)} 平均 ETA，商家公平均值 {avg_fairness:.2f}",
-                "#dc6803",
-            ),
-            control_card(
-                "骑手供给",
-                f"{len(riders)} riders",
-                "用于同屏派单比较和空间供需展示",
-                "#7c3aed",
-            ),
-        ]
-    )
-    st.markdown(f'<div class="ff-control-strip">{strip_html}</div>', unsafe_allow_html=True)
+    summary_cols = st.columns(5)
+    with summary_cols[0]:
+        st.metric("当前用户", str(user_id))
+        st.caption(f"历史 {int(user_row.get('history_orders', 0))} 单")
+    with summary_cols[1]:
+        st.metric("推荐策略", strategy_name)
+        st.caption("用户偏好、曝光与履约")
+    with summary_cols[2]:
+        st.metric("首位商家", str(top_row["merchant_name"]))
+        st.caption(f"TOP1 分数 {float(top_row['final_score']):.3f}")
+    with summary_cols[3]:
+        st.metric("推荐履约", f"{avg_eta:.1f} min")
+        st.caption(f"商家公平均值 {avg_fairness:.2f}")
+    with summary_cols[4]:
+        st.metric("骑手供给", f"{len(riders)}")
+        st.caption("合成在线骑手")
 
 offline_path = Path("outputs/results/offline_metrics.csv")
 sim_path = Path("outputs/results/simulation_metrics.csv")
@@ -495,19 +433,15 @@ with tab_case:
             with col:
                 st.markdown(recommendation_card(row), unsafe_allow_html=True)
 
-    st.subheader("同一用户的策略对比")
-    run_strategy_compare = st.checkbox("计算三策略对比", value=False)
+    st.subheader("同一用户的主线策略对比")
+    run_strategy_compare = st.checkbox("计算主线策略对比", value=False)
     if run_strategy_compare:
         strategy_rows = []
         for name in [
             "UserOnly",
-            "Seq-Hybrid",
-            "Seq-xQuAD",
             "Seq-Tuned",
             "Seq-Tuned-xQuAD",
-            "Seq-Tripartite",
             "Seq-xQuAD-Tripartite",
-            "Ours-Balanced",
             "Ours-Full",
         ]:
             with st.spinner(f"加载 {name} 并生成对比..."):
@@ -551,7 +485,7 @@ with tab_case:
             strategy_chart.update_layout(height=300, margin=dict(l=8, r=8, t=48, b=8), xaxis_title="")
             st.plotly_chart(strategy_chart, use_container_width=True)
     else:
-        st.caption("为保证首屏打开速度，三策略对比默认不预计算；需要展示时勾选即可。")
+        st.caption("为保证首屏打开速度，主线策略对比默认不预计算；需要展示时勾选即可。")
 
     option_labels = [
         f"TOP {int(row.rank)} · {row.merchant_name} · ID {row.merchant_id}" for row in rec_df.itertuples(index=False)
@@ -939,19 +873,15 @@ with tab_peak:
                 data,
                 {
                     "UserOnly + MinETA": (load_model("UserOnly", model_data_key, interactive_data), "min_eta"),
-                    "Seq-Hybrid + MinETA": (load_model("Seq-Hybrid", model_data_key, interactive_data), "min_eta"),
-                    "Seq-xQuAD + MinETA": (load_model("Seq-xQuAD", model_data_key, interactive_data), "min_eta"),
                     "Seq-Tuned + MinETA": (load_model("Seq-Tuned", model_data_key, interactive_data), "min_eta"),
                     "Seq-Tuned-xQuAD + MinETA": (
                         load_model("Seq-Tuned-xQuAD", model_data_key, interactive_data),
                         "min_eta",
                     ),
-                    "Seq-Tripartite": (load_model("Seq-Tripartite", model_data_key, interactive_data), "load_aware"),
                     "Seq-xQuAD-Tripartite": (
                         load_model("Seq-xQuAD-Tripartite", model_data_key, interactive_data),
                         "load_aware",
                     ),
-                    "Ours-Balanced": (load_model("Ours-Balanced", model_data_key, interactive_data), "load_aware"),
                     "Ours-Full": (load_model("Ours-Full", model_data_key, interactive_data), "load_aware"),
                 },
                 seed=33,
@@ -1138,9 +1068,7 @@ with tab_method:
                         "即时配送派单",
                         "Seq-Tuned",
                         "Seq-Tuned-xQuAD",
-                        "Seq-Hybrid",
-                        "Seq-xQuAD",
-                        "三方重排",
+                        "Seq-xQuAD-Tripartite",
                         "骑手仿真",
                         "答辩指标",
                     ],
@@ -1152,17 +1080,15 @@ with tab_method:
                         "#fecaca",
                         "#B45309",
                         "#0E7490",
-                        "#2563eb",
-                        "#0f766e",
                         "#dc6803",
                         "#7c3aed",
                         "#B5121B",
                     ],
                 ),
                 link=dict(
-                    source=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
-                    target=[5, 6, 6, 9, 10, 7, 8, 8, 9, 10],
-                    value=[2, 1, 1, 1, 1, 2, 2, 2, 2, 2],
+                    source=[0, 1, 2, 3, 4, 5, 6, 7, 8],
+                    target=[5, 6, 6, 7, 8, 6, 7, 8, 9],
+                    value=[2, 1, 1, 1, 1, 2, 2, 2, 2],
                     color=[
                         "#dbeafe",
                         "#ccfbf1",
@@ -1171,7 +1097,6 @@ with tab_method:
                         "#fee2e2",
                         "#fde68a",
                         "#bfdbfe",
-                        "#99f6e4",
                         "#fed7aa",
                         "#ddd6fe",
                     ],
