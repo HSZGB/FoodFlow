@@ -99,27 +99,26 @@
 
 - Baselines：Random、Popular、Repeat、ItemCF、BPR-MF
 - UserOnly：品类偏好 + 复购 + 价格匹配 + 时段偏好 + 商家质量
-- Ours-Balanced：提高用户偏好权重，同时保留 ETA 与供给约束
-- Ours-Full：用户偏好 + 商家公平 + ETA + 供给分
+- Seq-Hybrid：复购序列 + 最近订单衰减 + 商家转移概率
+- Seq-xQuAD：序列相关性 + 品类覆盖 + 长尾曝光
+- Seq-xQuAD-Tripartite：列表级覆盖 + 商家公平 + ETA + 供给分
 - 可解释输出只引用真实参与打分的特征
 
 视觉布局：
 
 - 左侧放模型对照表。
-- 右侧放 Ours-Full 打分公式：
+- 右侧放 Seq-xQuAD-Tripartite 打分拆解：
 
 ```text
-score = 0.62 user_score
-      + 0.18 fairness
-      + 0.14 eta_score
-      + 0.06 supply_score
+base_score = user_preference + fairness + eta_score + supply_score
+list_score = relevance + category_coverage + long_tail_gain
 ```
 
 - 用不同颜色标注用户、商家、骑手/履约相关项。
 
 演讲备注：
 
-基线覆盖随机、热门、复购、协同过滤和矩阵分解。UserOnly 证明用户偏好特征有效；Ours-Full 在此基础上加入商家曝光公平、预计履约时间和供给可行性。这样推荐列表不只对用户排序，也把商家和履约约束纳入排序。
+基线覆盖随机、热门、复购、协同过滤和矩阵分解。Seq-Hybrid 把外卖复购和最近订单序列建进去；Seq-xQuAD 在此基础上做列表级覆盖；Seq-xQuAD-Tripartite 再加入商家公平、ETA 和供给分。这样推荐列表不只对用户排序，也把商家和履约约束纳入排序。
 
 ## Slide 6：离线推荐指标结果
 
@@ -138,11 +137,12 @@ score = 0.62 user_score
 
 必须出现的文本：
 
+- Seq-xQuAD Recall@20 = 0.4447，NDCG@20 = 0.3538
+- Seq-Hybrid Recall@20 = 0.4441，NDCG@20 = 0.3513
 - UserOnly Recall@20 = 0.4287，NDCG@20 = 0.3423
 - Repeat Recall@20 = 0.4062，体现外卖复购特征
-- Ours-Balanced Recall@20 = 0.4097，NDCG@20 = 0.3346
-- Ours-Full Recall@20 = 0.4055，NDCG@20 = 0.3320
-- Ours-Full 不是追求单一 Recall 最大，而是在准确性、公平性和履约之间折中
+- Seq-xQuAD-Tripartite Recall@20 = 0.4180，NDCG@20 = 0.3440
+- Seq-xQuAD-Tripartite 不是追求单一 Recall 最大，而是在准确性、公平性和履约之间折中
 
 视觉布局：
 
@@ -152,7 +152,7 @@ score = 0.62 user_score
 
 演讲备注：
 
-离线结果显示，UserOnly 的 Recall@20 和 NDCG@20 最高，说明用户画像特征有效；Repeat 也很强，符合外卖复购规律。Ours-Full 的离线准确率有所下降，但仍显著优于随机、热门和传统协同过滤基线，它的价值要结合三方指标继续判断。
+离线结果显示，Seq-xQuAD 的 Recall@20 和 NDCG@20 最高，说明外卖复购序列和列表级覆盖重排有效；Repeat 也很强，符合外卖复购规律。Seq-xQuAD-Tripartite 的离线准确率有所下降，但 NDCG@20 仍略高于 UserOnly，它的价值要结合三方履约指标继续判断。
 
 ## Slide 7：动态履约仿真设计
 
@@ -191,21 +191,22 @@ score = 0.62 user_score
 
 必须出现的文本：
 
-- UserOnly + Nearest：Avg ETA = 95.41，Timeout Rate = 0.8182，Utility = 0.4255
-- UserOnly + MinETA：Avg ETA = 53.86，Timeout Rate = 0.6517，Utility = 0.4779
-- Ours-Balanced：Avg ETA = 59.00，Timeout Rate = 0.7941，Utility = 0.4597
-- Ours-Full：Avg ETA = 46.78，Timeout Rate = 0.4725，Utility = 0.5394
-- Ours-Full 平台综合效用最高
+- UserOnly + Nearest：Avg ETA = 86.54，Timeout Rate = 0.8721，Utility = 0.3998
+- UserOnly + MinETA：Avg ETA = 55.33，Timeout Rate = 0.6701，Utility = 0.4831
+- Seq-Tripartite：Avg ETA = 52.15，Timeout Rate = 0.6364，Utility = 0.4963
+- Ours-Full：Avg ETA = 50.85，Timeout Rate = 0.5714，Utility = 0.5246
+- Seq-xQuAD-Tripartite：Avg ETA = 50.33，Timeout Rate = 0.5319，Utility = 0.5264
+- Seq-xQuAD-Tripartite 平台综合效用最高
 
 视觉布局：
 
 - 上方放两个主图：平均 ETA、平台效用。
 - 下方放小表格，列出三条关键策略的 ETA、超时率、效用。
-- 用正式红突出 Ours-Full 的 `0.5394`。
+- 用正式红突出 Seq-xQuAD-Tripartite 的 `0.5264`。
 
 演讲备注：
 
-仿真结果说明，单纯 UserOnly 加最近骑手会造成很高 ETA 和超时率。改为最小 ETA 派单后明显改善；继续加入履约感知和三方重排后，Ours-Full 平均 ETA 最低、超时率最低、平台综合效用最高，证明推荐策略需要接受履约结果检验。
+仿真结果说明，单纯 UserOnly 加最近骑手会造成很高 ETA 和超时率。改为最小 ETA 派单后明显改善；继续加入列表级覆盖、履约感知和三方重排后，Seq-xQuAD-Tripartite 平均 ETA、超时率和平台效用最好，证明推荐策略需要接受履约结果检验。
 
 ## Slide 9：案例解释：一次推荐如何兼顾三方
 
@@ -239,7 +240,7 @@ score = 0.62 user_score
 
 - 结论 1：标准推荐指标证明模型有效
 - 结论 2：三方重排把商家公平和履约约束引入推荐
-- 结论 3：Ours-Full 以较小准确率代价换取更低 ETA、更低超时率和最高平台效用
+- 结论 3：Seq-xQuAD-Tripartite 以一部分准确率代价换取更低 ETA、更低超时率和最高平台效用
 - 局限：骑手数据为合成 proxy；BPR-MF 为轻量实现；平台效用权重是解释性设置
 - 后续：接入真实派单数据、敏感性分析、图模型扩展
 
@@ -247,11 +248,11 @@ score = 0.62 user_score
 
 - 上方三个结论卡片。
 - 下方一个“局限与后续”横条。
-- 右侧放关键数字摘要：Recall@20 0.4055、Avg ETA 46.78、Utility 0.5394。
+- 右侧放关键数字摘要：Seq-xQuAD Recall@20 0.4447、Seq-xQuAD-Tripartite Avg ETA 50.33、Utility 0.5264。
 
 演讲备注：
 
-项目完成了可运行的推荐与履约仿真闭环。离线指标证明推荐不是随机有效，三方重排让商家公平和履约可行性进入排序，系统级仿真显示 Ours-Full 的平台效用最高。局限也很明确：骑手数据是 proxy，后续应接入真实派单并做更充分的敏感性分析。
+项目完成了可运行的推荐与履约仿真闭环。离线指标证明推荐不是随机有效，Seq-xQuAD 把离线排序指标继续推高；Seq-xQuAD-Tripartite 让商家公平和履约可行性进入排序，系统级仿真显示它的平台效用最高。局限也很明确：骑手数据是 proxy，后续应接入真实派单并做更充分的敏感性分析。
 
 ## Slide 11：Q&A
 

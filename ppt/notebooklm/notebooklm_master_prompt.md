@@ -24,9 +24,10 @@
 - 使用用户、商家、菜品、训练订单、测试订单和测试标签。
 - 不下载约 1.8GB 的 `graph.bin`，因为本项目核心实现不依赖 DGL 图文件。
 - 骑手位置、在线状态、负载、可靠性和收入是固定 seed 合成 proxy，只用于仿真，不能说成真实骑手数据。
-- 已实现推荐策略：Random、Popular、Repeat、ItemCF、BPR-MF、UserOnly、Ours-Balanced、Ours-Full。
-- Ours-Full = 用户偏好 + 商家公平 + ETA + 供给分。
-- 已实现仿真策略：Popular + Nearest、UserOnly + Nearest、UserOnly + MinETA、Ours w/o Fairness、Ours-Full。
+- 已实现推荐策略：Random、Popular、Repeat、ItemCF、BPR-MF、UserOnly、Seq-Hybrid、Seq-xQuAD、Seq-Tripartite、Seq-xQuAD-Tripartite、Ours-Balanced、Ours-Full。
+- Seq-xQuAD = 序列复购相关性 + xQuAD/MMR 风格列表级覆盖重排。
+- Seq-xQuAD-Tripartite = 序列偏好 + 列表级覆盖 + 商家公平 + ETA + 供给分。
+- 已实现仿真策略：Popular + Nearest、UserOnly + Nearest、UserOnly + MinETA、Seq-Hybrid + MinETA、Seq-xQuAD + MinETA、Seq-Tripartite、Seq-xQuAD-Tripartite、Ours w/o Fairness、Ours-Full。
 - 三方推荐必须体现为：
   - 用户侧：给用户推荐商家/菜品。
   - 商家侧：通过公平重排让商家获得更合理曝光。
@@ -37,18 +38,22 @@
 离线推荐：
 
 - `UserOnly`：Recall@20 = `0.4287`，NDCG@20 = `0.3423`，HitRate@20 = `0.5733`。
+- `Seq-Hybrid`：Recall@20 = `0.4441`，NDCG@20 = `0.3513`，HitRate@20 = `0.5933`。
+- `Seq-xQuAD`：Recall@20 = `0.4447`，NDCG@20 = `0.3538`，HitRate@20 = `0.5967`。
+- `Seq-xQuAD-Tripartite`：Recall@20 = `0.4180`，NDCG@20 = `0.3440`，HitRate@20 = `0.5733`。
 - `Repeat`：Recall@20 = `0.4062`，NDCG@20 = `0.3348`。
 - `Ours-Balanced`：Recall@20 = `0.4097`，NDCG@20 = `0.3346`，HitRate@20 = `0.5633`。
 - `Ours-Full`：Recall@20 = `0.4055`，NDCG@20 = `0.3320`，HitRate@20 = `0.5633`。
 
 动态履约仿真：
 
-- `UserOnly + Nearest`：Avg ETA = `95.41`，Timeout Rate = `0.8182`，Platform Utility = `0.4255`。
-- `UserOnly + MinETA`：Avg ETA = `53.86`，Timeout Rate = `0.6517`，Platform Utility = `0.4779`。
-- `Ours-Balanced`：Avg ETA = `59.00`，Timeout Rate = `0.7941`，Platform Utility = `0.4597`。
-- `Ours-Full`：Avg ETA = `46.78`，Timeout Rate = `0.4725`，Platform Utility = `0.5394`。
+- `UserOnly + Nearest`：Avg ETA = `86.54`，Timeout Rate = `0.8721`，Platform Utility = `0.3998`。
+- `UserOnly + MinETA`：Avg ETA = `55.33`，Timeout Rate = `0.6701`，Platform Utility = `0.4831`。
+- `Seq-Tripartite`：Avg ETA = `52.15`，Timeout Rate = `0.6364`，Platform Utility = `0.4963`。
+- `Seq-xQuAD-Tripartite`：Avg ETA = `50.33`，Timeout Rate = `0.5319`，Platform Utility = `0.5264`。
+- `Ours-Full`：Avg ETA = `50.85`，Timeout Rate = `0.5714`，Platform Utility = `0.5246`。
 
-结论必须表达为：Ours-Full 牺牲一部分离线准确性，但换来更好的履约效率、更低超时风险和最高平台综合效用。
+结论必须表达为：Seq-xQuAD 是离线推荐指标最强策略；Seq-xQuAD-Tripartite 牺牲一部分离线准确性，但换来更好的履约效率、更低超时风险和最高平台综合效用。
 
 ## 视觉风格
 
@@ -79,7 +84,7 @@
    展示数据处理 -> 推荐召回排序 -> 三方重排 -> 骑手匹配 -> 动态仿真 -> 指标评估。
 
 5. **推荐算法与三方重排**  
-   对比 Random、Popular、Repeat、ItemCF、BPR-MF、UserOnly、Ours-Balanced、Ours-Full；展示 Ours-Full 打分拆解。
+   对比 Random、Popular、Repeat、ItemCF、BPR-MF、UserOnly、Seq-Hybrid、Seq-xQuAD、Seq-xQuAD-Tripartite、Ours-Full；展示 Seq-xQuAD-Tripartite 的三方重排拆解。
 
 6. **离线推荐指标结果**  
    使用 `offline_recall20.png` 和 `tradeoff_ndcg_gini.png`，也可引用 `offline_metrics.csv` 生成小表。说明标准推荐指标与商家曝光指标。
@@ -88,7 +93,7 @@
    展示午餐高峰多时间步、推荐列表产生订单、订单推荐/匹配给骑手、状态更新闭环。
 
 8. **三方策略的系统级指标**  
-   使用 `simulation_avg_eta.png` 和 `simulation_platform_utility.png`，也可补充超时率和骑手负载。强调 Ours-Full 的系统级优势。
+   使用 `simulation_avg_eta.png` 和 `simulation_platform_utility.png`，也可补充超时率和骑手负载。强调 Seq-xQuAD-Tripartite 的系统级优势，同时说明 Ours-Full 是接近最优的三方对照。
 
 9. **案例解释：一次推荐如何兼顾三方**  
    用一个案例串起用户画像、Top-K 商家推荐、推荐解释、下单、骑手匹配、ETA/超时风险。

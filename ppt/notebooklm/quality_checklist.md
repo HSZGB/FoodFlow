@@ -21,7 +21,7 @@
 ## 关键页检查
 
 - [ ] Slide 3 写明 TRD、Zenodo DOI `10.5281/zenodo.8025855`、北京 11 个商圈、2021-03-01 至 2021-03-28。
-- [ ] Slide 5 写明 Ours-Full = 用户偏好 + 商家公平 + ETA + 供给分。
+- [ ] Slide 5 写明 Seq-xQuAD-Tripartite = 序列偏好 + 列表级覆盖 + 商家公平 + ETA + 供给分。
 - [ ] Slide 6 出现 Recall@20/NDCG@20/Exposure Gini/Coverage 至少两个图或一个图加表。
 - [ ] Slide 8 出现 Avg ETA、Timeout Rate、Rider Load Std、Platform Utility 至少两个图或一个图加表。
 - [ ] Slide 10 同时写结论和局限，不只写优点。
@@ -29,9 +29,14 @@
 ## 必须保留的关键数字
 
 - [ ] `UserOnly`：Recall@20 = `0.4287`，NDCG@20 = `0.3423`，HitRate@20 = `0.5733`。
+- [ ] `Seq-Hybrid`：Recall@20 = `0.4441`，NDCG@20 = `0.3513`，HitRate@20 = `0.5933`。
+- [ ] `Seq-xQuAD`：Recall@20 = `0.4447`，NDCG@20 = `0.3538`，HitRate@20 = `0.5967`。
+- [ ] `Seq-xQuAD-Tripartite`：Recall@20 = `0.4180`，NDCG@20 = `0.3440`，HitRate@20 = `0.5733`。
 - [ ] `Ours-Balanced`：Recall@20 = `0.4097`，NDCG@20 = `0.3346`，HitRate@20 = `0.5633`。
 - [ ] `Ours-Full`：Recall@20 = `0.4055`，NDCG@20 = `0.3320`，HitRate@20 = `0.5633`。
 - [ ] `Repeat`：Recall@20 = `0.4062`，NDCG@20 = `0.3348`。
-- [ ] `UserOnly + Nearest`：Avg ETA = `95.41`，Timeout Rate = `0.8182`，Utility = `0.4255`。
-- [ ] `UserOnly + MinETA`：Avg ETA = `53.86`，Timeout Rate = `0.6517`，Utility = `0.4779`。
-- [ ] `Ours-Full`：Avg ETA = `46.78`，Timeout Rate = `0.4725`，Utility = `0.5394`。
+- [ ] `UserOnly + Nearest`：Avg ETA = `86.54`，Timeout Rate = `0.8721`，Utility = `0.3998`。
+- [ ] `UserOnly + MinETA`：Avg ETA = `55.33`，Timeout Rate = `0.6701`，Utility = `0.4831`。
+- [ ] `Seq-Tripartite`：Avg ETA = `52.15`，Timeout Rate = `0.6364`，Utility = `0.4963`。
+- [ ] `Seq-xQuAD-Tripartite`：Avg ETA = `50.33`，Timeout Rate = `0.5319`，Utility = `0.5264`。
+- [ ] `Ours-Full`：Avg ETA = `50.85`，Timeout Rate = `0.5714`，Utility = `0.5246`。
