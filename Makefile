@@ -61,14 +61,14 @@ report:
 	$(PYTHON) -m foodflow.cli report --results-dir outputs/results --figures-dir outputs/figures --output report/实验报告.md --data-audit outputs/results/data_audit.json
 
 demo:
-	@echo "Starting FoodFlow demo..."
-	@echo "Open http://localhost:8501 after Streamlit starts. Press Ctrl+C to stop."
-	$(STREAMLIT) run app.py $(STREAMLIT_FLAGS)
+	@printf "\nFoodFlow demo is a long-running Streamlit web server, not a batch command.\n"
+	@printf "Keep this terminal open, then visit http://localhost:8501 . Press Ctrl+C here to stop.\n\n"
+	$(STREAMLIT) run app.py --server.headless true $(STREAMLIT_FLAGS)
 
 demo-full:
-	@echo "Starting FoodFlow demo with full processed train orders..."
-	@echo "Open http://localhost:8501 after Streamlit starts. Press Ctrl+C to stop."
-	FOODFLOW_DEMO_MAX_ORDERS=0 $(STREAMLIT) run app.py $(STREAMLIT_FLAGS)
+	@printf "\nFoodFlow demo-full uses all processed train orders and may take longer on first load.\n"
+	@printf "Keep this terminal open, then visit http://localhost:8501 . Press Ctrl+C here to stop.\n\n"
+	FOODFLOW_DEMO_MAX_ORDERS=0 $(STREAMLIT) run app.py --server.headless true $(STREAMLIT_FLAGS)
 
 test:
 	$(PYTHON) -m pytest -q

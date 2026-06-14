@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import html
+import math
 import os
 from pathlib import Path
 
@@ -41,6 +42,23 @@ st.markdown(
     h1, h2, h3 { letter-spacing: 0; }
     .ff-title { font-size: 2rem; font-weight: 760; margin-bottom: 0.1rem; }
     .ff-subtitle { color: #4b5563; font-size: 0.98rem; margin-bottom: 1rem; }
+    .ff-control-strip {
+        display: grid;
+        grid-template-columns: repeat(5, minmax(0, 1fr));
+        gap: 0.7rem;
+        margin: 0.25rem 0 1rem;
+    }
+    .ff-control-card {
+        border: 1px solid #d9e2ec;
+        border-radius: 8px;
+        padding: 0.68rem 0.76rem;
+        background: #ffffff;
+        min-height: 92px;
+    }
+    .ff-control-accent { border-top: 3px solid var(--accent); }
+    .ff-control-label { color: #64748b; font-size: 0.74rem; font-weight: 700; }
+    .ff-control-value { color: #0f172a; font-size: 1.08rem; font-weight: 780; margin-top: 0.18rem; }
+    .ff-control-note { color: #64748b; font-size: 0.76rem; margin-top: 0.22rem; line-height: 1.25; }
     .ff-card {
         border: 1px solid #d9e2ec;
         border-radius: 8px;
@@ -107,6 +125,7 @@ st.markdown(
     }
     .ff-ops-value { color: #0f172a; font-weight: 760; }
     @media (max-width: 900px) {
+        .ff-control-strip { grid-template-columns: repeat(2, minmax(0, 1fr)); }
         .ff-ops-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     }
     </style>
@@ -200,6 +219,37 @@ def demo_color(name: object) -> str:
 
 def demo_color_map(values) -> dict[str, str]:
     return {str(value): demo_color(value) for value in values}
+
+
+def geo_circle(lng: float, lat: float, radius_km: float, points: int = 96) -> tuple[list[float], list[float]]:
+    lat_delta = radius_km / 111.0
+    lng_delta = radius_km / max(111.0 * math.cos(math.radians(lat)), 1e-6)
+    angles = [2.0 * math.pi * i / points for i in range(points + 1)]
+    return (
+        [lng + lng_delta * math.cos(angle) for angle in angles],
+        [lat + lat_delta * math.sin(angle) for angle in angles],
+    )
+
+
+def viewport_range(values: list[float], padding_ratio: float = 0.18) -> list[float]:
+    clean_values = [float(value) for value in values if pd.notna(value)]
+    if not clean_values:
+        return [0.0, 1.0]
+    low = min(clean_values)
+    high = max(clean_values)
+    span = max(high - low, 0.01)
+    padding = span * padding_ratio
+    return [low - padding, high + padding]
+
+
+def control_card(label: str, value: str, note: str, color: str) -> str:
+    return f"""
+    <div class="ff-control-card ff-control-accent" style="--accent:{color};">
+      <div class="ff-control-label">{html.escape(label)}</div>
+      <div class="ff-control-value">{html.escape(value)}</div>
+      <div class="ff-control-note">{html.escape(note)}</div>
+    </div>
+    """
 
 
 def peak_policy_card(row: pd.Series, rank: int) -> str:
@@ -302,7 +352,47 @@ rec_df = build_recommendation_frame(interactive_data, model, user_id, recs, peri
 users_df = data.users.set_index("user_id", drop=False)
 merchants = data.merchants.set_index("wm_poi_id", drop=False)
 user_row = users_df.loc[user_id]
-riders = generate_riders(data.merchants, n_riders=240, seed=7)
+riders = generate_riders(data.merchants, n_riders=420, seed=7)
+
+if not rec_df.empty:
+    top_row = rec_df.iloc[0]
+    avg_eta = float(rec_df["eta_minutes"].mean())
+    avg_fairness = float(rec_df["fairness"].mean())
+    strip_html = "".join(
+        [
+            control_card(
+                "当前用户",
+                str(user_id),
+                f"历史 {int(user_row.get('history_orders', 0))} 单，偏好 {str(user_row.get('favorite_category', 'unknown'))}",
+                "#2563eb",
+            ),
+            control_card(
+                "推荐策略",
+                strategy_name,
+                "先排用户偏好，再接商家曝光和履约约束",
+                demo_color(strategy_name),
+            ),
+            control_card(
+                "首位商家",
+                str(top_row["merchant_name"]),
+                f"TOP1 分数 {float(top_row['final_score']):.3f}，品类 {top_row['category']}",
+                "#0f766e",
+            ),
+            control_card(
+                "推荐履约",
+                f"{avg_eta:.1f} min",
+                f"Top{len(rec_df)} 平均 ETA，商家公平均值 {avg_fairness:.2f}",
+                "#dc6803",
+            ),
+            control_card(
+                "骑手供给",
+                f"{len(riders)} riders",
+                "用于同屏派单比较和空间供需展示",
+                "#7c3aed",
+            ),
+        ]
+    )
+    st.markdown(f'<div class="ff-control-strip">{strip_html}</div>', unsafe_allow_html=True)
 
 tab_case, tab_peak, tab_metrics, tab_figures = st.tabs(["推荐工作台", "高峰仿真回放", "指标故事线", "图表材料"])
 
@@ -487,11 +577,27 @@ with tab_case:
 
     with map_col:
         rider_point = rider_compare[rider_compare["policy_key"] == "load_aware"].iloc[0]
+        user_lng = float(user_row.get("lng", 116.40))
+        user_lat = float(user_row.get("lat", 39.92))
+        merchant_lng = float(merchant_row.get("lng", 116.40))
+        merchant_lat = float(merchant_row.get("lat", 39.92))
+        rider_lng = float(rider_point["lng"])
+        rider_lat = float(rider_point["lat"])
+        rider_plot = riders.copy()
+        rider_plot["lng"] = pd.to_numeric(rider_plot["lng"], errors="coerce").fillna(116.40)
+        rider_plot["lat"] = pd.to_numeric(rider_plot["lat"], errors="coerce").fillna(39.92)
+        rider_plot["pickup_distance"] = (
+            (rider_plot["lng"] - merchant_lng).pow(2) + (rider_plot["lat"] - merchant_lat).pow(2)
+        )
+        nearby_riders = rider_plot.nsmallest(min(180, len(rider_plot)), "pickup_distance")
+        merchant_circle_x, merchant_circle_y = geo_circle(merchant_lng, merchant_lat, 2.5)
+        user_circle_x, user_circle_y = geo_circle(user_lng, user_lat, 2.5)
+
         map_fig = go.Figure()
         map_fig.add_trace(
             go.Histogram2dContour(
-                x=pd.to_numeric(riders["lng"], errors="coerce"),
-                y=pd.to_numeric(riders["lat"], errors="coerce"),
+                x=rider_plot["lng"],
+                y=rider_plot["lat"],
                 colorscale=[
                     [0.0, "rgba(15, 118, 110, 0.00)"],
                     [0.35, "rgba(45, 212, 191, 0.16)"],
@@ -505,87 +611,140 @@ with tab_case:
         )
         map_fig.add_trace(
             go.Scatter(
-                x=pd.to_numeric(riders["lng"], errors="coerce"),
-                y=pd.to_numeric(riders["lat"], errors="coerce"),
-                mode="markers",
-                name="骑手供给",
-                text=riders["rider_id"],
-                marker=dict(
-                    size=6,
-                    color=pd.to_numeric(riders["load"], errors="coerce"),
-                    colorscale=[[0, "#cbd5e1"], [0.5, "#94a3b8"], [1, "#475569"]],
-                    opacity=0.36,
-                    line=dict(width=0),
-                ),
-                hovertemplate="骑手 %{text}<br>经度 %{x:.4f}<br>纬度 %{y:.4f}<extra></extra>",
-            )
-        )
-        map_fig.add_trace(
-            go.Scatter(
-                x=[float(rider_point["lng"]), float(merchant_row.get("lng", 116.40)), float(user_row.get("lng", 116.40))],
-                y=[float(rider_point["lat"]), float(merchant_row.get("lat", 39.92)), float(user_row.get("lat", 39.92))],
+                x=merchant_circle_x,
+                y=merchant_circle_y,
                 mode="lines",
-                name="履约路径",
-                line=dict(color="#0f766e", width=3, dash="dot"),
+                fill="toself",
+                fillcolor="rgba(15, 118, 110, 0.07)",
+                line=dict(color="rgba(15, 118, 110, 0.42)", width=1.5),
+                name="商家取餐圈",
                 hoverinfo="skip",
             )
         )
         map_fig.add_trace(
             go.Scatter(
-                x=[float(user_row.get("lng", 116.40))],
-                y=[float(user_row.get("lat", 39.92))],
+                x=user_circle_x,
+                y=user_circle_y,
+                mode="lines",
+                fill="toself",
+                fillcolor="rgba(37, 99, 235, 0.06)",
+                line=dict(color="rgba(37, 99, 235, 0.38)", width=1.5),
+                name="用户送达圈",
+                hoverinfo="skip",
+            )
+        )
+        map_fig.add_trace(
+            go.Scatter(
+                x=nearby_riders["lng"],
+                y=nearby_riders["lat"],
+                mode="markers",
+                name="候选骑手池",
+                text=nearby_riders["rider_id"],
+                customdata=nearby_riders[["load", "reliability"]].to_numpy(),
+                marker=dict(
+                    size=7,
+                    color=pd.to_numeric(nearby_riders["load"], errors="coerce"),
+                    colorscale=[[0, "#d9e2ec"], [0.5, "#94a3b8"], [1, "#334155"]],
+                    opacity=0.46,
+                    line=dict(width=0.4, color="#ffffff"),
+                ),
+                hovertemplate="骑手 %{text}<br>负载 %{customdata[0]}<br>可靠性 %{customdata[1]:.2f}<extra></extra>",
+            )
+        )
+        map_fig.add_trace(
+            go.Scatter(
+                x=[rider_lng, merchant_lng],
+                y=[rider_lat, merchant_lat],
+                mode="lines",
+                name="取餐段",
+                line=dict(color="#7c3aed", width=3, dash="dot"),
+                hoverinfo="skip",
+            )
+        )
+        map_fig.add_trace(
+            go.Scatter(
+                x=[merchant_lng, user_lng],
+                y=[merchant_lat, user_lat],
+                mode="lines",
+                name="配送段",
+                line=dict(color="#dc6803", width=3),
+                hoverinfo="skip",
+            )
+        )
+        map_fig.add_trace(
+            go.Scatter(
+                x=[user_lng],
+                y=[user_lat],
                 mode="markers+text",
                 name="用户",
                 text=[f"用户 {user_id}"],
                 textposition="top center",
-                marker=dict(size=15, color="#2563eb", symbol="circle"),
+                marker=dict(size=16, color="#2563eb", symbol="circle", line=dict(color="#ffffff", width=1.5)),
             )
         )
         map_fig.add_trace(
             go.Scatter(
                 x=rec_df["lng"],
                 y=rec_df["lat"],
-                mode="markers",
+                mode="markers+text",
                 name="推荐商家",
-                text=rec_df["merchant_name"],
-                marker=dict(size=rec_df["final_score"].rank(pct=True) * 16 + 8, color="#0f766e", opacity=0.75),
-                hovertemplate="%{text}<br>经度 %{x:.4f}<br>纬度 %{y:.4f}<extra></extra>",
+                text=rec_df["rank"].astype(int).map(lambda value: f"T{value}"),
+                customdata=rec_df[["merchant_name", "eta_minutes", "final_score"]].to_numpy(),
+                textposition="middle center",
+                marker=dict(
+                    size=rec_df["final_score"].rank(pct=True) * 18 + 10,
+                    color="#0f766e",
+                    opacity=0.74,
+                    line=dict(color="#ffffff", width=1),
+                ),
+                hovertemplate="%{customdata[0]}<br>ETA %{customdata[1]:.1f} min<br>总分 %{customdata[2]:.3f}<extra></extra>",
             )
         )
         map_fig.add_trace(
             go.Scatter(
-                x=[float(merchant_row.get("lng", 116.40))],
-                y=[float(merchant_row.get("lat", 39.92))],
+                x=[merchant_lng],
+                y=[merchant_lat],
                 mode="markers+text",
                 name="下单商家",
                 text=[str(chosen_row["merchant_name"])],
                 textposition="bottom center",
-                marker=dict(size=19, color="#dc6803", symbol="diamond"),
+                marker=dict(size=20, color="#dc6803", symbol="diamond", line=dict(color="#ffffff", width=1.5)),
             )
         )
         map_fig.add_trace(
             go.Scatter(
-                x=[float(rider_point["lng"])],
-                y=[float(rider_point["lat"])],
+                x=[rider_lng],
+                y=[rider_lat],
                 mode="markers+text",
                 name="匹配骑手",
                 text=[str(rider_point["rider_id"])],
                 textposition="top center",
-                marker=dict(size=17, color="#7c3aed", symbol="square"),
+                marker=dict(size=18, color="#7c3aed", symbol="square", line=dict(color="#ffffff", width=1.5)),
             )
         )
+        focus_lng = [user_lng, merchant_lng, rider_lng] + rec_df["lng"].dropna().astype(float).tolist()
+        focus_lat = [user_lat, merchant_lat, rider_lat] + rec_df["lat"].dropna().astype(float).tolist()
+        focus_lng += nearby_riders["lng"].dropna().astype(float).tolist()
+        focus_lat += nearby_riders["lat"].dropna().astype(float).tolist()
         map_fig.update_layout(
-            title="空间供需：骑手密度、推荐商家与履约路径",
-            height=340,
+            title="空间供需调度图：候选骑手、取餐圈与配送路径",
+            height=390,
             xaxis_title="经度",
             yaxis_title="纬度",
             margin=dict(l=8, r=8, t=52, b=8),
             plot_bgcolor="#f8fafc",
             paper_bgcolor="#ffffff",
-            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0),
+            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0, font=dict(size=10)),
         )
-        map_fig.update_xaxes(showgrid=True, gridcolor="#e2e8f0", zeroline=False)
-        map_fig.update_yaxes(showgrid=True, gridcolor="#e2e8f0", zeroline=False, scaleanchor="x", scaleratio=1)
+        map_fig.update_xaxes(showgrid=True, gridcolor="#e2e8f0", zeroline=False, range=viewport_range(focus_lng))
+        map_fig.update_yaxes(
+            showgrid=True,
+            gridcolor="#e2e8f0",
+            zeroline=False,
+            range=viewport_range(focus_lat),
+            scaleanchor="x",
+            scaleratio=1,
+        )
         st.plotly_chart(map_fig, use_container_width=True)
 
     st.subheader("推荐明细")
