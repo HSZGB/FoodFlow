@@ -444,6 +444,68 @@ class SeqXQuadRecommender(SequentialHybridRecommender):
         return recs, {m: scores.get(m, float(self.popular.get(m, 0))) for m in recs}
 
 
+class SeqXQuadTripartiteRecommender(SeqTripartiteRecommender):
+    name = "Seq-xQuAD-Tripartite"
+
+    def __init__(
+        self,
+        user_weight: float = 0.93,
+        fairness_weight: float = 0.025,
+        eta_weight: float = 0.03,
+        supply_weight: float = 0.015,
+        diversity_weight: float = 0.12,
+        tail_weight: float = 0.04,
+    ):
+        super().__init__(user_weight, fairness_weight, eta_weight, supply_weight)
+        self.diversity_weight = diversity_weight
+        self.tail_weight = tail_weight
+
+    def _rerank_xquad(self, scores: dict[str, float], k: int) -> list[str]:
+        if not scores:
+            return []
+        candidates = sorted(scores, key=scores.get, reverse=True)[:80]
+        min_score = min(scores[m] for m in candidates)
+        max_score = max(scores[m] for m in candidates)
+        scale = max(max_score - min_score, 1e-9)
+        relevance_weight = max(1.0 - self.diversity_weight - self.tail_weight, 0.0)
+        selected: list[str] = []
+        covered_categories: set[str] = set()
+        while len(selected) < k and len(selected) < len(candidates):
+            best_item = None
+            best_score = -float("inf")
+            for merchant_id in candidates:
+                if merchant_id in selected:
+                    continue
+                merchant = self.merchants.loc[merchant_id]
+                category = str(merchant.get("primary_first_tag_id", "unknown"))
+                category_gain = 0.0 if category in covered_categories else 1.0
+                order_count = float(merchant.get("order_count", 0) or 0)
+                tail_gain = 1.0 / (1.0 + np.log1p(order_count))
+                relevance = (scores[merchant_id] - min_score) / scale
+                value = (
+                    relevance_weight * relevance
+                    + self.diversity_weight * category_gain
+                    + self.tail_weight * tail_gain
+                )
+                if value > best_score:
+                    best_item = merchant_id
+                    best_score = value
+            if best_item is None:
+                break
+            selected.append(best_item)
+            covered_categories.add(str(self.merchants.loc[best_item].get("primary_first_tag_id", "unknown")))
+        return selected
+
+    def recommend_for_user(self, user_id: str, k: int, period: str = "lunch") -> tuple[list[str], dict[str, float]]:
+        scores = {
+            merchant_id: self.component_scores(user_id, merchant_id, period)["final_score"]
+            for merchant_id in self._sequential_candidates(user_id)
+        }
+        recs = self._rerank_xquad(scores, k)
+        recs = self._remove_seen_and_backfill(user_id, recs, k)
+        return recs, {m: scores.get(m, float(self.popular.get(m, 0))) for m in recs}
+
+
 class TripartiteRerankRecommender(UserOnlyRecommender):
     name = "Tripartite-Rerank"
 
@@ -532,6 +594,7 @@ def build_recommenders(seed: int = 42) -> list[BaseRecommender]:
         SequentialHybridRecommender(),
         SeqXQuadRecommender(),
         SeqTripartiteRecommender(),
+        SeqXQuadTripartiteRecommender(),
         OursBalancedRecommender(),
         OursFullRecommender(),
     ]

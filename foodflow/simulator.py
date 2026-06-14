@@ -15,6 +15,7 @@ from .recommenders import (
     PopularRecommender,
     SeqTripartiteRecommender,
     SeqXQuadRecommender,
+    SeqXQuadTripartiteRecommender,
     SequentialHybridRecommender,
     UserOnlyRecommender,
 )
@@ -37,6 +38,7 @@ DEFAULT_POLICIES = [
     SimulationPolicy("Seq-xQuAD + MinETA", "seq_xquad", "min_eta"),
     SimulationPolicy("Seq-Hybrid + LoadAware", "seq_hybrid", "load_aware"),
     SimulationPolicy("Seq-Tripartite", "seq_tripartite", "load_aware", fairness=True),
+    SimulationPolicy("Seq-xQuAD-Tripartite", "seq_xquad_tripartite", "load_aware", fairness=True),
     SimulationPolicy("Ours-Balanced", "ours_balanced", "load_aware", fairness=True),
     SimulationPolicy("Ours w/o Fairness", "useronly", "load_aware"),
     SimulationPolicy("Ours-Full", "ours", "load_aware", fairness=True),
@@ -54,6 +56,8 @@ def _select_recommender(data: PreparedData, name: str, seed: int):
         return SeqXQuadRecommender().fit(data)
     if name == "seq_tripartite":
         return SeqTripartiteRecommender().fit(data)
+    if name == "seq_xquad_tripartite":
+        return SeqXQuadTripartiteRecommender().fit(data)
     if name == "ours":
         return OursFullRecommender().fit(data)
     if name == "ours_balanced":

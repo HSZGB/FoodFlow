@@ -15,7 +15,7 @@ FoodFlow 当前最值得增强的方向不是直接堆大模型，而是把外�
 | 多目标推荐 | Multi-Objective Recommender Systems: Survey and Challenges, 2022 | 准确率、覆盖、公平、履约并非单一目标 | 保留 `Seq-Hybrid` 作为准确性上界，同时用 `Ours-Full` 讲系统级收益 |
 | 曝光公平 | Burke, Multisided Fairness for Recommendation, 2017；Joint Multisided Exposure Fairness, SIGIR 2022 | 推荐平台要同时考虑消费者和供给侧曝光 | `Ours-Full` 和图表继续展示 Coverage、Long-tail Exposure、Exposure Gini |
 | 多样性重排 | YouTube DPP reranking, CIKM 2018；MMR/xQuAD 思路 | 排序后可做多样性、覆盖和供给约束重排 | 新增 `Seq-xQuAD`，在序列相关性后做品类覆盖和长尾曝光的列表级重排 |
-| 即时配送派单 | Matching Algorithm with Reinforcement Learning and Decoupling Strategy for Order Dispatching in On-Demand Food Delivery, TST 2023 | 推荐产生订单后，派单和 ETA 会反过来影响平台体验 | 当前履约仿真比较最近骑手、最小 ETA、负载感知派单 |
+| 即时配送派单 | Matching Algorithm with Reinforcement Learning and Decoupling Strategy for Order Dispatching in On-Demand Food Delivery, TST 2023 | 推荐产生订单后，派单和 ETA 会反过来影响平台体验 | 新增 `Seq-xQuAD-Tripartite`，把列表级重排和 ETA/供给/负载感知派单串成闭环 |
 
 ## 本轮实现：Seq-Hybrid 与 Seq-xQuAD
 
@@ -51,6 +51,8 @@ list_score =
 
 其中 `uncovered_category_gain` 借鉴 xQuAD/MMR 的覆盖思想，让推荐列表不要被单一品类挤满；`long_tail_gain` 给订单量较低的商家一点曝光补偿。这个版本的定位不是工业级 DPP，而是课程项目中可解释、可运行、指标有提升的列表重排模块。
 
+随后加入 `Seq-xQuAD-Tripartite`：先用序列偏好、曝光公平、ETA 和供给分得到三方相关性，再把这个相关性送入 xQuAD 式列表重排。它的意义不在于继续刷新离线 Recall，而是把“用户喜欢什么”和“系统能否履约”放在同一个可解释排序器里。
+
 ## 当前指标收益
 
 完整 TRD 处理结果上，`Seq-xQuAD` 成为离线推荐指标最强策略：
@@ -60,10 +62,11 @@ list_score =
 | UserOnly | 0.4287 | 0.3423 | 0.5733 |
 | Seq-Hybrid | 0.4441 | 0.3513 | 0.5933 |
 | Seq-xQuAD | 0.4447 | 0.3538 | 0.5967 |
+| Seq-xQuAD-Tripartite | 0.4180 | 0.3440 | 0.5733 |
 
 本轮继续实现了 `Seq-Tripartite`：在 `Seq-Hybrid` 的序列偏好底座上轻量加入公平、ETA 和供给约束。它的 NDCG@20 和 HitRate@20 高于 UserOnly，仿真平台效用也高于 `Seq-Hybrid + MinETA`，说明序列准确性可以和三方约束结合。
 
-仿真结果中，`Ours-Full` 仍取得最高平台效用。答辩故事因此更自然：`Seq-xQuAD` 证明推荐准确性可以继续提升；`Seq-Tripartite` 证明高准确序列模型可以接入三方约束；`Ours-Full` 证明外卖平台不能只看准确性，还要看 ETA、超时率、商家曝光和骑手负载。
+仿真结果中，`Seq-xQuAD-Tripartite` 取得当前最高平台效用 `0.5264`、最低平均 ETA `50.33` 和最低超时率 `0.5319`。答辩故事因此更自然：`Seq-xQuAD` 证明推荐准确性可以继续提升；`Seq-xQuAD-Tripartite` 证明高准确序列模型可以接入三方约束并改善履约；`Ours-Full` 作为原始三方重排对照，说明外卖平台不能只看准确性，还要看 ETA、超时率、商家曝光和骑手负载。
 
 ## 下一步可继续尝试
 
