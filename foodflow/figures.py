@@ -10,9 +10,11 @@ from .io import ensure_dir
 
 
 HIGHLIGHT = {
-    "Seq-Hybrid": "#2563EB",
+    "Seq-xQuAD-Tripartite": "#B5121B",
+    "Seq-xQuAD": "#2563EB",
+    "Seq-Hybrid": "#60A5FA",
     "Seq-Tripartite": "#0F766E",
-    "Ours-Full": "#B5121B",
+    "Ours-Full": "#DC6803",
     "Ours-Balanced": "#7C3AED",
 }
 DEFAULT_COLOR = "#CBD5E1"
@@ -25,6 +27,31 @@ def _color_for(label: str) -> str:
         if key in str(label):
             return color
     return DEFAULT_COLOR
+
+
+def _annotate_highlights(ax, df: pd.DataFrame, x: str, y: str, label_col: str) -> None:
+    offsets = {
+        "Seq-xQuAD-Tripartite": (8, 13),
+        "Ours-Full": (8, -13),
+        "Seq-xQuAD": (8, 8),
+        "Seq-Hybrid": (8, -10),
+        "Seq-Tripartite": (8, 10),
+        "Ours-Balanced": (8, -10),
+    }
+    for _, row in df.iterrows():
+        label = str(row[label_col])
+        if not any(key in label for key in HIGHLIGHT):
+            continue
+        offset = next((value for key, value in offsets.items() if key in label), (7, 5))
+        ax.annotate(
+            label,
+            (float(row[x]), float(row[y])),
+            xytext=offset,
+            textcoords="offset points",
+            fontsize=8.2,
+            color=TEXT_COLOR,
+            bbox=dict(boxstyle="round,pad=0.22", fc="white", ec=GRID_COLOR, alpha=0.9),
+        )
 
 
 def _save_bar(
@@ -145,6 +172,7 @@ def generate_figures(results_dir: Path, figures_dir: Path) -> list[Path]:
             )
             ax.set_title("Accuracy-Fairness trade-off", fontsize=14, fontweight="bold", loc="left")
             ax.grid(color=GRID_COLOR)
+            _annotate_highlights(ax, offline, "NDCG@20", "ExposureGini", "model")
             ax.legend(frameon=False, bbox_to_anchor=(1.02, 1), loc="upper left")
             fig.tight_layout()
             out = figures_dir / "tradeoff_ndcg_gini.png"
@@ -165,6 +193,7 @@ def generate_figures(results_dir: Path, figures_dir: Path) -> list[Path]:
             )
             ax.set_title("Accuracy-Coverage trade-off", fontsize=14, fontweight="bold", loc="left")
             ax.grid(color=GRID_COLOR)
+            _annotate_highlights(ax, offline, "Recall@20", "Coverage@20", "model")
             ax.legend(frameon=False, bbox_to_anchor=(1.02, 1), loc="upper left")
             fig.tight_layout()
             out = figures_dir / "tradeoff_recall_coverage.png"
@@ -206,6 +235,7 @@ def generate_figures(results_dir: Path, figures_dir: Path) -> list[Path]:
             )
             ax.set_title("ETA-Utility trade-off", fontsize=14, fontweight="bold", loc="left")
             ax.grid(color=GRID_COLOR)
+            _annotate_highlights(ax, sim, "avg_eta", "platform_utility", "policy")
             ax.legend(frameon=False, bbox_to_anchor=(1.02, 1), loc="upper left")
             fig.tight_layout()
             out = figures_dir / "tradeoff_eta_utility.png"

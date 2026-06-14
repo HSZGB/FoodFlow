@@ -140,6 +140,28 @@ def pct(value: float) -> str:
     return f"{clamp01(value) * 100:.0f}%"
 
 
+DEMO_COLORS = {
+    "Seq-xQuAD-Tripartite": "#B5121B",
+    "Seq-xQuAD": "#2563EB",
+    "Seq-Hybrid": "#60A5FA",
+    "Seq-Tripartite": "#0F766E",
+    "Ours-Full": "#DC6803",
+    "Ours-Balanced": "#7C3AED",
+}
+
+
+def demo_color(name: object) -> str:
+    text = str(name)
+    for key, color in DEMO_COLORS.items():
+        if key in text:
+            return color
+    return "#94a3b8"
+
+
+def demo_color_map(values) -> dict[str, str]:
+    return {str(value): demo_color(value) for value in values}
+
+
 def recommendation_card(row: pd.Series, selected: bool = False) -> str:
     card_class = "ff-card ff-card-selected" if selected else "ff-card"
     name = html.escape(str(row["merchant_name"]))
@@ -665,16 +687,67 @@ with tab_metrics:
     if offline_path.exists() and sim_path.exists():
         offline = pd.read_csv(offline_path)
         sim = pd.read_csv(sim_path)
+        policy_model_map = {
+            "Popular + Nearest": "Popular",
+            "UserOnly + Nearest": "UserOnly",
+            "UserOnly + MinETA": "UserOnly",
+            "Seq-Hybrid + MinETA": "Seq-Hybrid",
+            "Seq-Hybrid + LoadAware": "Seq-Hybrid",
+            "Seq-xQuAD + MinETA": "Seq-xQuAD",
+            "Seq-Tripartite": "Seq-Tripartite",
+            "Seq-xQuAD-Tripartite": "Seq-xQuAD-Tripartite",
+            "Ours-Balanced": "Ours-Balanced",
+            "Ours w/o Fairness": "UserOnly",
+            "Ours-Full": "Ours-Full",
+        }
         user_best = offline.sort_values("Recall@20", ascending=False).iloc[0]
-        ours_full = offline[offline["model"] == "Ours-Full"].iloc[0]
         utility_best = sim.sort_values("platform_utility", ascending=False).iloc[0]
         eta_best = sim.sort_values("avg_eta").iloc[0]
+        utility_model_name = policy_model_map.get(str(utility_best["policy"]), str(utility_best["policy"]))
+        utility_model_match = offline[offline["model"].astype(str) == utility_model_name]
+        utility_model = utility_model_match.iloc[0] if not utility_model_match.empty else user_best
 
         k1, k2, k3, k4 = st.columns(4)
         k1.metric("最高 Recall@20", f"{user_best['Recall@20']:.4f}", str(user_best["model"]))
-        k2.metric("Ours-Full Recall@20", f"{ours_full['Recall@20']:.4f}", "换取履约约束")
+        k2.metric("最高效用模型 Recall@20", f"{utility_model['Recall@20']:.4f}", utility_model_name)
         k3.metric("最低 Avg ETA", f"{eta_best['avg_eta']:.2f}", str(eta_best["policy"]))
         k4.metric("最高平台效用", f"{utility_best['platform_utility']:.4f}", str(utility_best["policy"]))
+
+        offline_index = offline.set_index("model", drop=False)
+        frontier_rows = []
+        for _, sim_row in sim.iterrows():
+            policy = str(sim_row["policy"])
+            model_name = policy_model_map.get(policy)
+            if model_name not in offline_index.index:
+                continue
+            off_row = offline_index.loc[model_name]
+            frontier_rows.append(
+                {
+                    "策略": policy,
+                    "推荐模型": model_name,
+                    "Recall@20": float(off_row["Recall@20"]),
+                    "NDCG@20": float(off_row["NDCG@20"]),
+                    "曝光Gini": float(off_row["ExposureGini"]),
+                    "Avg ETA": float(sim_row["avg_eta"]),
+                    "超时率": float(sim_row["timeout_rate"]),
+                    "平台效用": float(sim_row["platform_utility"]),
+                }
+            )
+        frontier_df = pd.DataFrame(frontier_rows).sort_values("平台效用", ascending=False)
+        st.markdown("#### 三方权衡摘要")
+        st.dataframe(
+            frontier_df.head(7),
+            use_container_width=True,
+            hide_index=True,
+            column_config={
+                "Recall@20": st.column_config.NumberColumn(format="%.4f"),
+                "NDCG@20": st.column_config.NumberColumn(format="%.4f"),
+                "曝光Gini": st.column_config.NumberColumn(format="%.4f"),
+                "Avg ETA": st.column_config.NumberColumn(format="%.2f"),
+                "超时率": st.column_config.NumberColumn(format="%.4f"),
+                "平台效用": st.column_config.NumberColumn(format="%.4f"),
+            },
+        )
 
         c1, c2 = st.columns(2)
         with c1:
@@ -687,6 +760,7 @@ with tab_metrics:
                 color_discrete_sequence=["#2563eb", "#0f766e"],
             )
             acc_fig.update_layout(height=360, margin=dict(l=8, r=8, t=48, b=8), xaxis_title="")
+            acc_fig.update_xaxes(tickangle=25)
             st.plotly_chart(acc_fig, use_container_width=True)
 
         with c2:
@@ -697,6 +771,7 @@ with tab_metrics:
                 color="model",
                 size="LongTailExposure@20",
                 title="用户准确性与商家覆盖的权衡",
+                color_discrete_map=demo_color_map(offline["model"]),
             )
             fair_fig.update_layout(height=360, margin=dict(l=8, r=8, t=48, b=8))
             st.plotly_chart(fair_fig, use_container_width=True)
@@ -710,20 +785,25 @@ with tab_metrics:
                 color="policy",
                 size="completed_orders",
                 title="履约侧：ETA 与平台效用",
+                color_discrete_map=demo_color_map(sim["policy"]),
             )
             sim_fig.update_layout(height=360, margin=dict(l=8, r=8, t=48, b=8))
             st.plotly_chart(sim_fig, use_container_width=True)
 
         with c4:
+            timeout_sorted = sim.sort_values("timeout_rate")
             timeout_fig = px.bar(
-                sim.sort_values("timeout_rate"),
+                timeout_sorted,
                 x="policy",
                 y="timeout_rate",
-                color="platform_utility",
+                color="policy",
+                text="timeout_rate",
                 title="超时率越低，平台效用越容易提升",
-                color_continuous_scale=["#dc6803", "#0f766e"],
+                color_discrete_map=demo_color_map(timeout_sorted["policy"]),
             )
             timeout_fig.update_layout(height=360, margin=dict(l=8, r=8, t=48, b=8), xaxis_title="")
+            timeout_fig.update_traces(texttemplate="%{y:.1%}", textposition="outside")
+            timeout_fig.update_xaxes(tickangle=25)
             st.plotly_chart(timeout_fig, use_container_width=True)
 
         with st.expander("查看完整指标表", expanded=False):
