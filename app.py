@@ -217,7 +217,7 @@ user_set = set(user_ids)
 default_user = "8" if "8" in user_set else user_ids[0]
 case_options = demo_user_cases(data.users)
 demo_max_orders = bounded_env_int("FOODFLOW_DEMO_MAX_ORDERS", 12000, 0, 2_000_000)
-demo_rider_count = bounded_env_int("FOODFLOW_DEMO_RIDERS", 960, 120, 2000)
+demo_rider_count = bounded_env_int("FOODFLOW_DEMO_RIDERS", 1200, 120, 2400)
 
 with st.sidebar:
     st.header("演示参数")
@@ -322,7 +322,7 @@ with tab_case:
     else:
         card_df = rec_df.copy()
     if card_df.empty:
-        st.info("当前筛选条件下没有推荐商家，已展示完整推荐列表。")
+        st.info("这个筛选没命中，先把原来的推荐列表放回来。")
         card_df = rec_df.copy()
 
     card_count = min(9, len(card_df))
@@ -378,7 +378,7 @@ with tab_case:
             strategy_chart.update_layout(height=300, margin=dict(l=8, r=8, t=48, b=8), xaxis_title="")
             st.plotly_chart(strategy_chart, use_container_width=True)
     else:
-        st.caption("这一步会多拟合几个模型，默认先不跑；需要比较时再勾选。")
+        st.caption("这个比较会临时多训几个模型，课堂演示时需要再打开。")
 
     option_labels = [
         f"TOP {int(row.rank)} · {row.merchant_name} · ID {row.merchant_id}" for row in rec_df.itertuples(index=False)
@@ -389,7 +389,7 @@ with tab_case:
     chosen_id = str(chosen_row["merchant_id"])
     merchant_row = merchants.loc[chosen_id]
 
-    st.subheader("这单怎么派出去")
+    st.subheader("这单派给谁")
     left, right = st.columns([1.05, 1.35])
     with left:
         render_recommendation_card(chosen_row, selected=True)
@@ -540,20 +540,20 @@ with tab_case:
         rider_plot["pickup_distance"] = (
             (rider_plot["lng"] - merchant_lng).pow(2) + (rider_plot["lat"] - merchant_lat).pow(2)
         )
-        nearby_count = min(420, len(rider_plot))
+        nearby_count = min(600, len(rider_plot))
         nearby_riders = rider_plot.nsmallest(nearby_count, "pickup_distance")
         user_plot = data.users.copy()
         user_plot["lng"] = pd.to_numeric(user_plot["lng"], errors="coerce").fillna(116.40)
         user_plot["lat"] = pd.to_numeric(user_plot["lat"], errors="coerce").fillna(39.92)
         user_plot["distance_to_user"] = (user_plot["lng"] - user_lng).pow(2) + (user_plot["lat"] - user_lat).pow(2)
-        nearby_users = user_plot.nsmallest(min(120, len(user_plot)), "distance_to_user")
+        nearby_users = user_plot.nsmallest(min(180, len(user_plot)), "distance_to_user")
         merchant_plot = data.merchants.copy()
         merchant_plot["lng"] = pd.to_numeric(merchant_plot["lng"], errors="coerce").fillna(116.40)
         merchant_plot["lat"] = pd.to_numeric(merchant_plot["lat"], errors="coerce").fillna(39.92)
         merchant_plot["distance_to_store"] = (
             (merchant_plot["lng"] - merchant_lng).pow(2) + (merchant_plot["lat"] - merchant_lat).pow(2)
         )
-        nearby_merchants = merchant_plot.nsmallest(min(120, len(merchant_plot)), "distance_to_store")
+        nearby_merchants = merchant_plot.nsmallest(min(180, len(merchant_plot)), "distance_to_store")
         merchant_circle_x, merchant_circle_y = geo_circle(merchant_lng, merchant_lat, 2.5)
         user_circle_x, user_circle_y = geo_circle(user_lng, user_lat, 2.5)
 
@@ -561,6 +561,7 @@ with tab_case:
             f"小蓝点是附近用户样本，小绿点是附近商家样本，灰色点是 {nearby_count} 名近场骑手；"
             "紫色编号 R1/R2... 是派单候选榜，两个圆分别是商家和用户周边 2.5km 参考范围。"
         )
+        st.caption("半透明圆只是距离参考，不是等高线、热力图或真实配送边界。")
         map_fig = go.Figure()
         map_fig.add_trace(
             go.Scattergl(
@@ -788,9 +789,9 @@ with tab_peak:
     st.subheader("午餐高峰怎么变化")
     replay_c1, replay_c2 = st.columns(2)
     with replay_c1:
-        replay_steps = st.slider("回放时间步", min_value=8, max_value=24, value=12, step=2)
+        replay_steps = st.slider("回放时间步", min_value=8, max_value=32, value=16, step=2)
     with replay_c2:
-        replay_requests = st.slider("每步订单请求", min_value=6, max_value=16, value=10, step=2)
+        replay_requests = st.slider("每步订单请求", min_value=4, max_value=16, value=8, step=2)
     run_peak_replay = st.checkbox("运行高峰回放", value=False)
     if run_peak_replay:
         with st.spinner("正在跑午餐高峰回放，第一次会稍慢，后面会走缓存..."):
@@ -900,10 +901,10 @@ with tab_peak:
 
             st.dataframe(trace_df, use_container_width=True, hide_index=True)
     else:
-        st.caption("这一步会跑多轮推荐和派单，默认先不跑；讲到高峰期变化时再勾选。")
+        st.caption("这里会连续跑多轮推荐和派单，课堂上讲到高峰变化时再打开。")
 
 with tab_method:
-    st.subheader("这些方法在项目里怎么用")
+    st.subheader("项目里到底用了什么")
     offline_method = pd.read_csv(offline_path) if offline_path.exists() else pd.DataFrame()
     sim_method = pd.read_csv(sim_path) if sim_path.exists() else pd.DataFrame()
 
@@ -945,7 +946,7 @@ with tab_method:
         (
             "骑手侧",
             "订单派给骑手：看时间，也看负载",
-            "用户选店之后继续模拟派单，用超时率和平台综合分看策略好不好。",
+            "用户选店之后继续模拟派单，用超时率和综合分看这条链路稳不稳。",
             policy_metric_text("Seq-xQuAD-Tripartite", "platform_utility", "Platform Utility"),
         ),
     ]
@@ -985,9 +986,9 @@ with tab_method:
         )
 
         p1, p2, p3, p4 = st.columns(4)
-        p1.metric("准确率优先", f"{user_best['Recall@20']:.4f}", str(user_best["model"]))
-        p2.metric("排序更靠前", f"{ndcg_best['NDCG@20']:.4f}", str(ndcg_best["model"]))
-        p3.metric("平台综合分最高", f"{utility_best['platform_utility']:.4f}", str(utility_best["policy"]))
+        p1.metric("最会命中", f"{user_best['Recall@20']:.4f}", str(user_best["model"]))
+        p2.metric("排得更靠前", f"{ndcg_best['NDCG@20']:.4f}", str(ndcg_best["model"]))
+        p3.metric("综合分最高", f"{utility_best['platform_utility']:.4f}", str(utility_best["policy"]))
         p4.metric("最快履约", f"{eta_best['avg_eta']:.2f} min", str(eta_best["policy"]))
 
         playbook_rows = [
@@ -995,29 +996,29 @@ with tab_method:
                 "场景": "只看推荐准确率",
                 "建议策略": str(user_best["model"]),
                 "证据": f"Recall@20={float(user_best['Recall@20']):.4f}",
-                "取舍": "适合作为推荐上界，不单独证明三方收益",
+                "怎么讲": "能说明推荐排得准，但还不能说明配送会变好",
             },
             {
-                "场景": "排序质量与品类校准",
+                "场景": "看用户口味",
                 "建议策略": str(calibration_best["model"]),
                 "证据": f"NDCG@20={float(ndcg_best['NDCG@20']):.4f}, JSD@20={float(calibration_best.get('CategoryJSD@20', 0.0)):.4f}",
-                "取舍": "解释性更强，但仍偏用户侧",
+                "怎么讲": "能解释口味是否贴近历史习惯，但还没管配送压力",
             },
             {
-                "场景": "平台整体表现",
+                "场景": "看整条链路",
                 "建议策略": str(utility_best["policy"]),
                 "证据": f"Utility={float(utility_best['platform_utility']):.4f}, Timeout={float(utility_best['timeout_rate']):.4f}",
-                "取舍": "牺牲少量离线命中，换取履约和平台收益",
+                "怎么讲": "少一点命中率，换来更稳的配送",
             },
             {
-                "场景": "讲清楚取舍",
+                "场景": "讲清楚为什么",
                 "建议策略": str(frontier_best["policy"]) if frontier_best is not None else str(utility_best["policy"]),
                 "证据": (
                     f"Recall@20={float(frontier_best['Recall@20']):.4f}, Utility={float(frontier_best['platform_utility']):.4f}"
                     if frontier_best is not None
                     else f"Utility={float(utility_best['platform_utility']):.4f}"
                 ),
-                "取舍": "说明为什么不能只追最高 Recall",
+                "怎么讲": "用来解释为什么不是 Recall 最高就结束",
             },
         ]
         st.dataframe(pd.DataFrame(playbook_rows), use_container_width=True, hide_index=True)
@@ -1042,8 +1043,8 @@ with tab_metrics:
 
         k1, k2, k3, k4, k5 = st.columns(5)
         k1.metric("最高 Recall@20", f"{user_best['Recall@20']:.4f}", str(user_best["model"]))
-        k2.metric("最高效用模型 Recall@20", f"{utility_model['Recall@20']:.4f}", utility_model_name)
-        k3.metric("最佳品类校准", f"{calibration_best.get('CategoryJSD@20', 0.0):.4f}", str(calibration_best["model"]))
+        k2.metric("配送最优的 Recall", f"{utility_model['Recall@20']:.4f}", utility_model_name)
+        k3.metric("品类最贴近历史", f"{calibration_best.get('CategoryJSD@20', 0.0):.4f}", str(calibration_best["model"]))
         k4.metric("最低 Avg ETA", f"{eta_best['avg_eta']:.2f}", str(eta_best["policy"]))
         k5.metric("最高平台综合分", f"{utility_best['platform_utility']:.4f}", str(utility_best["policy"]))
 
@@ -1058,7 +1059,7 @@ with tab_metrics:
                 "is_frontier": "未被压过",
             }
         ).sort_values("平台综合分", ascending=False)
-        st.subheader("哪些策略值得拿出来比较")
+        st.subheader("课堂上可以重点讲这几条")
         st.dataframe(
             frontier_df[["策略", "推荐模型", "未被压过", "Recall@20", "NDCG@20", "曝光Gini", "Avg ETA", "超时率", "平台综合分"]].head(7),
             use_container_width=True,
@@ -1082,7 +1083,7 @@ with tab_metrics:
             symbol="is_frontier",
             size="on_time_rate",
             hover_data=["model", "NDCG@20", "ExposureGini", "avg_eta", "timeout_rate"],
-            title="准确率和平台综合分的取舍",
+            title="推荐准不准和配送稳不稳",
             color_discrete_map=demo_color_map(frontier["policy"]),
         )
         pareto_front = frontier[frontier["is_frontier"]].sort_values("Recall@20")
@@ -1093,7 +1094,7 @@ with tab_metrics:
                     y=pareto_front["platform_utility"],
                     mode="lines",
                     line=dict(color="#B5121B", width=2),
-                    name="取舍边界",
+                    name="折中线",
                     hoverinfo="skip",
                 )
             )
@@ -1107,7 +1108,7 @@ with tab_metrics:
                 x="model",
                 y=["Recall@20", "NDCG@20"],
                 barmode="group",
-                title="用户侧：推荐准确性",
+                title="用户侧：推荐有没有命中",
                 color_discrete_sequence=["#2563eb", "#0f766e"],
             )
             acc_fig.update_layout(height=360, margin=dict(l=8, r=8, t=48, b=8), xaxis_title="")
@@ -1135,7 +1136,7 @@ with tab_metrics:
                 y="platform_utility",
                 color="policy",
                 size="completed_orders",
-                title="履约侧：ETA 和平台综合分",
+                title="配送侧：时间和综合分",
                 color_discrete_map=demo_color_map(sim["policy"]),
             )
             sim_fig.update_layout(height=360, margin=dict(l=8, r=8, t=48, b=8))
