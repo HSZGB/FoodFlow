@@ -124,9 +124,28 @@ st.markdown(
         margin-top: 0.35rem;
     }
     .ff-ops-value { color: #0f172a; font-weight: 760; }
+    .ff-method-grid {
+        display: grid;
+        grid-template-columns: repeat(5, minmax(0, 1fr));
+        gap: 0.7rem;
+        margin: 0.45rem 0 1rem;
+    }
+    .ff-method-card {
+        border: 1px solid #d9e2ec;
+        border-left: 5px solid var(--accent);
+        border-radius: 8px;
+        background: #ffffff;
+        padding: 0.75rem 0.78rem;
+        min-height: 158px;
+    }
+    .ff-method-kicker { color: #64748b; font-size: 0.72rem; font-weight: 700; }
+    .ff-method-title { color: #0f172a; font-size: 0.94rem; font-weight: 780; margin-top: 0.22rem; line-height: 1.22; }
+    .ff-method-body { color: #475569; font-size: 0.76rem; margin-top: 0.45rem; line-height: 1.35; }
+    .ff-method-metric { color: #0f172a; font-size: 0.78rem; font-weight: 760; margin-top: 0.5rem; }
     @media (max-width: 900px) {
         .ff-control-strip { grid-template-columns: repeat(2, minmax(0, 1fr)); }
         .ff-ops-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        .ff-method-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     }
     </style>
     """,
@@ -248,6 +267,17 @@ def control_card(label: str, value: str, note: str, color: str) -> str:
       <div class="ff-control-label">{html.escape(label)}</div>
       <div class="ff-control-value">{html.escape(value)}</div>
       <div class="ff-control-note">{html.escape(note)}</div>
+    </div>
+    """
+
+
+def method_card(source: str, title: str, body: str, metric: str, color: str) -> str:
+    return f"""
+    <div class="ff-method-card" style="--accent:{color};">
+      <div class="ff-method-kicker">{html.escape(source)}</div>
+      <div class="ff-method-title">{html.escape(title)}</div>
+      <div class="ff-method-body">{html.escape(body)}</div>
+      <div class="ff-method-metric">{html.escape(metric)}</div>
     </div>
     """
 
@@ -394,7 +424,13 @@ if not rec_df.empty:
     )
     st.markdown(f'<div class="ff-control-strip">{strip_html}</div>', unsafe_allow_html=True)
 
-tab_case, tab_peak, tab_metrics, tab_figures = st.tabs(["推荐工作台", "高峰仿真回放", "指标故事线", "图表材料"])
+offline_path = Path("outputs/results/offline_metrics.csv")
+sim_path = Path("outputs/results/simulation_metrics.csv")
+figures_dir = Path("outputs/figures")
+
+tab_case, tab_peak, tab_method, tab_metrics, tab_figures = st.tabs(
+    ["推荐工作台", "高峰仿真回放", "方法看板", "指标故事线", "图表材料"]
+)
 
 with tab_case:
     profile_col, category_col = st.columns([1.05, 1.25])
@@ -902,9 +938,178 @@ with tab_peak:
     else:
         st.caption("高峰回放涉及多策略推荐和骑手匹配，默认不随首屏预运行；需要展示动态过程时勾选即可。")
 
-offline_path = Path("outputs/results/offline_metrics.csv")
-sim_path = Path("outputs/results/simulation_metrics.csv")
-figures_dir = Path("outputs/figures")
+with tab_method:
+    st.subheader("论文借鉴与工程落地")
+    offline_method = pd.read_csv(offline_path) if offline_path.exists() else pd.DataFrame()
+    sim_method = pd.read_csv(sim_path) if sim_path.exists() else pd.DataFrame()
+
+    def model_metric_text(model_name: str, metric: str, label: str) -> str:
+        if offline_method.empty or metric not in offline_method.columns:
+            return label
+        matched = offline_method[offline_method["model"].astype(str) == model_name]
+        if matched.empty:
+            return label
+        return f"{label}: {float(matched.iloc[0][metric]):.4f}"
+
+    def policy_metric_text(policy_name: str, metric: str, label: str) -> str:
+        if sim_method.empty or metric not in sim_method.columns:
+            return label
+        matched = sim_method[sim_method["policy"].astype(str) == policy_name]
+        if matched.empty:
+            return label
+        return f"{label}: {float(matched.iloc[0][metric]):.4f}"
+
+    method_cards = "".join(
+        [
+            method_card(
+                "FPMC / 会话推荐",
+                "Seq-Hybrid：复购 + 最近订单 + 转移概率",
+                "把外卖高复购和短期口味变化放进同一个用户偏好分，作为准确率底座。",
+                model_metric_text("Seq-Hybrid", "Recall@20", "Recall@20"),
+                "#2563eb",
+            ),
+            method_card(
+                "xQuAD / MMR 重排",
+                "Seq-xQuAD：列表级覆盖与长尾增益",
+                "在序列相关性之后做贪心 slate 重排，避免推荐列表被单一品类和头部商家挤满。",
+                model_metric_text("Seq-xQuAD", "NDCG@20", "NDCG@20"),
+                "#0f766e",
+            ),
+            method_card(
+                "Calibrated Rec",
+                "CategoryJSD：推荐分布校准度量",
+                "用用户历史品类分布约束结果解释，证明多样性没有偏离用户真实偏好。",
+                model_metric_text("Seq-xQuAD", "CategoryJSD@20", "CategoryJSD@20"),
+                "#7c3aed",
+            ),
+            method_card(
+                "Multi-sided Fairness",
+                "三方重排：用户、商家、平台共同优化",
+                "把商家曝光公平、ETA 和供给稳定接到推荐分数中，展示多主体平台目标。",
+                model_metric_text("Seq-xQuAD-Tripartite", "ExposureGini", "Exposure Gini"),
+                "#dc6803",
+            ),
+            method_card(
+                "即时配送派单",
+                "订单 -> 骑手：负载感知履约仿真",
+                "推荐产生订单后继续模拟骑手匹配，用超时率、负载和效用评价策略。",
+                policy_metric_text("Seq-xQuAD-Tripartite", "platform_utility", "Platform Utility"),
+                "#B5121B",
+            ),
+        ]
+    )
+    st.markdown(f'<div class="ff-method-grid">{method_cards}</div>', unsafe_allow_html=True)
+
+    method_flow = go.Figure(
+        data=[
+            go.Sankey(
+                node=dict(
+                    pad=16,
+                    thickness=16,
+                    line=dict(color="#cbd5e1", width=1),
+                    label=[
+                        "复购/短序列论文",
+                        "列表多样性重排",
+                        "校准推荐",
+                        "多边公平",
+                        "即时配送派单",
+                        "Seq-Hybrid",
+                        "Seq-xQuAD",
+                        "三方重排",
+                        "骑手仿真",
+                        "答辩指标",
+                    ],
+                    color=[
+                        "#bfdbfe",
+                        "#99f6e4",
+                        "#ddd6fe",
+                        "#fed7aa",
+                        "#fecaca",
+                        "#2563eb",
+                        "#0f766e",
+                        "#dc6803",
+                        "#7c3aed",
+                        "#B5121B",
+                    ],
+                ),
+                link=dict(
+                    source=[0, 1, 2, 3, 4, 5, 6, 7, 8],
+                    target=[5, 6, 6, 7, 8, 6, 7, 8, 9],
+                    value=[2, 1, 1, 1, 1, 2, 2, 2, 2],
+                    color=[
+                        "#dbeafe",
+                        "#ccfbf1",
+                        "#ede9fe",
+                        "#ffedd5",
+                        "#fee2e2",
+                        "#bfdbfe",
+                        "#99f6e4",
+                        "#fed7aa",
+                        "#ddd6fe",
+                    ],
+                ),
+            )
+        ]
+    )
+    method_flow.update_layout(title="从论文思想到 FoodFlow 模块", height=330, margin=dict(l=8, r=8, t=48, b=8))
+    st.plotly_chart(method_flow, use_container_width=True)
+
+    if not offline_method.empty and not sim_method.empty:
+        frontier_method = build_tripartite_frontier(offline_method, sim_method, POLICY_MODEL_MAP)
+        user_best = offline_method.sort_values("Recall@20", ascending=False).iloc[0]
+        ndcg_best = offline_method.sort_values("NDCG@20", ascending=False).iloc[0]
+        calibration_best = (
+            offline_method.sort_values("CategoryJSD@20").iloc[0]
+            if "CategoryJSD@20" in offline_method.columns
+            else user_best
+        )
+        utility_best = sim_method.sort_values("platform_utility", ascending=False).iloc[0]
+        eta_best = sim_method.sort_values("avg_eta").iloc[0]
+        frontier_best = (
+            frontier_method[frontier_method["is_frontier"]].sort_values("platform_utility", ascending=False).iloc[0]
+            if not frontier_method.empty and frontier_method["is_frontier"].any()
+            else None
+        )
+
+        p1, p2, p3, p4 = st.columns(4)
+        p1.metric("准确率优先", f"{user_best['Recall@20']:.4f}", str(user_best["model"]))
+        p2.metric("排序质量优先", f"{ndcg_best['NDCG@20']:.4f}", str(ndcg_best["model"]))
+        p3.metric("履约效用优先", f"{utility_best['platform_utility']:.4f}", str(utility_best["policy"]))
+        p4.metric("最快履约", f"{eta_best['avg_eta']:.2f} min", str(eta_best["policy"]))
+
+        playbook_rows = [
+            {
+                "场景": "只看推荐准确率",
+                "建议策略": str(user_best["model"]),
+                "关键证据": f"Recall@20={float(user_best['Recall@20']):.4f}",
+                "取舍": "适合作为推荐上界，不单独证明三方收益",
+            },
+            {
+                "场景": "排序质量与品类校准",
+                "建议策略": str(calibration_best["model"]),
+                "关键证据": f"NDCG@20={float(ndcg_best['NDCG@20']):.4f}, JSD@20={float(calibration_best.get('CategoryJSD@20', 0.0)):.4f}",
+                "取舍": "解释性更强，但仍偏用户侧",
+            },
+            {
+                "场景": "三方平台效用",
+                "建议策略": str(utility_best["policy"]),
+                "关键证据": f"Utility={float(utility_best['platform_utility']):.4f}, Timeout={float(utility_best['timeout_rate']):.4f}",
+                "取舍": "牺牲少量离线命中，换取履约和平台收益",
+            },
+            {
+                "场景": "Pareto 答辩主线",
+                "建议策略": str(frontier_best["policy"]) if frontier_best is not None else str(utility_best["policy"]),
+                "关键证据": (
+                    f"Recall@20={float(frontier_best['Recall@20']):.4f}, Utility={float(frontier_best['platform_utility']):.4f}"
+                    if frontier_best is not None
+                    else f"Utility={float(utility_best['platform_utility']):.4f}"
+                ),
+                "取舍": "把准确率、公平和履约放到同一张图讲",
+            },
+        ]
+        st.dataframe(pd.DataFrame(playbook_rows), use_container_width=True, hide_index=True)
+    else:
+        st.warning("尚未找到指标表，请先运行 `make eval simulate`。")
 
 with tab_metrics:
     st.subheader("指标故事线")

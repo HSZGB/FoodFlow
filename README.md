@@ -185,7 +185,7 @@ make STREAMLIT=".venv/bin/streamlit" demo
 make STREAMLIT_FLAGS="--server.port 8502" demo
 ```
 
-demo 默认展示用户 `8`，也提供复购活跃型、高消费型、价格敏感型等快速案例；侧边栏可手动输入其它用户 ID，并在 `Seq-xQuAD`、`Seq-xQuAD-Tripartite`、`Seq-Hybrid`、`Seq-Tripartite`、`UserOnly`、`Ours-Balanced`、`Ours-Full` 之间切换策略。当前界面包含推荐商家卡片、推荐理由筛选、用户品类偏好、策略对比、分数组成、同一订单的骑手策略 ETA 对比、用户-商家-骑手链路图、骑手供给云与履约路径、午餐高峰热力图回放和实验指标看板。
+demo 默认展示用户 `8`，也提供复购活跃型、高消费型、价格敏感型等快速案例；侧边栏可手动输入其它用户 ID，并在 `Seq-xQuAD`、`Seq-xQuAD-Tripartite`、`Seq-Hybrid`、`Seq-Tripartite`、`UserOnly`、`Ours-Balanced`、`Ours-Full` 之间切换策略。当前界面包含推荐商家卡片、推荐理由筛选、用户品类偏好、策略对比、分数组成、同一订单的骑手策略 ETA 对比、用户-商家-骑手链路图、骑手供给云与履约路径、午餐高峰热力图回放、论文方法看板和实验指标看板。
 当前 demo 首屏会先给出用户、策略、Top1 商家、平均 ETA 和骑手供给规模摘要；空间图聚焦当前订单附近，展示候选骑手池、商家取餐圈、用户送达圈、取餐段和配送段。
 
 ## 主要输出
