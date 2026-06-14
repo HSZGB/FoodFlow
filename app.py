@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import html
 import math
 import os
 from pathlib import Path
@@ -34,110 +33,8 @@ from foodflow.rider_sim import generate_riders
 
 st.set_page_config(page_title="FoodFlow", layout="wide")
 
-st.markdown(
-    """
-    <style>
-    .main .block-container { padding-top: 1.25rem; padding-bottom: 2rem; }
-    h1, h2, h3 { letter-spacing: 0; }
-    .ff-title { font-size: 2rem; font-weight: 760; margin-bottom: 0.1rem; }
-    .ff-subtitle { color: #4b5563; font-size: 0.98rem; margin-bottom: 1rem; }
-    .ff-card {
-        border: 1px solid #d9e2ec;
-        border-radius: 8px;
-        padding: 0.85rem 0.9rem;
-        background: #ffffff;
-        box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
-        min-height: 255px;
-    }
-    .ff-card-selected { border: 2px solid #0f766e; }
-    .ff-rank { color: #0f766e; font-size: 0.84rem; font-weight: 720; }
-    .ff-name { color: #111827; font-size: 1.04rem; font-weight: 720; margin: 0.2rem 0 0.1rem; }
-    .ff-meta { color: #64748b; font-size: 0.82rem; line-height: 1.35; }
-    .ff-reason { color: #334155; font-size: 0.84rem; min-height: 2.4rem; margin: 0.35rem 0 0.55rem; }
-    .ff-score { color: #0f172a; font-weight: 720; }
-    .ff-bar { height: 7px; background: #e5e7eb; border-radius: 999px; overflow: hidden; margin: 0.12rem 0 0.42rem; }
-    .ff-fill-user { height: 7px; background: #2563eb; }
-    .ff-fill-fair { height: 7px; background: #0f766e; }
-    .ff-fill-eta { height: 7px; background: #dc6803; }
-    .ff-fill-supply { height: 7px; background: #7c3aed; }
-    .ff-chip {
-        display: inline-block;
-        border: 1px solid #cbd5e1;
-        border-radius: 999px;
-        padding: 0.12rem 0.45rem;
-        margin-right: 0.25rem;
-        color: #334155;
-        background: #f8fafc;
-        font-size: 0.76rem;
-    }
-    .ff-ops-grid {
-        display: grid;
-        grid-template-columns: repeat(4, minmax(0, 1fr));
-        gap: 0.75rem;
-        margin: 0.45rem 0 1rem;
-    }
-    .ff-ops-card {
-        border: 1px solid #d9e2ec;
-        border-left: 5px solid var(--accent);
-        border-radius: 8px;
-        padding: 0.72rem 0.8rem;
-        background: #ffffff;
-        min-height: 132px;
-    }
-    .ff-ops-title {
-        color: #0f172a;
-        font-size: 0.86rem;
-        font-weight: 760;
-        line-height: 1.25;
-        min-height: 2.1rem;
-    }
-    .ff-ops-rank {
-        color: #64748b;
-        font-size: 0.74rem;
-        font-weight: 680;
-        margin-bottom: 0.18rem;
-    }
-    .ff-ops-line {
-        display: flex;
-        justify-content: space-between;
-        gap: 0.45rem;
-        color: #475569;
-        font-size: 0.78rem;
-        margin-top: 0.35rem;
-    }
-    .ff-ops-value { color: #0f172a; font-weight: 760; }
-    .ff-method-grid {
-        display: grid;
-        grid-template-columns: repeat(5, minmax(0, 1fr));
-        gap: 0.7rem;
-        margin: 0.45rem 0 1rem;
-    }
-    .ff-method-card {
-        border: 1px solid #d9e2ec;
-        border-left: 5px solid var(--accent);
-        border-radius: 8px;
-        background: #ffffff;
-        padding: 0.75rem 0.78rem;
-        min-height: 158px;
-    }
-    .ff-method-kicker { color: #64748b; font-size: 0.72rem; font-weight: 700; }
-    .ff-method-title { color: #0f172a; font-size: 0.94rem; font-weight: 780; margin-top: 0.22rem; line-height: 1.22; }
-    .ff-method-body { color: #475569; font-size: 0.76rem; margin-top: 0.45rem; line-height: 1.35; }
-    .ff-method-metric { color: #0f172a; font-size: 0.78rem; font-weight: 760; margin-top: 0.5rem; }
-    @media (max-width: 900px) {
-        .ff-ops-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-        .ff-method-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-    }
-    </style>
-    """,
-    unsafe_allow_html=True,
-)
-
-st.markdown('<div class="ff-title">FoodFlow 外卖三方推荐与履约仿真</div>', unsafe_allow_html=True)
-st.markdown(
-    '<div class="ff-subtitle">把“推荐商家”继续推进到“商家曝光”和“订单派给骑手”，用同一条链路展示用户、商家、骑手三方效果。</div>',
-    unsafe_allow_html=True,
-)
+st.title("FoodFlow 外卖推荐与配送仿真")
+st.caption("把一次下单拆开看：用户看到哪些商家，商家拿到多少曝光，订单最后派给哪位骑手。")
 
 processed_dir = Path("data/processed")
 if not (processed_dir / "users.csv").exists():
@@ -193,8 +90,29 @@ def load_model(strategy: str, data_key: str, _data: PreparedData) -> object:
     return factories[strategy]().fit(_data)
 
 
-def pct(value: float) -> str:
-    return f"{clamp01(value) * 100:.0f}%"
+@st.cache_data(show_spinner=False)
+def load_peak_trace(
+    data_key: str,
+    top_k: int,
+    steps: int,
+    requests_per_step: int,
+    _data: PreparedData,
+) -> pd.DataFrame:
+    policies = {
+        "UserOnly + MinETA": (load_model("UserOnly", data_key, _data), "min_eta"),
+        "Seq-Tuned + MinETA": (load_model("Seq-Tuned", data_key, _data), "min_eta"),
+        "Seq-Tuned-xQuAD + MinETA": (load_model("Seq-Tuned-xQuAD", data_key, _data), "min_eta"),
+        "Seq-xQuAD-Tripartite": (load_model("Seq-xQuAD-Tripartite", data_key, _data), "load_aware"),
+        "Ours-Full": (load_model("Ours-Full", data_key, _data), "load_aware"),
+    }
+    return build_peak_trace(
+        _data,
+        policies,
+        seed=33,
+        steps=steps,
+        requests_per_step=requests_per_step,
+        top_k=top_k,
+    )
 
 
 DEMO_COLORS = {
@@ -247,63 +165,50 @@ def bounded_env_int(name: str, default: int, min_value: int, max_value: int) -> 
     return max(min_value, min(value, max_value))
 
 
-def method_card(source: str, title: str, body: str, metric: str, color: str) -> str:
-    return f"""
-    <div class="ff-method-card" style="--accent:{color};">
-      <div class="ff-method-kicker">{html.escape(source)}</div>
-      <div class="ff-method-title">{html.escape(title)}</div>
-      <div class="ff-method-body">{html.escape(body)}</div>
-      <div class="ff-method-metric">{html.escape(metric)}</div>
-    </div>
-    """
+def score_bar(label: str, value: float) -> None:
+    value = clamp01(value)
+    st.caption(f"{label} {value:.0%}")
+    st.progress(value)
 
 
-def peak_policy_card(row: pd.Series, rank: int) -> str:
-    policy = html.escape(str(row["policy"]))
-    color = demo_color(row["policy"])
+def render_method_card(source: str, title: str, body: str, metric: str) -> None:
+    with st.container(border=True):
+        st.caption(source)
+        st.write(f"**{title}**")
+        st.write(body)
+        st.caption(metric)
+
+
+def render_peak_policy_card(row: pd.Series, rank: int) -> None:
     on_time = 1.0 - float(row["timeout_rate"])
-    return f"""
-    <div class="ff-ops-card" style="--accent:{color};">
-      <div class="ff-ops-rank">策略排名 {rank}</div>
-      <div class="ff-ops-title">{policy}</div>
-      <div class="ff-ops-line"><span>累计订单</span><span class="ff-ops-value">{int(row['completed_orders'])}</span></div>
-      <div class="ff-ops-line"><span>Avg ETA</span><span class="ff-ops-value">{float(row['avg_eta']):.1f} min</span></div>
-      <div class="ff-ops-line"><span>准时率</span><span class="ff-ops-value">{on_time:.1%}</span></div>
-      <div class="ff-ops-line"><span>活跃骑手</span><span class="ff-ops-value">{int(row['active_riders'])}</span></div>
-    </div>
-    """
+    with st.container(border=True):
+        st.caption(f"第 {rank} 名")
+        st.write(f"**{row['policy']}**")
+        a, b = st.columns(2)
+        a.metric("累计订单", int(row["completed_orders"]))
+        b.metric("准时率", f"{on_time:.1%}")
+        c, d = st.columns(2)
+        c.metric("Avg ETA", f"{float(row['avg_eta']):.1f} min")
+        d.metric("活跃骑手", int(row["active_riders"]))
 
 
-def recommendation_card(row: pd.Series, selected: bool = False) -> str:
-    card_class = "ff-card ff-card-selected" if selected else "ff-card"
-    name = html.escape(str(row["merchant_name"]))
-    category = html.escape(str(row["category"]))
-    merchant_id = html.escape(str(row["merchant_id"]))
-    reason = html.escape(str(row["reason"]))
-    reason_chips = "".join(
-        f'<span class="ff-chip">{html.escape(part)}</span>' for part in str(row["reason"]).split(" / ") if part
-    )
-    return f"""
-    <div class="{card_class}">
-      <div class="ff-rank">TOP {int(row['rank'])}</div>
-      <div class="ff-name">{name}</div>
-      <div class="ff-meta">
-        ID {merchant_id} · 品类 {category}<br>
-        评分 {float(row['poi_score']):.2f} · 均价 {float(row['avg_price']):.1f} · 距离 {float(row['distance_km']):.2f} km
-      </div>
-      <div class="ff-reason" aria-label="{reason}">{reason_chips}</div>
-      <span class="ff-chip">总分 <span class="ff-score">{float(row['final_score']):.3f}</span></span>
-      <span class="ff-chip">ETA {float(row['eta_minutes']):.1f} min</span>
-      <div class="ff-meta" style="margin-top:0.55rem;">用户偏好</div>
-      <div class="ff-bar"><div class="ff-fill-user" style="width:{pct(row['user_score'])};"></div></div>
-      <div class="ff-meta">商家公平</div>
-      <div class="ff-bar"><div class="ff-fill-fair" style="width:{pct(row['fairness'])};"></div></div>
-      <div class="ff-meta">履约速度</div>
-      <div class="ff-bar"><div class="ff-fill-eta" style="width:{pct(row['eta_score'])};"></div></div>
-      <div class="ff-meta">供给稳定</div>
-      <div class="ff-bar"><div class="ff-fill-supply" style="width:{pct(row['supply'])};"></div></div>
-    </div>
-    """
+def render_recommendation_card(row: pd.Series, selected: bool = False) -> None:
+    with st.container(border=True):
+        st.caption("当前下单商家" if selected else f"TOP {int(row['rank'])}")
+        st.write(f"**{row['merchant_name']}**")
+        st.caption(
+            f"ID {row['merchant_id']} · 品类 {row['category']} · "
+            f"评分 {float(row['poi_score']):.2f} · 均价 {float(row['avg_price']):.1f} · "
+            f"距离 {float(row['distance_km']):.2f} km"
+        )
+        st.write(str(row["reason"]).replace(" / ", "、"))
+        m1, m2 = st.columns(2)
+        m1.metric("总分", f"{float(row['final_score']):.3f}")
+        m2.metric("ETA", f"{float(row['eta_minutes']):.1f} min")
+        score_bar("用户偏好", float(row["user_score"]))
+        score_bar("商家公平", float(row["fairness"]))
+        score_bar("履约速度", float(row["eta_score"]))
+        score_bar("供给稳定", float(row["supply"]))
 
 
 data = load_data()
@@ -311,8 +216,8 @@ user_ids = data.user_ids
 user_set = set(user_ids)
 default_user = "8" if "8" in user_set else user_ids[0]
 case_options = demo_user_cases(data.users)
-demo_max_orders = bounded_env_int("FOODFLOW_DEMO_MAX_ORDERS", 30000, 0, 2_000_000)
-demo_rider_count = bounded_env_int("FOODFLOW_DEMO_RIDERS", 720, 80, 1600)
+demo_max_orders = bounded_env_int("FOODFLOW_DEMO_MAX_ORDERS", 12000, 0, 2_000_000)
+demo_rider_count = bounded_env_int("FOODFLOW_DEMO_RIDERS", 960, 120, 2000)
 
 with st.sidebar:
     st.header("演示参数")
@@ -339,7 +244,7 @@ with st.sidebar:
         ],
         index=0,
     )
-    top_k = st.slider("推荐数量", min_value=5, max_value=12, value=10, step=1)
+    top_k = st.slider("推荐数量", min_value=8, max_value=20, value=12, step=1)
 
 interactive_data = build_interactive_data(user_id, demo_max_orders, tuple(case_options.values()), data)
 model_data_key = f"orders={len(interactive_data.orders_train)};user={user_id};max={demo_max_orders}"
@@ -385,7 +290,7 @@ sim_path = Path("outputs/results/simulation_metrics.csv")
 figures_dir = Path("outputs/figures")
 
 tab_case, tab_peak, tab_method, tab_metrics, tab_figures = st.tabs(
-    ["推荐工作台", "高峰仿真回放", "方法看板", "指标故事线", "图表材料"]
+    ["推荐工作台", "高峰回放", "方法说明", "结果怎么读", "图表材料"]
 )
 
 with tab_case:
@@ -426,12 +331,12 @@ with tab_case:
         st.info("当前筛选条件下没有推荐商家，已展示完整推荐列表。")
         card_df = rec_df.copy()
 
-    card_count = min(6, len(card_df))
+    card_count = min(9, len(card_df))
     for start in range(0, card_count, 3):
         cols = st.columns(3)
         for col, (_, row) in zip(cols, card_df.iloc[start : start + 3].iterrows()):
             with col:
-                st.markdown(recommendation_card(row), unsafe_allow_html=True)
+                render_recommendation_card(row)
 
     st.subheader("同一用户的主线策略对比")
     run_strategy_compare = st.checkbox("计算主线策略对比", value=False)
@@ -485,7 +390,7 @@ with tab_case:
             strategy_chart.update_layout(height=300, margin=dict(l=8, r=8, t=48, b=8), xaxis_title="")
             st.plotly_chart(strategy_chart, use_container_width=True)
     else:
-        st.caption("为保证首屏打开速度，主线策略对比默认不预计算；需要展示时勾选即可。")
+        st.caption("这一步会多拟合几个模型，默认先不跑；需要比较时再勾选。")
 
     option_labels = [
         f"TOP {int(row.rank)} · {row.merchant_name} · ID {row.merchant_id}" for row in rec_df.itertuples(index=False)
@@ -499,9 +404,9 @@ with tab_case:
     st.subheader("三方链路拆解")
     left, right = st.columns([1.05, 1.35])
     with left:
-        st.markdown(recommendation_card(chosen_row, selected=True), unsafe_allow_html=True)
+        render_recommendation_card(chosen_row, selected=True)
         rider_compare = build_rider_policy_frame(user_row, merchant_row, riders, period)
-        rider_candidates = build_rider_candidate_frame(user_row, merchant_row, riders, period, top_n=10)
+        rider_candidates = build_rider_candidate_frame(user_row, merchant_row, riders, period, top_n=16)
         load_aware = rider_compare[rider_compare["policy_key"] == "load_aware"].iloc[0]
         c1, c2, c3 = st.columns(3)
         c1.metric("匹配骑手", str(load_aware["rider_id"]))
@@ -647,25 +552,48 @@ with tab_case:
         rider_plot["pickup_distance"] = (
             (rider_plot["lng"] - merchant_lng).pow(2) + (rider_plot["lat"] - merchant_lat).pow(2)
         )
-        nearby_count = min(320, len(rider_plot))
+        nearby_count = min(420, len(rider_plot))
         nearby_riders = rider_plot.nsmallest(nearby_count, "pickup_distance")
+        user_plot = data.users.copy()
+        user_plot["lng"] = pd.to_numeric(user_plot["lng"], errors="coerce").fillna(116.40)
+        user_plot["lat"] = pd.to_numeric(user_plot["lat"], errors="coerce").fillna(39.92)
+        user_plot["distance_to_user"] = (user_plot["lng"] - user_lng).pow(2) + (user_plot["lat"] - user_lat).pow(2)
+        nearby_users = user_plot.nsmallest(min(120, len(user_plot)), "distance_to_user")
+        merchant_plot = data.merchants.copy()
+        merchant_plot["lng"] = pd.to_numeric(merchant_plot["lng"], errors="coerce").fillna(116.40)
+        merchant_plot["lat"] = pd.to_numeric(merchant_plot["lat"], errors="coerce").fillna(39.92)
+        merchant_plot["distance_to_store"] = (
+            (merchant_plot["lng"] - merchant_lng).pow(2) + (merchant_plot["lat"] - merchant_lat).pow(2)
+        )
+        nearby_merchants = merchant_plot.nsmallest(min(120, len(merchant_plot)), "distance_to_store")
         merchant_circle_x, merchant_circle_y = geo_circle(merchant_lng, merchant_lat, 2.5)
         user_circle_x, user_circle_y = geo_circle(user_lng, user_lat, 2.5)
 
+        st.caption(
+            f"小蓝点是附近用户样本，小绿点是附近商家样本，灰色点是 {nearby_count} 名近场骑手；"
+            "紫色编号 R1/R2... 是派单候选榜，两个圆分别是商家和用户周边 2.5km 参考范围。"
+        )
         map_fig = go.Figure()
         map_fig.add_trace(
-            go.Histogram2dContour(
-                x=rider_plot["lng"],
-                y=rider_plot["lat"],
-                colorscale=[
-                    [0.0, "rgba(15, 118, 110, 0.00)"],
-                    [0.35, "rgba(45, 212, 191, 0.16)"],
-                    [1.0, "rgba(15, 118, 110, 0.38)"],
-                ],
-                contours=dict(coloring="heatmap", showlines=False),
-                showscale=False,
-                name="骑手密度",
-                hoverinfo="skip",
+            go.Scattergl(
+                x=nearby_users["lng"],
+                y=nearby_users["lat"],
+                mode="markers",
+                name="附近用户样本",
+                text=nearby_users["user_id"].astype(str),
+                marker=dict(size=5, color="#93c5fd", opacity=0.28),
+                hovertemplate="用户 %{text}<extra></extra>",
+            )
+        )
+        map_fig.add_trace(
+            go.Scattergl(
+                x=nearby_merchants["lng"],
+                y=nearby_merchants["lat"],
+                mode="markers",
+                name="附近商家样本",
+                text=nearby_merchants["wm_poi_id"].astype(str),
+                marker=dict(size=5, color="#86efac", opacity=0.32),
+                hovertemplate="商家 %{text}<extra></extra>",
             )
         )
         map_fig.add_trace(
@@ -676,7 +604,7 @@ with tab_case:
                 fill="toself",
                 fillcolor="rgba(15, 118, 110, 0.07)",
                 line=dict(color="rgba(15, 118, 110, 0.42)", width=1.5),
-                name="商家取餐圈",
+                name="商家 2.5km 圈",
                 hoverinfo="skip",
             )
         )
@@ -688,7 +616,7 @@ with tab_case:
                 fill="toself",
                 fillcolor="rgba(37, 99, 235, 0.06)",
                 line=dict(color="rgba(37, 99, 235, 0.38)", width=1.5),
-                name="用户送达圈",
+                name="用户 2.5km 圈",
                 hoverinfo="skip",
             )
         )
@@ -697,7 +625,7 @@ with tab_case:
                 x=nearby_riders["lng"],
                 y=nearby_riders["lat"],
                 mode="markers",
-                name="候选骑手池",
+                name="近场骑手",
                 text=nearby_riders["rider_id"],
                 customdata=nearby_riders[["load", "reliability"]].to_numpy(),
                 marker=dict(
@@ -806,12 +734,16 @@ with tab_case:
         )
         focus_lng = [user_lng, merchant_lng, rider_lng] + rec_df["lng"].dropna().astype(float).tolist()
         focus_lat = [user_lat, merchant_lat, rider_lat] + rec_df["lat"].dropna().astype(float).tolist()
+        focus_lng += nearby_users["lng"].dropna().astype(float).tolist()
+        focus_lat += nearby_users["lat"].dropna().astype(float).tolist()
+        focus_lng += nearby_merchants["lng"].dropna().astype(float).tolist()
+        focus_lat += nearby_merchants["lat"].dropna().astype(float).tolist()
         focus_lng += nearby_riders["lng"].dropna().astype(float).tolist()
         focus_lat += nearby_riders["lat"].dropna().astype(float).tolist()
         focus_lng += rider_candidates["lng"].dropna().astype(float).tolist()
         focus_lat += rider_candidates["lat"].dropna().astype(float).tolist()
         map_fig.update_layout(
-            title=f"空间供需调度图：{nearby_count} 名近场骑手、Top{len(rider_candidates)} 派单候选与配送路径",
+            title="当前订单附近的用户、商家和骑手",
             height=430,
             margin=dict(l=8, r=8, t=52, b=8),
             plot_bgcolor="#f6f8fb",
@@ -866,28 +798,20 @@ with tab_case:
 
 with tab_peak:
     st.subheader("午餐高峰仿真回放")
+    replay_c1, replay_c2 = st.columns(2)
+    with replay_c1:
+        replay_steps = st.slider("回放时间步", min_value=8, max_value=24, value=12, step=2)
+    with replay_c2:
+        replay_requests = st.slider("每步订单请求", min_value=6, max_value=16, value=10, step=2)
     run_peak_replay = st.checkbox("运行高峰回放", value=False)
     if run_peak_replay:
-        with st.spinner("正在运行轻量午餐高峰回放..."):
-            trace_df = build_peak_trace(
-                data,
-                {
-                    "UserOnly + MinETA": (load_model("UserOnly", model_data_key, interactive_data), "min_eta"),
-                    "Seq-Tuned + MinETA": (load_model("Seq-Tuned", model_data_key, interactive_data), "min_eta"),
-                    "Seq-Tuned-xQuAD + MinETA": (
-                        load_model("Seq-Tuned-xQuAD", model_data_key, interactive_data),
-                        "min_eta",
-                    ),
-                    "Seq-xQuAD-Tripartite": (
-                        load_model("Seq-xQuAD-Tripartite", model_data_key, interactive_data),
-                        "load_aware",
-                    ),
-                    "Ours-Full": (load_model("Ours-Full", model_data_key, interactive_data), "load_aware"),
-                },
-                seed=33,
-                steps=6,
-                requests_per_step=8,
-                top_k=top_k,
+        with st.spinner("正在跑午餐高峰回放，第一次会稍慢，后面会走缓存..."):
+            trace_df = load_peak_trace(
+                model_data_key,
+                top_k,
+                replay_steps,
+                replay_requests,
+                interactive_data,
             )
         if trace_df.empty:
             st.warning("当前数据没有可用于仿真的测试用户。")
@@ -904,11 +828,10 @@ with tab_peak:
             ops_board = final_trace.assign(on_time_rate=1.0 - final_trace["timeout_rate"]).sort_values(
                 ["on_time_rate", "avg_eta", "completed_orders"], ascending=[False, True, False]
             )
-            cards = "".join(
-                peak_policy_card(row, rank)
-                for rank, (_, row) in enumerate(ops_board.head(4).iterrows(), start=1)
-            )
-            st.markdown(f'<div class="ff-ops-grid">{cards}</div>', unsafe_allow_html=True)
+            card_cols = st.columns(min(4, len(ops_board)))
+            for col, (rank, (_, row)) in zip(card_cols, enumerate(ops_board.head(4).iterrows(), start=1)):
+                with col:
+                    render_peak_policy_card(row, rank)
 
             t1, t2 = st.columns(2)
             with t1:
@@ -989,10 +912,10 @@ with tab_peak:
 
             st.dataframe(trace_df, use_container_width=True, hide_index=True)
     else:
-        st.caption("高峰回放涉及多策略推荐和骑手匹配，默认不随首屏预运行；需要展示动态过程时勾选即可。")
+        st.caption("这一步会跑多轮推荐和派单，默认先不跑；讲到高峰期变化时再勾选。")
 
 with tab_method:
-    st.subheader("论文借鉴与工程落地")
+    st.subheader("这些方法在项目里怎么用")
     offline_method = pd.read_csv(offline_path) if offline_path.exists() else pd.DataFrame()
     sim_method = pd.read_csv(sim_path) if sim_path.exists() else pd.DataFrame()
 
@@ -1012,100 +935,56 @@ with tab_method:
             return label
         return f"{label}: {float(matched.iloc[0][metric]):.4f}"
 
-    method_cards = "".join(
-        [
-            method_card(
-                "FPMC / 会话推荐",
-                "Seq-Tuned：复购权重增强的短序列模型",
-                "保留最近订单和转移概率，同时提高复购信号权重，把外卖高复购优势转成命中率。",
-                model_metric_text("Seq-Tuned", "Recall@20", "Recall@20"),
-                "#2563eb",
-            ),
-            method_card(
-                "xQuAD / MMR 重排",
-                "Seq-Tuned-xQuAD：高命中列表级重排",
-                "在序列相关性之后做贪心 slate 重排，避免推荐列表被单一品类和头部商家挤满。",
-                model_metric_text("Seq-Tuned-xQuAD", "ExposureGini", "Exposure Gini"),
-                "#0f766e",
-            ),
-            method_card(
-                "Calibrated Rec",
-                "CategoryJSD：推荐分布校准度量",
-                "用用户历史品类分布约束结果解释，证明多样性没有偏离用户真实偏好。",
-                model_metric_text("Seq-Tuned-xQuAD", "CategoryJSD@20", "CategoryJSD@20"),
-                "#7c3aed",
-            ),
-            method_card(
-                "Multi-sided Fairness",
-                "三方重排：用户、商家、平台共同优化",
-                "把商家曝光公平、ETA 和供给稳定接到推荐分数中，展示多主体平台目标。",
-                model_metric_text("Seq-xQuAD-Tripartite", "ExposureGini", "Exposure Gini"),
-                "#dc6803",
-            ),
-            method_card(
-                "即时配送派单",
-                "订单 -> 骑手：负载感知履约仿真",
-                "推荐产生订单后继续模拟骑手匹配，用超时率、负载和效用评价策略。",
-                policy_metric_text("Seq-xQuAD-Tripartite", "platform_utility", "Platform Utility"),
-                "#B5121B",
-            ),
-        ]
-    )
-    st.markdown(f'<div class="ff-method-grid">{method_cards}</div>', unsafe_allow_html=True)
+    method_rows = [
+        (
+            "短序列推荐",
+            "Seq-Tuned：把复购放在更前面",
+            "外卖用户常常反复点熟悉的店，所以这里更看重最近订单、复购次数和商家转移。",
+            model_metric_text("Seq-Tuned", "Recall@20", "Recall@20"),
+        ),
+        (
+            "列表重排",
+            "Seq-Tuned-xQuAD：别让列表全是同一类店",
+            "先保证命中，再给品类覆盖和长尾商家留一点位置。",
+            model_metric_text("Seq-Tuned-xQuAD", "ExposureGini", "Exposure Gini"),
+        ),
+        (
+            "品类校准",
+            "CategoryJSD：推荐列表像不像这个用户",
+            "这个数越低，说明推荐品类越接近用户平时真的会点的品类。",
+            model_metric_text("Seq-Tuned-xQuAD", "CategoryJSD@20", "CategoryJSD@20"),
+        ),
+        (
+            "商家侧",
+            "三方重排：不只照顾用户点击",
+            "把曝光公平、ETA 和供给情况一起放进排序，避免平台只推少数头部店。",
+            model_metric_text("Seq-xQuAD-Tripartite", "ExposureGini", "Exposure Gini"),
+        ),
+        (
+            "骑手侧",
+            "订单派给骑手：看时间，也看负载",
+            "用户选店之后继续模拟派单，用超时率和平台效用看策略好不好。",
+            policy_metric_text("Seq-xQuAD-Tripartite", "platform_utility", "Platform Utility"),
+        ),
+    ]
+    for start in range(0, len(method_rows), 3):
+        cols = st.columns(min(3, len(method_rows) - start))
+        for col, values in zip(cols, method_rows[start : start + 3]):
+            with col:
+                render_method_card(*values)
 
-    method_flow = go.Figure(
-        data=[
-            go.Sankey(
-                node=dict(
-                    pad=16,
-                    thickness=16,
-                    line=dict(color="#cbd5e1", width=1),
-                    label=[
-                        "复购/短序列论文",
-                        "列表多样性重排",
-                        "校准推荐",
-                        "多边公平",
-                        "即时配送派单",
-                        "Seq-Tuned",
-                        "Seq-Tuned-xQuAD",
-                        "Seq-xQuAD-Tripartite",
-                        "骑手仿真",
-                        "答辩指标",
-                    ],
-                    color=[
-                        "#bfdbfe",
-                        "#99f6e4",
-                        "#ddd6fe",
-                        "#fed7aa",
-                        "#fecaca",
-                        "#B45309",
-                        "#0E7490",
-                        "#dc6803",
-                        "#7c3aed",
-                        "#B5121B",
-                    ],
-                ),
-                link=dict(
-                    source=[0, 1, 2, 3, 4, 5, 6, 7, 8],
-                    target=[5, 6, 6, 7, 8, 6, 7, 8, 9],
-                    value=[2, 1, 1, 1, 1, 2, 2, 2, 2],
-                    color=[
-                        "#dbeafe",
-                        "#ccfbf1",
-                        "#ede9fe",
-                        "#ffedd5",
-                        "#fee2e2",
-                        "#fde68a",
-                        "#bfdbfe",
-                        "#fed7aa",
-                        "#ddd6fe",
-                    ],
-                ),
-            )
-        ]
+    st.dataframe(
+        pd.DataFrame(
+            [
+                {"问题": "用户到底爱点什么", "项目做法": "用最近订单、复购次数和店铺转移来排商家", "对应模块": "Seq-Tuned"},
+                {"问题": "列表太集中", "项目做法": "在排序后留出一些品类覆盖和长尾曝光", "对应模块": "Seq-Tuned-xQuAD"},
+                {"问题": "只看用户会忽略商家", "项目做法": "把曝光公平、ETA 和供给情况接到重排里", "对应模块": "Seq-xQuAD-Tripartite"},
+                {"问题": "推荐完还要能送到", "项目做法": "模拟骑手候选排序和负载感知派单", "对应模块": "骑手仿真"},
+            ]
+        ),
+        use_container_width=True,
+        hide_index=True,
     )
-    method_flow.update_layout(title="从论文思想到 FoodFlow 模块", height=330, margin=dict(l=8, r=8, t=48, b=8))
-    st.plotly_chart(method_flow, use_container_width=True)
 
     if not offline_method.empty and not sim_method.empty:
         frontier_method = build_tripartite_frontier(offline_method, sim_method, POLICY_MODEL_MAP)
@@ -1134,30 +1013,30 @@ with tab_method:
             {
                 "场景": "只看推荐准确率",
                 "建议策略": str(user_best["model"]),
-                "关键证据": f"Recall@20={float(user_best['Recall@20']):.4f}",
+                "证据": f"Recall@20={float(user_best['Recall@20']):.4f}",
                 "取舍": "适合作为推荐上界，不单独证明三方收益",
             },
             {
                 "场景": "排序质量与品类校准",
                 "建议策略": str(calibration_best["model"]),
-                "关键证据": f"NDCG@20={float(ndcg_best['NDCG@20']):.4f}, JSD@20={float(calibration_best.get('CategoryJSD@20', 0.0)):.4f}",
+                "证据": f"NDCG@20={float(ndcg_best['NDCG@20']):.4f}, JSD@20={float(calibration_best.get('CategoryJSD@20', 0.0)):.4f}",
                 "取舍": "解释性更强，但仍偏用户侧",
             },
             {
                 "场景": "三方平台效用",
                 "建议策略": str(utility_best["policy"]),
-                "关键证据": f"Utility={float(utility_best['platform_utility']):.4f}, Timeout={float(utility_best['timeout_rate']):.4f}",
+                "证据": f"Utility={float(utility_best['platform_utility']):.4f}, Timeout={float(utility_best['timeout_rate']):.4f}",
                 "取舍": "牺牲少量离线命中，换取履约和平台收益",
             },
             {
-                "场景": "Pareto 答辩主线",
+                "场景": "讲清楚取舍",
                 "建议策略": str(frontier_best["policy"]) if frontier_best is not None else str(utility_best["policy"]),
-                "关键证据": (
+                "证据": (
                     f"Recall@20={float(frontier_best['Recall@20']):.4f}, Utility={float(frontier_best['platform_utility']):.4f}"
                     if frontier_best is not None
                     else f"Utility={float(utility_best['platform_utility']):.4f}"
                 ),
-                "取舍": "把准确率、公平和履约放到同一张图讲",
+                "取舍": "说明为什么不能只追最高 Recall",
             },
         ]
         st.dataframe(pd.DataFrame(playbook_rows), use_container_width=True, hide_index=True)
@@ -1165,7 +1044,7 @@ with tab_method:
         st.warning("尚未找到指标表，请先运行 `make eval simulate`。")
 
 with tab_metrics:
-    st.subheader("指标故事线")
+    st.subheader("结果怎么读")
     if offline_path.exists() and sim_path.exists():
         offline = pd.read_csv(offline_path)
         sim = pd.read_csv(sim_path)
@@ -1195,16 +1074,16 @@ with tab_metrics:
                 "avg_eta": "Avg ETA",
                 "timeout_rate": "超时率",
                 "platform_utility": "平台效用",
-                "is_frontier": "Pareto前沿",
+                "is_frontier": "未被压过",
             }
         ).sort_values("平台效用", ascending=False)
-        st.markdown("#### 三方权衡摘要")
+        st.subheader("哪些策略值得拿出来比较")
         st.dataframe(
-            frontier_df[["策略", "推荐模型", "Pareto前沿", "Recall@20", "NDCG@20", "曝光Gini", "Avg ETA", "超时率", "平台效用"]].head(7),
+            frontier_df[["策略", "推荐模型", "未被压过", "Recall@20", "NDCG@20", "曝光Gini", "Avg ETA", "超时率", "平台效用"]].head(7),
             use_container_width=True,
             hide_index=True,
             column_config={
-                "Pareto前沿": st.column_config.CheckboxColumn(),
+                "未被压过": st.column_config.CheckboxColumn(),
                 "Recall@20": st.column_config.NumberColumn(format="%.4f"),
                 "NDCG@20": st.column_config.NumberColumn(format="%.4f"),
                 "曝光Gini": st.column_config.NumberColumn(format="%.4f"),
@@ -1222,7 +1101,7 @@ with tab_metrics:
             symbol="is_frontier",
             size="on_time_rate",
             hover_data=["model", "NDCG@20", "ExposureGini", "avg_eta", "timeout_rate"],
-            title="Pareto 视角：推荐准确性与平台效用",
+            title="准确率和平台效用的取舍",
             color_discrete_map=demo_color_map(frontier["policy"]),
         )
         pareto_front = frontier[frontier["is_frontier"]].sort_values("Recall@20")
@@ -1233,7 +1112,7 @@ with tab_metrics:
                     y=pareto_front["platform_utility"],
                     mode="lines",
                     line=dict(color="#B5121B", width=2),
-                    name="Pareto 前沿",
+                    name="取舍边界",
                     hoverinfo="skip",
                 )
             )
