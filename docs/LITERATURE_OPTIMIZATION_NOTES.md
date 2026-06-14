@@ -73,6 +73,8 @@ list_score =
 
 仿真结果中，`Seq-xQuAD-Tripartite` 取得当前最高平台效用 `0.5264`、最低平均 ETA `50.33` 和最低超时率 `0.5319`。答辩故事因此更自然：`Seq-Tuned` 证明推荐准确性可以继续提升；`Seq-Tuned-xQuAD` 证明高准确序列模型可以兼顾曝光与校准；`Seq-xQuAD-Tripartite` 证明高准确序列模型接入三方约束后可以改善履约；`Ours-Full` 作为原始三方重排对照，说明外卖平台不能只看准确性，还要看 ETA、超时率、商家曝光和骑手负载。
 
+进一步做了 Tuned 序列底座接入三方重排的消融。`Seq-Tuned-xQuAD-Tripartite-ETA` 可以把平均 ETA 降到 `49.04`，但平台效用只有 `0.5166`，仍低于 `Seq-xQuAD-Tripartite` 的 `0.5264`。因此当前不把 Tuned 三方候选纳入默认策略：`Seq-Tuned` 负责离线准确率前沿，`Seq-xQuAD-Tripartite` 负责系统效用前沿，两条线分开讲更符合多目标推荐的实际权衡。
+
 ## 下一步可继续尝试
 
 1. 对三方权重做网格搜索或贝叶斯优化，输出 Pareto frontier，而不是只给单点权重。

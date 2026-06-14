@@ -10,6 +10,7 @@
 - [x] 新增 conda 环境、数据审计、Ours-Balanced 权重敏感策略和三方可视化看板。
 - [x] 新增 Seq-Tuned 与 Seq-Tuned-xQuAD，当前离线 Recall@20 提升到 `0.4675`，并已重生成指标、图表、报告和 NotebookLM 上传包。
 - [x] 新增可复现的 `scripts/search_seq_weights.py` 和 `docs/SEQ_TUNED_SEARCH.md`，用于说明 Seq-Tuned 权重来源。
+- [x] 完成 Tuned 序列底座接入三方重排的消融记录，确认默认系统效用前沿仍为 `Seq-xQuAD-Tripartite`。
 - [ ] PPT 最终图片页和 `.pptx` 等待 `codex-ppt` 审批门禁。
 
 ## 重复执行流程
