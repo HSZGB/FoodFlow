@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 from collections import Counter
 from dataclasses import dataclass
+from time import perf_counter
 
 import numpy as np
 import pandas as pd
@@ -110,6 +111,7 @@ def run_simulation(
     requests_per_step: int = 16,
     steps: int = 8,
     top_k: int = 10,
+    verbose: bool = False,
 ) -> pd.DataFrame:
     policies = policies or DEFAULT_POLICIES
     truth = data.truth_by_user()
@@ -120,10 +122,23 @@ def run_simulation(
     merchants_df = data.merchants.set_index("wm_poi_id", drop=False)
     results = []
 
-    for policy in policies:
+    for policy_index, policy in enumerate(policies, start=1):
         policy_seed = _stable_policy_seed(seed, policy.name)
         rng = np.random.default_rng(policy_seed)
+        if verbose:
+            print(
+                f"[simulate] {policy_index}/{len(policies)} {policy.name}: fitting recommender...",
+                flush=True,
+            )
+        fit_started = perf_counter()
         recommender = _select_recommender(data, policy.recommender, seed)
+        fit_done = perf_counter()
+        if verbose:
+            print(
+                f"[simulate] {policy_index}/{len(policies)} {policy.name}: "
+                f"running {steps} steps x {requests_per_step} requests...",
+                flush=True,
+            )
         riders = generate_riders(data.merchants, n_riders=120, seed=policy_seed)
         exposure = Counter()
         completed = 0
@@ -178,5 +193,15 @@ def run_simulation(
         }
         row["platform_utility"] = platform_utility(row)
         results.append(row)
+        if verbose:
+            policy_done = perf_counter()
+            print(
+                f"[simulate] {policy_index}/{len(policies)} {policy.name}: "
+                f"fit={fit_done - fit_started:.2f}s "
+                f"simulate={policy_done - fit_done:.2f}s "
+                f"orders={completed} avg_eta={row['avg_eta']:.2f} "
+                f"timeout={row['timeout_rate']:.4f} utility={row['platform_utility']:.4f}",
+                flush=True,
+            )
 
     return pd.DataFrame(results)

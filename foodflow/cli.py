@@ -45,6 +45,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--processed-dir", type=Path, default=DEFAULT_PROCESSED_DIR)
     p.add_argument("--output", type=Path, default=Path("outputs/results/simulation_metrics.csv"))
     p.add_argument("--seed", type=int, default=42)
+    p.add_argument("--quiet", action="store_true", help="Disable per-policy progress logs.")
 
     p = sub.add_parser("figures")
     p.add_argument("--results-dir", type=Path, default=Path("outputs/results"))
@@ -89,7 +90,7 @@ def main(argv: list[str] | None = None) -> None:
         print(df.to_string(index=False))
     elif args.command == "simulate":
         data = PreparedData.load(args.processed_dir)
-        df = run_simulation(data, seed=args.seed)
+        df = run_simulation(data, seed=args.seed, verbose=not args.quiet)
         args.output.parent.mkdir(parents=True, exist_ok=True)
         df.to_csv(args.output, index=False)
         print(df.to_string(index=False))

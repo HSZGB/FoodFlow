@@ -126,6 +126,12 @@ make report
 make download preprocess eval simulate audit figures report
 ```
 
+`make simulate` 会按策略输出进度和耗时，例如当前跑到第几个策略、完成订单数、平均 ETA、超时率和平台效用；如果只想输出最终表格，可使用：
+
+```bash
+python -m foodflow.cli simulate --quiet
+```
+
 如果要使用完整 TRD 训练集：
 
 ```bash
