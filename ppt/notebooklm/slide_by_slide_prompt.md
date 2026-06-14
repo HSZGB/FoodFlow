@@ -117,7 +117,7 @@ list_score = relevance + category_coverage + long_tail_gain
 
 演讲备注：
 
-基线保留热门推荐和 BPR-MF，避免模型清单过长。UserOnly 先把用户画像特征讲清楚，Seq-Tuned 再把外卖复购和最近订单序列建进去；Seq-xQuAD-Tripartite 进一步加入商家公平、ETA 和供给分。这样推荐列表不只对用户排序，也把商家和履约约束纳入排序。
+基线保留热门推荐和 BPR-MF，避免模型清单过长。UserOnly 先建立用户画像特征，Seq-Tuned 再加入外卖复购和最近订单序列；Seq-xQuAD-Tripartite 进一步加入商家公平、ETA 和供给分。这样推荐列表不只对用户排序，也把商家和履约约束纳入排序。
 
 ## Slide 6：离线推荐指标结果
 
@@ -235,7 +235,7 @@ list_score = relevance + category_coverage + long_tail_gain
 
 这一页用于解释三方推荐不是抽象概念。用户看到的是符合复购、品类和价格偏好的商家；商家侧通过曝光补偿避免全部流量集中在头部；用户下单后，订单再根据 ETA、负载和可靠性匹配给骑手，形成完整决策链路。
 
-## Slide 10：结论、局限与答辩亮点
+## Slide 10：结论、局限与改进方向
 
 页面目标：收束贡献，主动说明局限。
 

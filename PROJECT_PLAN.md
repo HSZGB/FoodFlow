@@ -77,7 +77,7 @@
 - [x] trade-off 图、三方 scorecard 与 Streamlit 三页看板
 - [x] 实验报告 Markdown
 - [x] Streamlit demo
-- [x] 方法看板、空间供需调度图、NotebookLM 上传包已同步最新指标。
+- [x] 方法与指标面板、空间供需调度图、NotebookLM 上传包已同步最新指标。
 - 验收命令：`make figures report`
 
 ### 阶段 6：PPT

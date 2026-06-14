@@ -154,7 +154,7 @@ score = user_preference
 - `Seq-Tuned + MinETA`：Avg ETA = `54.74`，Timeout Rate = `0.7320`，Utility = `0.4664`。
 - `Seq-xQuAD-Tripartite`：Avg ETA = `50.33`，Timeout Rate = `0.5319`，Utility = `0.5264`。
 
-结果解读：
+结果分析：
 
 - 只看热门推荐和最近骑手会造成较高 ETA 和超时率。
 - `UserOnly + MinETA` 显著降低 ETA，说明订单推荐给骑手时需要考虑 ETA。
@@ -174,11 +174,13 @@ score = user_preference
 
 注意：平台效用权重不是工业生产参数，报告中应说明它是课程实验中的可解释设置。
 
-## 11. PPT 工作流要求
+## 11. PPT 工作流与工具边界
 
-根据 Codex PPT 技能，图片页 PPT 的标准流程需要审批门禁：确认大纲、确认视觉风格、确认图片后端、生成并确认 1 页样张，然后再生成整套图片页和讲稿。当前 NotebookLM 方案是备用生成路径：请先用这里的提示词产出 11 页内容、视觉布局和讲稿，再由 PPT 工具或 NotebookLM 生成页面。
+根据 Codex PPT 技能，图片页 PPT 的标准流程需要审批门禁：确认大纲、确认视觉风格、确认图片后端、生成并确认 1 页样张，然后再生成整套图片页、讲稿和 `.pptx`。在这些门禁完成前，不创建最终 `deck_spec.json`、`speech.md`、整套图片页或 `.pptx`。
 
-`Image to Editable PPT` 技能不用于从零创作本答辩 PPT。它只适用于后续已有图片页、PDF 或截图后，需要把它们重建成对象级可编辑 PPT 的场景；那时应按 `editppt prepare -> page worker -> record -> finalize` 的流程处理。
+Codex PPT 的成品默认是统一风格的整页图片式幻灯片；每页图片应来自确认过的图片后端，并保持同一视觉身份。当前 NotebookLM 方案是备用生成路径：请先用这里的提示词产出 11 页内容、视觉布局和讲稿，再由 NotebookLM 或 PPT 工具生成页面。
+
+`Image to Editable PPT` 技能不用于从零创作本答辩 PPT。它只适用于后续已有图片页、PDF、截图或图片式 PPT 后，需要把它们重建成对象级可编辑 `.pptx` 的场景；那时应按 `editppt prepare -> page worker -> record -> finalize` 的流程处理。不要把 NotebookLM 一步生成的页面说成天然对象级可编辑。
 
 ## 12. 答辩故事线
 
@@ -204,5 +206,5 @@ score = user_preference
 7. 仿真：动态履约仿真设计。
 8. 结果：三方策略的系统级指标。
 9. 案例：一次推荐如何兼顾三方。
-10. 总结：结论、局限与答辩亮点。
+10. 总结：结论、局限与改进方向。
 11. Q&A。

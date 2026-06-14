@@ -66,7 +66,7 @@ Slide 9: 案例解释：一次推荐如何兼顾三方
 - Layout role and intent: case study。
 - Required source images: none。
 
-Slide 10: 结论、局限与答辩亮点
+Slide 10: 结论、局限与改进方向
 - Key points: 推荐有效、重排改善商家公平、履约感知提升系统指标；局限是骑手为合成 proxy；后续可接入真实派单或图模型。
 - Visual idea: 三个结论卡片 + 一个局限说明。
 - Layout role and intent: summary。

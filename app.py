@@ -284,7 +284,7 @@ sim_path = Path("outputs/results/simulation_metrics.csv")
 figures_dir = Path("outputs/figures")
 
 tab_case, tab_peak, tab_method, tab_metrics, tab_figures = st.tabs(
-    ["推荐工作台", "高峰回放", "方法说明", "结果怎么读", "图表材料"]
+    ["推荐工作台", "高峰回放", "方法与指标", "实验结果", "图表材料"]
 )
 
 with tab_case:
@@ -372,13 +372,13 @@ with tab_case:
                 x="策略",
                 y=["平均用户偏好", "平均商家公平", "平均供给"],
                 barmode="group",
-                title="几个策略偏向什么",
+                title="主线策略分项均值",
                 color_discrete_sequence=["#2563eb", "#0f766e", "#7c3aed"],
             )
             strategy_chart.update_layout(height=300, margin=dict(l=8, r=8, t=48, b=8), xaxis_title="")
             st.plotly_chart(strategy_chart, use_container_width=True)
     else:
-        st.caption("这个比较会临时多训几个模型，课堂演示时需要再打开。")
+        st.caption("开启后会临时加载三条主线策略，首次计算需要等待。")
 
     option_labels = [
         f"TOP {int(row.rank)} · {row.merchant_name} · ID {row.merchant_id}" for row in rec_df.itertuples(index=False)
@@ -901,10 +901,10 @@ with tab_peak:
 
             st.dataframe(trace_df, use_container_width=True, hide_index=True)
     else:
-        st.caption("这里会连续跑多轮推荐和派单，课堂上讲到高峰变化时再打开。")
+        st.caption("开启后会连续运行多轮推荐与派单仿真，首次计算需要等待。")
 
 with tab_method:
-    st.subheader("项目里到底用了什么")
+    st.subheader("方法与指标")
     offline_method = pd.read_csv(offline_path) if offline_path.exists() else pd.DataFrame()
     sim_method = pd.read_csv(sim_path) if sim_path.exists() else pd.DataFrame()
 
@@ -927,7 +927,7 @@ with tab_method:
     method_rows = [
         (
             "用户画像",
-            "UserOnly：先把用户习惯讲清楚",
+            "UserOnly：用户偏好排序",
             "用品类、复购、价格、时段和商家质量做排序，是后面三方策略的用户侧底座。",
             model_metric_text("UserOnly", "Recall@20", "Recall@20"),
         ),
@@ -959,9 +959,9 @@ with tab_method:
     st.dataframe(
         pd.DataFrame(
             [
-                {"问题": "用户到底爱点什么", "项目做法": "用最近订单、复购次数和店铺转移来排商家", "对应模块": "Seq-Tuned"},
-                {"问题": "只看用户会忽略商家", "项目做法": "把曝光公平、ETA 和供给情况接到重排里", "对应模块": "Seq-xQuAD-Tripartite"},
-                {"问题": "推荐完还要能送到", "项目做法": "模拟骑手候选排序和负载感知派单", "对应模块": "骑手仿真"},
+                {"评价对象": "用户偏好", "项目做法": "用最近订单、复购次数和店铺转移来排商家", "对应模块": "Seq-Tuned"},
+                {"评价对象": "商家曝光", "项目做法": "把曝光公平、ETA 和供给情况接到重排里", "对应模块": "Seq-xQuAD-Tripartite"},
+                {"评价对象": "订单履约", "项目做法": "模拟骑手候选排序和负载感知派单", "对应模块": "骑手仿真"},
             ]
         ),
         use_container_width=True,
@@ -986,39 +986,39 @@ with tab_method:
         )
 
         p1, p2, p3, p4 = st.columns(4)
-        p1.metric("最会命中", f"{user_best['Recall@20']:.4f}", str(user_best["model"]))
-        p2.metric("排得更靠前", f"{ndcg_best['NDCG@20']:.4f}", str(ndcg_best["model"]))
-        p3.metric("综合分最高", f"{utility_best['platform_utility']:.4f}", str(utility_best["policy"]))
-        p4.metric("最快履约", f"{eta_best['avg_eta']:.2f} min", str(eta_best["policy"]))
+        p1.metric("最高 Recall@20", f"{user_best['Recall@20']:.4f}", str(user_best["model"]))
+        p2.metric("最高 NDCG@20", f"{ndcg_best['NDCG@20']:.4f}", str(ndcg_best["model"]))
+        p3.metric("最高平台综合分", f"{utility_best['platform_utility']:.4f}", str(utility_best["policy"]))
+        p4.metric("最低 Avg ETA", f"{eta_best['avg_eta']:.2f} min", str(eta_best["policy"]))
 
         playbook_rows = [
             {
-                "场景": "只看推荐准确率",
+                "评价重点": "推荐准确率",
                 "建议策略": str(user_best["model"]),
                 "证据": f"Recall@20={float(user_best['Recall@20']):.4f}",
-                "怎么讲": "能说明推荐排得准，但还不能说明配送会变好",
+                "指标含义": "反映用户侧命中能力，尚未覆盖配送表现",
             },
             {
-                "场景": "看用户口味",
+                "评价重点": "品类校准",
                 "建议策略": str(calibration_best["model"]),
                 "证据": f"NDCG@20={float(ndcg_best['NDCG@20']):.4f}, JSD@20={float(calibration_best.get('CategoryJSD@20', 0.0)):.4f}",
-                "怎么讲": "能解释口味是否贴近历史习惯，但还没管配送压力",
+                "指标含义": "衡量推荐列表是否贴近用户历史品类分布",
             },
             {
-                "场景": "看整条链路",
+                "评价重点": "推荐到履约",
                 "建议策略": str(utility_best["policy"]),
                 "证据": f"Utility={float(utility_best['platform_utility']):.4f}, Timeout={float(utility_best['timeout_rate']):.4f}",
-                "怎么讲": "少一点命中率，换来更稳的配送",
+                "指标含义": "综合比较用户满意度、准时率、负载和商家曝光",
             },
             {
-                "场景": "讲清楚为什么",
+                "评价重点": "前沿方案",
                 "建议策略": str(frontier_best["policy"]) if frontier_best is not None else str(utility_best["policy"]),
                 "证据": (
                     f"Recall@20={float(frontier_best['Recall@20']):.4f}, Utility={float(frontier_best['platform_utility']):.4f}"
                     if frontier_best is not None
                     else f"Utility={float(utility_best['platform_utility']):.4f}"
                 ),
-                "怎么讲": "用来解释为什么不是 Recall 最高就结束",
+                "指标含义": "展示准确性与系统效用之间的折中边界",
             },
         ]
         st.dataframe(pd.DataFrame(playbook_rows), use_container_width=True, hide_index=True)
@@ -1026,7 +1026,7 @@ with tab_method:
         st.warning("尚未找到指标表，请先运行 `make eval simulate`。")
 
 with tab_metrics:
-    st.subheader("结果怎么读")
+    st.subheader("实验结果")
     if offline_path.exists() and sim_path.exists():
         offline = pd.read_csv(offline_path)
         sim = pd.read_csv(sim_path)
@@ -1059,7 +1059,7 @@ with tab_metrics:
                 "is_frontier": "未被压过",
             }
         ).sort_values("平台综合分", ascending=False)
-        st.subheader("课堂上可以重点讲这几条")
+        st.subheader("三方策略对比")
         st.dataframe(
             frontier_df[["策略", "推荐模型", "未被压过", "Recall@20", "NDCG@20", "曝光Gini", "Avg ETA", "超时率", "平台综合分"]].head(7),
             use_container_width=True,
@@ -1083,7 +1083,7 @@ with tab_metrics:
             symbol="is_frontier",
             size="on_time_rate",
             hover_data=["model", "NDCG@20", "ExposureGini", "avg_eta", "timeout_rate"],
-            title="推荐准不准和配送稳不稳",
+            title="推荐准确性与平台效用",
             color_discrete_map=demo_color_map(frontier["policy"]),
         )
         pareto_front = frontier[frontier["is_frontier"]].sort_values("Recall@20")
@@ -1150,7 +1150,7 @@ with tab_metrics:
                 y="timeout_rate",
                 color="policy",
                 text="timeout_rate",
-                title="超时少一点，平台综合分通常会好一些",
+                title="超时率对比",
                 color_discrete_map=demo_color_map(timeout_sorted["policy"]),
             )
             timeout_fig.update_layout(height=360, margin=dict(l=8, r=8, t=48, b=8), xaxis_title="")

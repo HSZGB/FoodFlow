@@ -47,5 +47,5 @@ ppt/notebooklm/upload_pack/
 
 ## 与两个 PPT 技能的关系
 
-- `codex-ppt` 的正式流程需要先确认大纲、视觉风格、图片后端和 1 页样张，再生成全套图片页、讲稿和 `.pptx`。当前 NotebookLM 包是因为本地暂时不能生成图片时的备用路径。
-- `image-to-editable-ppt` 不用于从零创作本 PPT。它适合后续已经有图片页、PDF 或截图后，再把页面重建成对象级可编辑 `.pptx`。
+- `codex-ppt` 的正式流程需要先确认大纲、视觉风格、图片后端和 1 页样张，再生成全套图片页、讲稿和 `.pptx`。当前 NotebookLM 包是因为本地暂时不能生成图片时的备用路径，不跳过这些门禁去伪造本地成品。
+- `image-to-editable-ppt` 不用于从零创作本 PPT。它适合后续已经有图片页、PDF、截图或图片式 PPT 后，再通过 `editppt prepare -> page worker -> record -> finalize` 重建对象级可编辑 `.pptx`。
