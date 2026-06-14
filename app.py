@@ -496,9 +496,9 @@ with tab_case:
             )
             score_fig.update_traces(
                 hovertemplate=(
-                    "骑手 %{y}<br>派单分 %{x:.3f}<br>ETA %{customdata[0]:.1f} min"
-                    "<br>负载 %{customdata[1]}<br>可靠性 %{customdata[2]:.2f}"
-                    "<br>取餐距离 %{customdata[3]:.2f} km<extra></extra>"
+                    "骑手 %{y} | 派单分 %{x:.3f} | ETA %{customdata[0]:.1f} min"
+                    " | 负载 %{customdata[1]} | 可靠性 %{customdata[2]:.2f}"
+                    " | 取餐距离 %{customdata[3]:.2f} km"
                 )
             )
             score_fig.update_layout(
@@ -582,7 +582,7 @@ with tab_case:
                 name="附近用户样本",
                 text=nearby_users["user_id"].astype(str),
                 marker=dict(size=5, color="#93c5fd", opacity=0.28),
-                hovertemplate="用户 %{text}<extra></extra>",
+                hovertemplate="用户 %{text}",
             )
         )
         map_fig.add_trace(
@@ -593,7 +593,7 @@ with tab_case:
                 name="附近商家样本",
                 text=nearby_merchants["wm_poi_id"].astype(str),
                 marker=dict(size=5, color="#86efac", opacity=0.32),
-                hovertemplate="商家 %{text}<extra></extra>",
+                hovertemplate="商家 %{text}",
             )
         )
         map_fig.add_trace(
@@ -635,7 +635,7 @@ with tab_case:
                     opacity=0.42,
                     line=dict(width=0.4, color="#ffffff"),
                 ),
-                hovertemplate="骑手 %{text}<br>负载 %{customdata[0]}<br>可靠性 %{customdata[1]:.2f}<extra></extra>",
+                hovertemplate="骑手 %{text} | 负载 %{customdata[0]} | 可靠性 %{customdata[1]:.2f}",
             )
         )
         if not rider_candidates.empty:
@@ -656,8 +656,8 @@ with tab_case:
                         line=dict(width=1.4, color="#7c3aed"),
                     ),
                     hovertemplate=(
-                        "骑手 %{customdata[0]}<br>派单分 %{customdata[1]:.3f}"
-                        "<br>ETA %{customdata[2]:.1f} min<br>负载 %{customdata[3]}<extra></extra>"
+                        "骑手 %{customdata[0]} | 派单分 %{customdata[1]:.3f}"
+                        " | ETA %{customdata[2]:.1f} min | 负载 %{customdata[3]}"
                     ),
                 )
             )
@@ -707,7 +707,7 @@ with tab_case:
                     opacity=0.74,
                     line=dict(color="#ffffff", width=1),
                 ),
-                hovertemplate="%{customdata[0]}<br>ETA %{customdata[1]:.1f} min<br>总分 %{customdata[2]:.3f}<extra></extra>",
+                hovertemplate="%{customdata[0]} | ETA %{customdata[1]:.1f} min | 总分 %{customdata[2]:.3f}",
             )
         )
         map_fig.add_trace(

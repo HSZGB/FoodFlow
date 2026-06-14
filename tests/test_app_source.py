@@ -6,4 +6,6 @@ def test_demo_does_not_use_raw_html_cards():
     assert "unsafe_allow_html" not in source
     assert "<div" not in source
     assert "<span" not in source
+    assert "<br" not in source
+    assert "<extra" not in source
     assert "ff-control-card" not in source
