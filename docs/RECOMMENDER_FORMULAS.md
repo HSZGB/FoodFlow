@@ -4,14 +4,15 @@
 
 ## 1. 默认推荐器
 
-`foodflow.recommenders.build_recommenders()` 当前返回 5 个代表模型：
+`foodflow.recommenders.build_recommenders()` 当前返回 6 个代表模型：
 
 ```python
 [
     PopularRecommender(),
     BPRMFRecommender(seed=seed),
     UserOnlyRecommender(),
-    LightGBMRankerRecommender(seed=seed),  # 若 LightGBM 不可用则回退 Seq-Tuned
+    LightGBMRankerRecommender(seed=seed),
+    SeqTunedRecommender(), # 用于与LightGBM 进行对比
     SeqXQuadTripartiteRecommender(),
 ]
 ```
@@ -74,10 +75,34 @@ UserOnly 是可解释用户画像模型，使用品类偏好、复购、价格�
 repeat(u,m)=\frac{\log(1+cnt_{u,m})}{\log 5}
 ```
 
-价格匹配：
+品类偏爱：（其中 $c(m)$ 表示 m 属于c类）
+
+```math
+category(u,m)=\frac{N_{u,c(m)}}{\sum_{c'}N_{u,c'}}
+```
+
+价格匹配：（价钱区间）
 
 ```math
 price(u,m)=1-\min\left(\frac{|p_u-p_m|}{\max(p_u,p_m,1)},1\right)
+```
+
+商家质量：（商家评分为 $s_m$，进行归一化）
+
+```math
+quality(m)=\frac{s_m-s_{\min}}{s_{\max}-s_{\min}}
+```
+
+商家热度：（$o_m$ 表示订单量）
+
+```math
+poplarity_{norm}(m)=\frac{o_m-o_{\min}}{o_{\max}-o_{\min}}
+```
+
+则有 
+
+```math
+novelty(m)=1-poplarity_{norm}(m)
 ```
 
 综合用户分：
@@ -107,7 +132,7 @@ popularity   : 0.008945
 quality      : 0.004398
 ```
 
-最近性衰减：
+最近性衰减：（$r_{fast}$ 表示极近期的偏爱信号，$r_{slow}$ 表示中期的行为惯性）
 
 ```math
 r_{fast}(u,m)=e^{-age(u,m)/6},\qquad

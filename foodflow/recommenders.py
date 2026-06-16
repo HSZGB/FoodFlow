@@ -780,5 +780,6 @@ def build_recommenders(seed: int = 42) -> list[BaseRecommender]:
         BPRMFRecommender(seed=seed),
         UserOnlyRecommender(),
         learned_seq_recommender,
+        SeqTunedRecommender(),
         SeqXQuadTripartiteRecommender(),
     ]

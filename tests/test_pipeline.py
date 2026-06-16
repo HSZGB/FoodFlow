@@ -23,7 +23,8 @@ def test_tiny_pipeline(tmp_path: Path):
     data = PreparedData.load(processed)
     sim = run_simulation(data, seed=123, requests_per_step=8, steps=3, top_k=10)
     sim.to_csv(results / "simulation_metrics.csv", index=False)
-    assert len(sim) >= 4
+    assert len(sim) >= 5
+    assert "LightGBM-LTR + MinETA" in set(sim["policy"])
     audit = audit_data(raw, processed, results / "data_audit.json", tmp_path / "DATA_AUDIT.md")
     assert audit["required_raw_files_present"]
     assert audit["processed_train_orders"] > 0
