@@ -1,201 +1,417 @@
-
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FoodFlow 五类推荐模型</title>
+<script>
+window.MathJax = {
+  tex: {
+    inlineMath: [['$', '$'], ['\\(', '\\)']],
+    displayMath: [['$$', '$$'], ['\\[', '\\]']]
+  },
+  options: {
+    skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre']
+  }
+};
+</script>
+<script defer src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js"></script>
 <style>
-*{box-sizing:border-box;margin:0;padding:0}
-.tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:16px}
-.tab{padding:6px 14px;border-radius:var(--border-radius-md);border:0.5px solid var(--color-border-secondary);font-size:13px;cursor:pointer;background:transparent;color:var(--color-text-secondary);transition:all .15s}
-.tab.active{background:var(--color-background-info);color:var(--color-text-info);border-color:var(--color-border-info)}
-.panel{display:none}.panel.active{display:block}
-.model-title{font-size:15px;font-weight:500;color:var(--color-text-primary);margin-bottom:4px}
-.model-sub{font-size:12px;color:var(--color-text-secondary);margin-bottom:16px}
-.flow{display:flex;align-items:center;gap:0;flex-wrap:wrap;margin-bottom:16px}
-.fbox{padding:8px 14px;border-radius:var(--border-radius-md);border:0.5px solid;font-size:12px;white-space:nowrap;line-height:1.4}
-.fbox.gray{background:var(--color-background-secondary);border-color:var(--color-border-secondary);color:var(--color-text-secondary)}
-.fbox.blue{background:#E6F1FB;border-color:#185FA5;color:#0C447C}
-.fbox.purple{background:#EEEDFE;border-color:#534AB7;color:#3C3489}
-.fbox.teal{background:#E1F5EE;border-color:#0F6E56;color:#085041}
-.fbox.coral{background:#FAECE7;border-color:#993C1D;color:#712B13}
-.fbox.amber{background:#FAEEDA;border-color:#854F0B;color:#633806}
-.fbox.green{background:#EAF3DE;border-color:#3B6D11;color:#27500A}
-@media(prefers-color-scheme:dark){
-.fbox.blue{background:#042C53;border-color:#378ADD;color:#B5D4F4}
-.fbox.purple{background:#26215C;border-color:#7F77DD;color:#CECBF6}
-.fbox.teal{background:#04342C;border-color:#1D9E75;color:#9FE1CB}
-.fbox.coral{background:#4A1B0C;border-color:#D85A30;color:#F5C4B3}
-.fbox.amber{background:#412402;border-color:#BA7517;color:#FAC775}
-.fbox.green{background:#173404;border-color:#639922;color:#C0DD97}
+* {
+  box-sizing: border-box;
 }
-.arr{color:var(--color-text-tertiary);font-size:16px;padding:0 4px}
-.formula-block{background:var(--color-background-secondary);border:0.5px solid var(--color-border-tertiary);border-radius:var(--border-radius-md);padding:12px 16px;margin-bottom:12px}
-.formula-label{font-size:11px;color:var(--color-text-tertiary);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px}
-.formula-content{font-size:13px;color:var(--color-text-primary);overflow-x:auto}
-.feature-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:8px;margin-bottom:16px}
-.feat{padding:8px 10px;border-radius:var(--border-radius-md);border:0.5px solid var(--color-border-tertiary);font-size:11px;color:var(--color-text-secondary);text-align:center}
-.feat strong{display:block;font-size:13px;color:var(--color-text-primary);font-weight:500;margin-bottom:2px}
-.note{font-size:12px;color:var(--color-text-tertiary);border-left:2px solid var(--color-border-secondary);padding-left:10px;margin-top:12px}
-.badge{display:inline-block;font-size:11px;padding:2px 8px;border-radius:9999px;margin-right:4px;margin-bottom:4px}
-.badge.blue{background:#E6F1FB;color:#0C447C}
-.badge.green{background:#EAF3DE;color:#27500A}
-.badge.amber{background:#FAEEDA;color:#633806}
-@media(prefers-color-scheme:dark){
-.badge.blue{background:#042C53;color:#B5D4F4}
-.badge.green{background:#173404;color:#C0DD97}
-.badge.amber{background:#412402;color:#FAC775}
+body {
+  margin: 0;
+  padding: 28px;
+  background: #f7f8fb;
+  color: #1f2933;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif;
+  line-height: 1.6;
+}
+.page {
+  max-width: 1080px;
+  margin: 0 auto;
+}
+.hero {
+  margin-bottom: 20px;
+  padding: 22px 24px;
+  background: #ffffff;
+  border: 1px solid #d9e2ec;
+  border-radius: 8px;
+}
+.hero h1 {
+  margin: 0 0 8px;
+  font-size: 25px;
+  line-height: 1.25;
+}
+.hero p {
+  margin: 0;
+  color: #52606d;
+  font-size: 14px;
+}
+.model {
+  margin-top: 16px;
+  padding: 20px 22px;
+  background: #ffffff;
+  border: 1px solid #d9e2ec;
+  border-radius: 8px;
+}
+.model h2 {
+  margin: 0 0 6px;
+  font-size: 20px;
+  line-height: 1.3;
+}
+.subtitle {
+  margin: 0 0 14px;
+  color: #52606d;
+  font-size: 14px;
+}
+.flow {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin: 14px 0;
+}
+.box {
+  min-height: 74px;
+  padding: 11px 12px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  background: #f8fafc;
+}
+.box strong {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 12px;
+  color: #64748b;
+  font-weight: 600;
+}
+.box span {
+  display: block;
+  color: #1f2933;
+  font-size: 14px;
+  font-weight: 600;
+}
+.box.input {
+  background: #eef6ff;
+  border-color: #9ac2ea;
+}
+.box.score {
+  background: #f1f0ff;
+  border-color: #b7b2ee;
+}
+.box.output {
+  background: #eaf8f1;
+  border-color: #91d6b8;
+}
+.box.fuse {
+  background: #fff6e6;
+  border-color: #e6c878;
+}
+.formula {
+  margin-top: 12px;
+  padding: 14px 16px;
+  background: #f8fafc;
+  border: 1px solid #e1e7ef;
+  border-radius: 8px;
+  overflow-x: auto;
+}
+.formula-title {
+  margin-bottom: 8px;
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: .02em;
+}
+.grid-2 {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+.weights {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 8px;
+  margin-top: 12px;
+}
+.weight {
+  padding: 9px 10px;
+  background: #ffffff;
+  border: 1px solid #e1e7ef;
+  border-radius: 7px;
+  color: #52606d;
+  font-size: 13px;
+}
+.weight b {
+  display: block;
+  color: #1f2933;
+  font-size: 15px;
+}
+.note {
+  margin: 12px 0 0;
+  padding-left: 11px;
+  border-left: 3px solid #cbd5e1;
+  color: #52606d;
+  font-size: 13px;
+}
+code {
+  padding: 1px 5px;
+  background: #eef2f7;
+  border: 1px solid #d9e2ec;
+  border-radius: 5px;
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+}
+@media (max-width: 760px) {
+  body {
+    padding: 16px;
+  }
+  .flow,
+  .grid-2 {
+    grid-template-columns: 1fr;
+  }
 }
 </style>
+</head>
+<body>
+<main class="page">
+  <section class="hero">
+    <h1>FoodFlow 五类推荐模型：核心思想、输入输出与公式</h1>
+    <p>对应 <code>foodflow/recommenders.py</code> 中 <code>build_recommenders()</code> 默认使用的五个模型。推荐输出统一为用户到商家的 Top-K 列表，后续进入离线评估、报告生成和履约仿真。</p>
+  </section>
 
-<div style="padding:4px 0 8px">
-<div class="tabs" id="tabs">
-  <button class="tab active" onclick="show(0)">1 · Popular</button>
-  <button class="tab" onclick="show(1)">2 · BPR-MF</button>
-  <button class="tab" onclick="show(2)">3 · UserOnly</button>
-  <button class="tab" onclick="show(3)">4 · SeqTuned</button>
-  <button class="tab" onclick="show(4)">5 · xQuAD-Tripartite</button>
-</div>
+  <section class="model">
+    <h2>1. PopularRecommender</h2>
+    <p class="subtitle">全局热门商家基线。它不做个性化，只根据训练集中商家的历史订单数排序。</p>
+    <div class="flow">
+      <div class="box input"><strong>输入</strong><span>训练订单 orders_train</span></div>
+      <div class="box score"><strong>核心计算</strong><span>统计每个商家的订单数</span></div>
+      <div class="box output"><strong>输出</strong><span>全局热门 Top-K 商家</span></div>
+      <div class="box fuse"><strong>后续融合</strong><span>作为冷启动和 backfill 兜底列表</span></div>
+    </div>
+    <div class="formula">
+      <div class="formula-title">热度分数</div>
+      \[
+      c_m=\left|\{o\in\mathcal{D}_{train}:o.wm\_poi\_id=m\}\right|,
+      \qquad
+      score_{pop}(u,m)=c_m
+      \]
+    </div>
+    <p class="note">实现中 `popular_list` 由商家订单数降序得到。其他模型推荐不足 Top-K 时，也会用该列表补齐。</p>
+  </section>
 
-<div id="p0" class="panel active">
-  <div class="model-title">PopularRecommender</div>
-  <div class="model-sub">全局热度基线，无个性化，作为所有模型的 backfill 兜底</div>
-  <div class="flow">
-    <div class="fbox gray">orders_train</div><span class="arr">→</span>
-    <div class="fbox blue">count(wm_poi_id)</div><span class="arr">→</span>
-    <div class="fbox blue">降序排列 popular_list</div><span class="arr">→</span>
-    <div class="fbox teal">Top-K 推荐列表</div>
-  </div>
-  <div class="formula-block">
-    <div class="formula-label">评分公式</div>
-    <div class="formula-content" id="f0a">\[\text{score}(m) = \text{count\_train}(m)\]</div>
-  </div>
-  <div class="formula-block">
-    <div class="formula-label">Backfill 策略</div>
-    <div class="formula-content" id="f0b">\[\text{output} = \text{ranked}[:k] \;;\quad \text{if } |\text{output}| < k,\;\text{pad with popular\_list}\]</div>
-  </div>
-  <p class="note">与后续模块融合：popular_list 在所有 Recommender 的 <code>_remove_seen_and_backfill()</code> 中全局共享，是冷启动兜底来源。</p>
-</div>
+  <section class="model">
+    <h2>2. BPRMFRecommender</h2>
+    <p class="subtitle">隐式反馈矩阵分解。用户点过的商家作为正样本，随机未交互商家作为负样本，训练目标是让正样本分数高于负样本。</p>
+    <div class="flow">
+      <div class="box input"><strong>输入</strong><span>用户-商家交互正样本</span></div>
+      <div class="box score"><strong>核心计算</strong><span>学习用户向量和商家向量</span></div>
+      <div class="box output"><strong>输出</strong><span>按内积分数排序的 Top-K</span></div>
+      <div class="box fuse"><strong>后续融合</strong><span>作为传统个性化推荐基线</span></div>
+    </div>
+    <div class="grid-2">
+      <div class="formula">
+        <div class="formula-title">预测分数</div>
+        \[
+        \hat{x}_{ui}=\mathbf{p}_u^\top\mathbf{q}_i
+        \]
+      </div>
+      <div class="formula">
+        <div class="formula-title">BPR 成对排序目标</div>
+        \[
+        \max_{\Theta}\sum_{(u,i,j)\in\mathcal{D}}
+        \log\sigma(\hat{x}_{ui}-\hat{x}_{uj})-\lambda\|\Theta\|^2
+        \]
+      </div>
+    </div>
+    <div class="formula">
+      <div class="formula-title">代码中的训练配置</div>
+      \[
+      d=24,\qquad epochs=4,\qquad \eta=0.035,\qquad \lambda=0.002
+      \]
+    </div>
+    <p class="note">若用户不在训练集中，模型退回到 Popular 推荐。该模型输出仍进入统一的离线评估流程。</p>
+  </section>
 
-<div id="p1" class="panel">
-  <div class="model-title">BPRMFRecommender</div>
-  <div class="model-sub">矩阵分解 + 贝叶斯个性化排序，学习用户/商家隐向量</div>
-  <div class="flow">
-    <div class="fbox gray">user-item 矩阵</div><span class="arr">→</span>
-    <div class="fbox blue">初始化<br>U ∈ ℝ<sup>|U|×d</sup>, V ∈ ℝ<sup>|I|×d</sup></div><span class="arr">→</span>
-    <div class="fbox purple">BPR 训练<br>正样本 i + 负采样 j</div><span class="arr">→</span>
-    <div class="fbox teal">Top-K 列表</div>
-  </div>
-  <div class="formula-block">
-    <div class="formula-label">目标函数（BPR-Opt）</div>
-    <div class="formula-content" id="f1a">\[\mathcal{L}_{\text{BPR}} = \sum_{(u,i,j)\in\mathcal{D}} \ln\,\sigma\!\left(\hat{x}_{ui} - \hat{x}_{uj}\right) - \lambda\|\Theta\|^2\]</div>
-  </div>
-  <div class="formula-block">
-    <div class="formula-label">预测得分 & 梯度</div>
-    <div class="formula-content" id="f1b">\[\hat{x}_{ui} = \mathbf{U}_u \cdot \mathbf{V}_i \qquad \sigma(x)=\frac{1}{1+e^{-x}} \qquad g = \sigma\!\left(\hat{x}_{ui}-\hat{x}_{uj}\right)\]</div>
-  </div>
-  <div class="formula-block">
-    <div class="formula-label">参数更新</div>
-    <div class="formula-content" id="f1c">\[\mathbf{U}_u \mathrel{+}= \eta\!\left(g(\mathbf{V}_i-\mathbf{V}_j)-\lambda\mathbf{U}_u\right)\quad \mathbf{V}_i \mathrel{+}= \eta\!\left(g\mathbf{U}_u-\lambda\mathbf{V}_i\right)\quad \mathbf{V}_j \mathrel{+}= \eta\!\left(-g\mathbf{U}_u-\lambda\mathbf{V}_j\right)\]</div>
-  </div>
-  <p class="note">冷启动（未见用户）回退至 PopularRecommender；输出排名列表经 backfill 补全到 K 条。</p>
-</div>
+  <section class="model">
+    <h2>3. UserOnlyRecommender</h2>
+    <p class="subtitle">可解释用户画像模型。它把品类偏好、复购、价格匹配、时段热度、商家质量和新颖性线性加权。</p>
+    <div class="flow">
+      <div class="box input"><strong>输入</strong><span>用户画像、商家属性、历史订单</span></div>
+      <div class="box score"><strong>核心计算</strong><span>六维可解释特征加权</span></div>
+      <div class="box output"><strong>输出</strong><span>个性化商家 Top-K</span></div>
+      <div class="box fuse"><strong>后续融合</strong><span>作为序列模型的画像基础类</span></div>
+    </div>
+    <div class="weights">
+      <div class="weight"><b>0.20</b>品类偏好 category</div>
+      <div class="weight"><b>0.52</b>复购强度 repeat</div>
+      <div class="weight"><b>0.10</b>价格匹配 price</div>
+      <div class="weight"><b>0.06</b>时段热度 period</div>
+      <div class="weight"><b>0.07</b>商家质量 quality</div>
+      <div class="weight"><b>0.05</b>新颖性 novelty</div>
+    </div>
+    <div class="grid-2">
+      <div class="formula">
+        <div class="formula-title">复购分</div>
+        \[
+        repeat(u,m)=\frac{\log(1+cnt_{u,m})}{\log 5}
+        \]
+      </div>
+      <div class="formula">
+        <div class="formula-title">价格匹配</div>
+        \[
+        price(u,m)=1-\min\left(\frac{|p_u-p_m|}{\max(p_u,p_m,1)},1\right)
+        \]
+      </div>
+    </div>
+    <div class="formula">
+      <div class="formula-title">综合用户分</div>
+      \[
+      \begin{aligned}
+      score_{user}(u,m,p)=&
+      0.20\,category(u,m)+0.52\,repeat(u,m)\\
+      &+0.10\,price(u,m)+0.06\,period(p,m)\\
+      &+0.07\,quality(m)+0.05\,novelty(m)
+      \end{aligned}
+      \]
+    </div>
+    <p class="note">这里复购权重最高，符合外卖场景中用户经常重复点同一家店的行为规律。</p>
+  </section>
 
-<div id="p2" class="panel">
-  <div class="model-title">UserOnlyRecommender</div>
-  <div class="model-sub">无序列信息，多维特征线性加权融合</div>
-  <div class="flow">
-    <div class="fbox gray">用户/商家属性</div><span class="arr">→</span>
-    <div class="fbox coral">6 维特征提取</div><span class="arr">→</span>
-    <div class="fbox purple">加权求和</div><span class="arr">→</span>
-    <div class="fbox blue">排序 + backfill</div><span class="arr">→</span>
-    <div class="fbox teal">Top-K</div>
-  </div>
-  <div class="feature-grid">
-    <div class="feat"><strong>0.20</strong>类目偏好<br>category_pref</div>
-    <div class="feat"><strong>0.52</strong>复购权重<br>log(1+cnt)</div>
-    <div class="feat"><strong>0.10</strong>价格匹配<br>price_fit</div>
-    <div class="feat"><strong>0.06</strong>时段热度<br>period_fit</div>
-    <div class="feat"><strong>0.07</strong>质量得分<br>quality</div>
-    <div class="feat"><strong>0.05</strong>新颖度<br>1 − pop</div>
-  </div>
-  <div class="formula-block">
-    <div class="formula-label">综合评分</div>
-    <div class="formula-content" id="f2a">\[\text{score}(u,m) = 0.20\cdot\text{cat} + 0.52\cdot\frac{\ln(1+c)}{\ln 5} + 0.10\cdot\text{price} + 0.06\cdot\text{period} + 0.07\cdot q + 0.05\cdot(1-p)\]</div>
-  </div>
-  <p class="note">作为 SequentialHybridRecommender 的父类；user_score() 被子类继承并覆盖扩展。</p>
-</div>
+  <section class="model">
+    <h2>4. SeqTunedRecommender</h2>
+    <p class="subtitle">序列推荐模型。它在用户画像之外加入最近订单、复购次数和商家转移概率，是项目中离线准确率较强的模型。</p>
+    <div class="flow">
+      <div class="box input"><strong>输入</strong><span>按时间排序的用户历史商家序列</span></div>
+      <div class="box score"><strong>核心计算</strong><span>7 维序列特征调权融合</span></div>
+      <div class="box output"><strong>输出</strong><span>序列感知 Top-K 商家</span></div>
+      <div class="box fuse"><strong>后续融合</strong><span>作为离线准确率前沿策略</span></div>
+    </div>
+    <div class="weights">
+      <div class="weight"><b>0.142601</b>fast_recency</div>
+      <div class="weight"><b>0.093624</b>slow_recency</div>
+      <div class="weight"><b>0.412158</b>repeat</div>
+      <div class="weight"><b>0.247023</b>transition</div>
+      <div class="weight"><b>0.091250</b>category</div>
+      <div class="weight"><b>0.008945</b>popularity</div>
+      <div class="weight"><b>0.004398</b>quality</div>
+    </div>
+    <div class="grid-2">
+      <div class="formula">
+        <div class="formula-title">最近性衰减</div>
+        \[
+        r_{fast}(u,m)=e^{-age(u,m)/6},
+        \qquad
+        r_{slow}(u,m)=e^{-age(u,m)/12}
+        \]
+      </div>
+      <div class="formula">
+        <div class="formula-title">商家转移概率</div>
+        \[
+        T(a,b)=\frac{count(a\rightarrow b)}
+        {\sum_c count(a\rightarrow c)}
+        \]
+      </div>
+    </div>
+    <div class="grid-2">
+      <div class="formula">
+        <div class="formula-title">最近 5 个历史商家的转移分</div>
+        \[
+        trans(u,m)=\max_{k=1}^{5}0.85^k\,T(s_{t-k},m)
+        \]
+      </div>
+      <div class="formula">
+        <div class="formula-title">最终序列分</div>
+        \[
+        score_{seq}(u,m)=
+        \frac{\sum_{f\in F}w_f f(u,m)}
+        {\sum_{f\in F}w_f}
+        \]
+      </div>
+    </div>
+    <p class="note">候选集来自用户最近历史商家、最近商家的转移邻居和热门商家补位。权重中 repeat 与 transition 最大，说明复购和相邻商家转移是关键。</p>
+  </section>
 
-<div id="p3" class="panel">
-  <div class="model-title">SeqTunedRecommender</div>
-  <div class="model-sub">序列感知特征 + 调优权重，强调复购行为</div>
-  <div class="flow">
-    <div class="fbox gray">历史序列 s₁…sₙ</div><span class="arr">→</span>
-    <div class="fbox blue">序列建模<br>transitions + recent</div><span class="arr">→</span>
-    <div class="fbox coral">7 维特征</div><span class="arr">→</span>
-    <div class="fbox purple">归一化加权</div><span class="arr">→</span>
-    <div class="fbox teal">Top-K</div>
-  </div>
-  <div class="formula-block">
-    <div class="formula-label">近度特征（快/慢衰减）</div>
-    <div class="formula-content" id="f3a">\[r_{\text{fast}}(m) = e^{-t/6}\qquad r_{\text{slow}}(m) = e^{-t/12}\qquad t = \text{距最近出现位置的步数}\]</div>
-  </div>
-  <div class="formula-block">
-    <div class="formula-label">序列转移得分</div>
-    <div class="formula-content" id="f3b">\[\tau(m) = \max_{k=1}^{5}\; 0.85^k \cdot T[s_{-k} \to m]\qquad T[a\to b]=\frac{\text{count}(a\to b)}{\sum_c \text{count}(a\to c)}\]</div>
-  </div>
-  <div class="formula-block">
-    <div class="formula-label">综合评分（归一化）</div>
-    <div class="formula-content" id="f3c">\[\text{score}(u,m) = \frac{\displaystyle\sum_{k} w_k f_k}{\displaystyle\sum_{k} w_k}\]</div>
-  </div>
-  <div class="feature-grid">
-    <div class="feat"><strong>0.143</strong>fast recency</div>
-    <div class="feat"><strong>0.094</strong>slow recency</div>
-    <div class="feat"><strong>0.412</strong>repeat</div>
-    <div class="feat"><strong>0.247</strong>transition</div>
-    <div class="feat"><strong>0.091</strong>category</div>
-    <div class="feat"><strong>0.009</strong>popularity</div>
-    <div class="feat"><strong>0.004</strong>quality</div>
-  </div>
-  <p class="note">repeat 权重最大（0.412），反映外卖场景的强复购规律。候选集 = 历史 + 转移邻居 + popular_list。</p>
-</div>
-
-<div id="p4" class="panel">
-  <div class="model-title">SeqXQuadTripartiteRecommender</div>
-  <div class="model-sub">三层管线：序列个性化 → 三方目标融合 → xQuAD 多样性重排</div>
-  <div class="flow">
-    <div class="fbox gray">历史序列</div><span class="arr">→</span>
-    <div class="fbox coral">SeqTuned<br>user_score</div><span class="arr">→</span>
-    <div class="fbox amber">三方融合<br>final_score</div><span class="arr">→</span>
-    <div class="fbox purple">xQuAD<br>贪心重排</div><span class="arr">→</span>
-    <div class="fbox teal">Top-K（多样）</div>
-  </div>
-
-  <div class="formula-block">
-    <div class="formula-label">① 三方加权融合</div>
-    <div class="formula-content" id="f4a">\[\text{final}(u,m) = 0.93\cdot\text{user\_score} + 0.025\cdot\text{fair}(m) + 0.03\cdot\text{eta\_score}(m) + 0.015\cdot\text{supply}(m)\]</div>
-  </div>
-  <div class="formula-block">
-    <div class="formula-label">ETA 归一化</div>
-    <div class="formula-content" id="f4b">\[\text{eta\_score}(m) = 1 - \min\!\left(\frac{\widehat{\text{ETA}}(u,m)}{70},\;1\right)\]</div>
-  </div>
-  <div class="formula-block">
-    <div class="formula-label">② xQuAD 贪心重排目标（逐步选入 S）</div>
-    <div class="formula-content" id="f4c">\[m^* = \arg\max_{m\notin S}\;\Bigl[\alpha\cdot\widetilde{r}(m) + \beta\cdot\mathbf{1}[\text{cat}_m\notin \mathcal{C}_S] + \gamma\cdot\frac{1}{1+\ln(1+\text{cnt}_m)}\Bigr]\]</div>
-  </div>
-  <div class="formula-block">
-    <div class="formula-label">参数取值</div>
-    <div class="formula-content" id="f4d">\[\alpha = 1-\beta-\gamma = 0.84\qquad \beta = 0.12\;(\text{类目多样})\qquad \gamma = 0.04\;(\text{长尾促进})\]</div>
-  </div>
-  <div class="formula-block">
-    <div class="formula-label">归一化相关度</div>
-    <div class="formula-content" id="f4e">\[\widetilde{r}(m)=\frac{\text{score}(m)-\min_c\text{score}(c)}{\max_c\text{score}(c)-\min_c\text{score}(c)}\qquad\text{候选集} = \text{Top-80 by final\_score}\]</div>
-  </div>
-  <p class="note">每次选出 m* 后将其类目加入已覆盖集合 C_S，下轮选择中同类目的 category_gain 归零，强制多样。</p>
-</div>
-</div>
-
-<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js"></script>
-<script>
-function show(i){
-  document.querySelectorAll('.tab').forEach((t,j)=>t.classList.toggle('active',i===j));
-  document.querySelectorAll('.panel').forEach((p,j)=>p.classList.toggle('active',i===j));
-  if(window.MathJax&&MathJax.typesetPromise){MathJax.typesetPromise();}
-}
-window.MathJax={tex:{inlineMath:[['$','$'],['\\(','\\)']],displayMath:[['$$','$$'],['\\[','\\]']]},options:{skipHtmlTags:['script','noscript','style']},startup:{ready(){MathJax.startup.defaultReady();}}};
-</script>
+  <section class="model">
+    <h2>5. SeqXQuadTripartiteRecommender</h2>
+    <p class="subtitle">三方重排模型。它先用序列用户分计算相关性，再融合商家公平、ETA 和供给可行性，最后用 xQuAD 做列表级多样化重排。</p>
+    <div class="flow">
+      <div class="box input"><strong>输入</strong><span>序列候选商家、用户位置、商家属性</span></div>
+      <div class="box score"><strong>核心计算</strong><span>用户 + 商家 + 履约三方打分</span></div>
+      <div class="box output"><strong>输出</strong><span>多样化、长尾友好的 Top-K</span></div>
+      <div class="box fuse"><strong>后续融合</strong><span>进入履约仿真，影响 ETA 和平台效用</span></div>
+    </div>
+    <div class="weights">
+      <div class="weight"><b>0.93</b>用户序列分 user</div>
+      <div class="weight"><b>0.025</b>商家公平 fair</div>
+      <div class="weight"><b>0.03</b>ETA 分 eta_score</div>
+      <div class="weight"><b>0.015</b>供给分 supply</div>
+      <div class="weight"><b>0.12</b>xQuAD 品类多样性</div>
+      <div class="weight"><b>0.04</b>xQuAD 长尾曝光</div>
+    </div>
+    <div class="grid-2">
+      <div class="formula">
+        <div class="formula-title">三方综合分</div>
+        \[
+        \begin{aligned}
+        score_{tri}(u,m)=&
+        0.93\,user(u,m)+0.025\,fair(m)\\
+        &+0.03\,eta\_score(u,m)+0.015\,supply(m)
+        \end{aligned}
+        \]
+      </div>
+      <div class="formula">
+        <div class="formula-title">商家公平分</div>
+        \[
+        fair(m)=0.75(1-popularity_{norm}(m))+0.25\,quality_{norm}(m)
+        \]
+      </div>
+    </div>
+    <div class="grid-2">
+      <div class="formula">
+        <div class="formula-title">推荐阶段 ETA 分</div>
+        \[
+        eta\_score(u,m)=1-\min\left(\frac{\widehat{ETA}(u,m)}{70},1\right)
+        \]
+      </div>
+      <div class="formula">
+        <div class="formula-title">ETA 估计</div>
+        \[
+        \widehat{ETA}(u,m)=prep(m)+\frac{dist(u,m)}{18}\times60+peak(p)
+        \]
+      </div>
+    </div>
+    <div class="grid-2">
+      <div class="formula">
+        <div class="formula-title">供给分</div>
+        \[
+        supply(m)=0.6\frac{delivery\_score_m}{5}
+        +0.4\frac{1}{1+\log(1+count_m)}
+        \]
+      </div>
+      <div class="formula">
+        <div class="formula-title">xQuAD 逐步选商家</div>
+        \[
+        m^*=\arg\max_{m\notin S}
+        \left[
+        0.84\,\widetilde r(m)
+        +0.12\,\mathbf{1}(cat_m\notin C_S)
+        +0.04\,tail(m)
+        \right]
+        \]
+      </div>
+    </div>
+    <div class="formula">
+      <div class="formula-title">xQuAD 相关性归一化与长尾项</div>
+      \[
+      \widetilde r(m)=
+      \frac{score_{tri}(u,m)-\min_{c\in\mathcal{C}}score_{tri}(u,c)}
+      {\max_{c\in\mathcal{C}}score_{tri}(u,c)-\min_{c\in\mathcal{C}}score_{tri}(u,c)},
+      \qquad
+      tail(m)=\frac{1}{1+\log(1+count_m)}
+      \]
+    </div>
+    <p class="note">实现中先取三方分数最高的 80 个候选，再贪心选出 Top-K。推荐结果会进入 `simulate`，由骑手派单策略进一步计算平均 ETA、超时率、骑手负载和平台综合效用。</p>
+  </section>
+</main>
+</body>
+</html>
