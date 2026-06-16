@@ -31,6 +31,16 @@ SEQ_TUNED_XQUAD_WEIGHTS = {
     "quality": 0.015892,
 }
 
+SEQUENCE_FEATURE_NAMES = [
+    "fast_recency",
+    "slow_recency",
+    "repeat",
+    "transition",
+    "category",
+    "popularity",
+    "quality",
+]
+
 
 @dataclass
 class RecommendationResult:
@@ -395,6 +405,93 @@ class SeqTunedRecommender(WeightedSequentialRecommender):
         super().__init__(name="Seq-Tuned", weights=SEQ_TUNED_WEIGHTS)
 
 
+class LightGBMRankerRecommender(WeightedSequentialRecommender):
+    name = "LightGBM-LTR"
+
+    def __init__(
+        self,
+        seed: int = 42,
+        max_train_users: int = 1000,
+        candidate_limit: int = 160,
+        n_estimators: int = 80,
+    ):
+        super().__init__(name=self.name, weights=SEQ_TUNED_WEIGHTS)
+        self.seed = seed
+        self.max_train_users = max_train_users
+        self.candidate_limit = candidate_limit
+        self.n_estimators = n_estimators
+        self.model = None
+
+    def _feature_vector(self, user_id: str, merchant_id: str) -> list[float]:
+        values = self._sequence_feature_values(user_id, merchant_id)
+        return [float(values.get(name, 0.0)) for name in SEQUENCE_FEATURE_NAMES]
+
+    def fit(self, data: PreparedData) -> "LightGBMRankerRecommender":
+        super().fit(data)
+        try:
+            from lightgbm import LGBMRanker
+        except ImportError:
+            self.model = None
+            return self
+
+        users = [user_id for user_id, counts in self.user_item_counts.items() if counts]
+        rng = np.random.default_rng(self.seed)
+        if len(users) > self.max_train_users:
+            users = rng.choice(users, size=self.max_train_users, replace=False).astype(str).tolist()
+
+        features: list[list[float]] = []
+        labels: list[int] = []
+        groups: list[int] = []
+        for user_id in users:
+            positives = set(self.user_item_counts.get(user_id, Counter()))
+            candidates = self._sequential_candidates(user_id)[: self.candidate_limit]
+            if not candidates:
+                continue
+            user_features: list[list[float]] = []
+            user_labels: list[int] = []
+            for merchant_id in candidates:
+                label = int(merchant_id in positives)
+                user_features.append(self._feature_vector(user_id, merchant_id))
+                user_labels.append(label)
+            if not any(user_labels) or all(user_labels):
+                continue
+            features.extend(user_features)
+            labels.extend(user_labels)
+            groups.append(len(user_labels))
+
+        if not features or not groups:
+            self.model = None
+            return self
+
+        self.model = LGBMRanker(
+            objective="lambdarank",
+            metric="ndcg",
+            n_estimators=self.n_estimators,
+            learning_rate=0.05,
+            num_leaves=15,
+            min_child_samples=20,
+            subsample=0.85,
+            colsample_bytree=0.9,
+            random_state=self.seed,
+            verbosity=-1,
+        )
+        self.model.fit(np.asarray(features, dtype=float), np.asarray(labels, dtype=int), group=groups)
+        return self
+
+    def recommend_for_user(self, user_id: str, k: int, period: str = "lunch") -> tuple[list[str], dict[str, float]]:
+        if self.model is None:
+            return super().recommend_for_user(user_id, k, period)
+        candidates = self._sequential_candidates(user_id)
+        if not candidates:
+            return super().recommend_for_user(user_id, k, period)
+        features = np.asarray([self._feature_vector(user_id, merchant_id) for merchant_id in candidates], dtype=float)
+        predictions = self.model.predict(features)
+        scores = {merchant_id: float(score) for merchant_id, score in zip(candidates, predictions)}
+        ranked = sorted(scores, key=scores.get, reverse=True)
+        recs = self._remove_seen_and_backfill(user_id, ranked, k)
+        return recs, {m: scores.get(m, float(self.popular.get(m, 0))) for m in recs}
+
+
 class SeqTripartiteRecommender(SequentialHybridRecommender):
     name = "Seq-Tripartite"
 
@@ -664,11 +761,24 @@ class OursFullRecommender(TripartiteRerankRecommender):
         )
 
 
+def lightgbm_available() -> bool:
+    try:
+        import lightgbm  # noqa: F401
+    except ImportError:
+        return False
+    return True
+
+
 def build_recommenders(seed: int = 42) -> list[BaseRecommender]:
+    learned_seq_recommender: BaseRecommender
+    if lightgbm_available():
+        learned_seq_recommender = LightGBMRankerRecommender(seed=seed)
+    else:
+        learned_seq_recommender = SeqTunedRecommender()
     return [
         PopularRecommender(),
         BPRMFRecommender(seed=seed),
         UserOnlyRecommender(),
-        SeqTunedRecommender(),
+        learned_seq_recommender,
         SeqXQuadTripartiteRecommender(),
     ]
