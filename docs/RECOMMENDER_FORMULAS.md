@@ -323,7 +323,20 @@ P(choice=m|u,t)=
 
 代码中用 `scipy.optimize.linear_sum_assignment` 在成本矩阵上求解；`load_aware` 策略把骑手可靠性、ETA 和当前负载合成为边权。
 
-## 9. 数据与仿真边界
+## 9. 轻量 KG 路径解释
+
+`foodflow.kg` 不训练 LightGCN/KGAT，而是把现有结构化字段转成可解释路径：
+
+```text
+user --ordered_poi--> poi
+user --prefers_category--> category <--has_category-- poi
+user --orders_in_area--> area <--located_in_area-- poi
+user --has_price_range--> price <--has_price_range-- poi
+```
+
+这些路径来自 `orders_train`、`users.favorite_category`、`merchants.primary_first_tag_id`、`merchants.aor_id` 和价格段。`foodflow explain-case` 会把路径证据、ETA 和曝光补偿一起输出，保证解释引用真实参与推荐/重排的字段。
+
+## 10. 数据与仿真边界
 
 真实推荐数据来自 Takeout Recommendation Dataset (TRD)，Zenodo DOI：`10.5281/zenodo.8025855`。项目使用用户、商家、菜品、训练订单、测试订单和测试标签文本文件。
 

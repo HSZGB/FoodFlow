@@ -8,6 +8,7 @@ import numpy as np
 import pandas as pd
 
 from .data import PreparedData
+from .kg import kg_path_summary
 from .rerank import estimate_user_merchant_eta, fairness_scores, haversine_km, supply_score_for_merchant
 from .rider_sim import assign_order, estimate_order_eta, generate_riders, rider_score, update_rider_after_assignment
 
@@ -159,6 +160,13 @@ def build_recommendation_frame(data: PreparedData, model, user_id: str, recs: li
             reasons.append("履约较快")
         if components["merchant_fairness"] >= 0.65:
             reasons.append("曝光补偿")
+        kg_summary = kg_path_summary(data, user_id, merchant_id)
+        if kg_summary.repeat_orders:
+            reasons.append("KG复购路径")
+        elif kg_summary.category_orders:
+            reasons.append("KG品类路径")
+        if kg_summary.area_orders:
+            reasons.append("KG区域路径")
         if not reasons:
             reasons.append("综合得分靠前")
 

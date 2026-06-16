@@ -110,6 +110,8 @@ def build_report(
 
 三方仿真保留 6 条代表链路：Popular + Nearest、UserOnly + MinETA、Seq-Tuned + MinETA、{learned_ltr} + MinETA、Seq-xQuAD-Tripartite + Greedy 和 Seq-xQuAD-Tripartite。每轮模拟午餐高峰的一批用户请求，推荐列表经过 softmax/MNL 选择模型产生订单，再由最近骑手、最小 ETA、负载感知逐单派单或批量最大权二分图匹配完成履约。
 
+轻量 KG 解释用于吸收知识图谱路线的可解释性亮点，但不引入高风险图神经网络训练。系统从训练订单、商家品类、商圈/区域和价格段构造 `user-ordered-poi`、`user-prefers-category`、`poi-has-category`、`poi-located-in-area`、`has-price-range` 等路径。`explain-case` 会输出类似 “user -> category <- poi” 的证据路径，并同时保留 ETA、曝光补偿等真实打分字段，避免空泛模板解释。
+
 ## 4. 离线推荐结果
 
 {offline_table}

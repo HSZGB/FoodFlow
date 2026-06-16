@@ -10,6 +10,7 @@
 - 商家侧公平：在重排中引入商家曝光公平、长尾曝光与 Exposure Gini 等指标。
 - 骑手侧履约：模拟订单-骑手匹配，比较最近骑手、最小 ETA、负载感知逐单派单和批量最大权匹配。
 - 动态仿真：模拟午餐高峰多时间步请求，持续更新骑手状态和订单履约结果。
+- 轻量 KG 解释：从历史下单、品类、区域和价格段构造路径证据，解释推荐原因。
 - 多指标评估：同时输出 Recall、NDCG、MRR、HitRate、Coverage、Exposure Gini、Avg ETA、Timeout Rate、Rider Load Std、Platform Utility。
 - 工程闭环：提供 Makefile、CLI、测试、图表、实验报告、Streamlit demo 和 NotebookLM PPT 素材包。
 
@@ -63,6 +64,7 @@ foodflow/
   data.py            # 处理后数据加载
   recommenders.py    # 推荐基线、序列模型与三方重排
   rerank.py          # ETA、公平分、供给分等重排特征
+  kg.py              # 轻量知识图谱三元组与路径解释
   rider_sim.py       # 骑手生成、ETA 估计、订单匹配
   simulator.py       # 动态履约仿真
   metrics.py         # 推荐与公平指标
@@ -256,7 +258,7 @@ python3 scripts/prepare_notebooklm_pack.py
 
 - 骑手数据为合成 proxy，不能替代真实派单数据。
 - BPR-MF 是轻量实现，未追求大规模深度模型最优性能。
-- 项目没有实现 LightGCN、KGAT 或完整知识图谱模型，这些作为调研背景和后续增强方向。
+- 项目实现的是轻量 KG 路径解释，没有实现 LightGCN、KGAT 或完整知识图谱训练模型，这些作为调研背景和后续增强方向。
 - 平台效用权重是课程项目中的解释性设置，后续可做权重敏感性分析。
 - 当前三方优化采用“推荐重排 + 下单后骑手匹配”的解耦闭环，不是工业级端到端联合调度系统。
 
