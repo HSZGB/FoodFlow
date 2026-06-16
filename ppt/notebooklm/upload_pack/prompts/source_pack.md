@@ -58,9 +58,9 @@ TRD 不包含完整骑手状态和真实派单记录。因此 FoodFlow 使用固
 1. 数据下载：下载 TRD txt 文件并跳过 `graph.bin`。
 2. 数据处理：清洗用户、商家、菜品、训练订单、测试订单和测试标签。
 3. 特征工程：生成用户画像、商家画像、菜品/品类特征、复购特征和时段特征。
-4. 离线推荐：默认评估 Popular、BPR-MF、UserOnly、Seq-Tuned、Seq-xQuAD-Tripartite 五个代表策略。
+4. 离线推荐：默认评估 Popular、BPR-MF、UserOnly、Seq-Tuned、LightGBM-LTR、Seq-xQuAD-Tripartite 六个代表策略。
 5. 三方重排：在用户偏好外加入列表级覆盖、商家公平、ETA 和供给分。
-6. 动态履约仿真：默认比较 Popular + Nearest、UserOnly + MinETA、Seq-Tuned + MinETA、Seq-xQuAD-Tripartite 四条链路。
+6. 动态履约仿真：默认比较 Popular + Nearest、UserOnly + MinETA、Seq-Tuned + MinETA、LightGBM-LTR + MinETA、Seq-xQuAD-Tripartite + Greedy、Seq-xQuAD-Tripartite 六条链路。
 7. 指标与图表：输出 CSV、PNG 图表、报告和 Streamlit demo。
 
 可重复执行接口：
@@ -76,13 +76,14 @@ TRD 不包含完整骑手状态和真实派单记录。因此 FoodFlow 使用固
 
 ## 6. 推荐算法
 
-答辩主线只展开 5 个代表策略：
+答辩主线只展开 6 个代表策略：
 
 - `Popular`：按训练订单热门商家排序，作为朴素热度基线。
 - `BPR-MF`：轻量矩阵分解排序基线，用来代表传统隐式反馈排序。
 - `UserOnly`：用户偏好排序，特征包括品类偏好、复购、价格匹配、时段热度、商家质量、新颖性。
 - `Seq-Tuned`：在同一批可解释序列特征上提高复购、商家转移和品类偏好权重，是当前离线准确率最强策略。
-- `Seq-xQuAD-Tripartite`：把列表级覆盖、商家公平、ETA 和供给约束放进同一个重排器，是当前仿真平台效用最强策略。
+- `LightGBM-LTR`：在同一批候选与序列特征上训练 LambdaRank 学习排序模型，补足学习排序证据。
+- `Seq-xQuAD-Tripartite`：把列表级覆盖、商家公平、ETA 和供给约束放进同一个重排器，并进入逐单贪心与批量匹配两条履约链路。
 
 项目代码中保留了一些历史消融类，方便追溯实验过程；PPT 不需要逐一展开，避免主线臃肿。
 
@@ -113,13 +114,15 @@ score = user_preference
 - `Popular + Nearest`：热门推荐 + 最近骑手，作为朴素履约基线。
 - `UserOnly + MinETA`：用户偏好推荐 + 最小 ETA 骑手。
 - `Seq-Tuned + MinETA`：短序列推荐 + 最小 ETA 骑手。
-- `Seq-xQuAD-Tripartite`：列表级三方重排 + 负载感知骑手。
+- `LightGBM-LTR + MinETA`：学习排序推荐 + 最小 ETA 骑手。
+- `Seq-xQuAD-Tripartite + Greedy`：列表级三方重排 + 逐单负载感知骑手。
+- `Seq-xQuAD-Tripartite`：列表级三方重排 + 批量最大权二分图匹配。
 
 仿真流程：
 
 1. 午餐高峰多时间步生成用户请求。
 2. 推荐器给每个用户生成 Top-K 商家列表。
-3. 用户选择模型优先选择真实测试标签中出现的商家，也允许按排序概率选择。
+3. 用户选择模型采用 softmax/MNL：推荐分、排序位置和测试集命中奖励共同影响下单选择，同时允许不下单。
 4. 生成订单后，从当前可用骑手中选择候选。
 5. 骑手策略包括最近骑手、最小 ETA、负载感知。
 6. 完成派单后更新骑手位置、负载、可用时间、收入和接单数。
@@ -138,6 +141,7 @@ score = user_preference
 
 - `Seq-Tuned` 是离线命中最强策略，Recall@20 = `0.4675`，NDCG@20 = `0.3652`，HitRate@20 = `0.6267`。
 - `UserOnly` Recall@20 = `0.4287`，NDCG@20 = `0.3423`，说明用户画像特征已经明显优于热门基线。
+- `LightGBM-LTR` Recall@20 = `0.4424`，Coverage@20 = `0.4345`，Exposure Gini = `0.7942`，说明学习排序进入默认评估并改善覆盖/曝光集中度。
 - `Seq-xQuAD-Tripartite` Recall@20 = `0.4180`，NDCG@20 = `0.3440`，不是追求单一 Recall 最大，而是在准确性、商家曝光和履约之间折中。
 - `BPR-MF` 和 `Popular` 用于证明传统基线和朴素热度基线的差距。
 
@@ -145,21 +149,24 @@ score = user_preference
 
 ## 9. 动态履约仿真指标结果
 
-履约指标：completed_orders、avg_eta、timeout_rate、on_time_rate、rider_load_std、merchant_exposure_gini、user_satisfaction、platform_utility。
+履约指标：completed_orders、total_orders、unassigned_orders、avg_eta、timeout_rate、on_time_rate、rider_load_std、merchant_exposure_gini、user_satisfaction、platform_utility。
 
 关键结果以 `results/simulation_metrics.csv` 为准。当前核心结论：
 
-- `Popular + Nearest`：Avg ETA = `84.71`，Timeout Rate = `0.7903`，Utility = `0.3365`。
-- `UserOnly + MinETA`：Avg ETA = `55.33`，Timeout Rate = `0.6701`，Utility = `0.4831`。
-- `Seq-Tuned + MinETA`：Avg ETA = `54.74`，Timeout Rate = `0.7320`，Utility = `0.4664`。
-- `Seq-xQuAD-Tripartite`：Avg ETA = `50.33`，Timeout Rate = `0.5319`，Utility = `0.5264`。
+- `Popular + Nearest`：Avg ETA = `86.64`，Timeout Rate = `0.8537`，Utility = `0.3098`。
+- `UserOnly + MinETA`：Avg ETA = `53.40`，Timeout Rate = `0.7113`，Utility = `0.4240`。
+- `Seq-Tuned + MinETA`：Avg ETA = `56.04`，Timeout Rate = `0.7097`，Utility = `0.4147`。
+- `LightGBM-LTR + MinETA`：Avg ETA = `54.81`，Timeout Rate = `0.7419`，Utility = `0.3922`。
+- `Seq-xQuAD-Tripartite + Greedy`：Avg ETA = `46.87`，Timeout Rate = `0.5200`，Utility = `0.4767`。
+- `Seq-xQuAD-Tripartite`：Avg ETA = `48.98`，Timeout Rate = `0.5543`，Utility = `0.4662`。
 
 结果分析：
 
 - 只看热门推荐和最近骑手会造成较高 ETA 和超时率。
 - `UserOnly + MinETA` 显著降低 ETA，说明订单推荐给骑手时需要考虑 ETA。
-- `Seq-xQuAD-Tripartite` 平均 ETA 最低、超时率最低、平台综合效用最高。
-- 因此项目结论不是“单一模型在所有指标上最大”，而是“多方重排改善系统级结果”。
+- `Seq-xQuAD-Tripartite + Greedy` 平均 ETA 最低、超时率最低、平台综合效用最高。
+- 批量匹配版 `Seq-xQuAD-Tripartite` 完成订单更多，但 ETA 和效用相对逐单贪心有取舍。
+- 因此项目结论不是“单一模型在所有指标上最大”，而是“多方重排把准确率、履约效率、订单吞吐和平台效用放进同一套权衡”。
 
 ## 10. 平台效用定义
 
@@ -190,7 +197,7 @@ Codex PPT 的成品默认是统一风格的整页图片式幻灯片；每页图�
 2. 使用 TRD 公开数据先完成用户-商家 Top-K 推荐，并用标准指标证明推荐有效。
 3. 加入商家公平、ETA 和供给分，构成三方重排。
 4. 把推荐结果接入动态履约仿真，比较不同派单策略。
-5. 实验显示 Seq-xQuAD-Tripartite 牺牲一部分离线准确性，但换来更低 ETA、更低超时率和更高平台效用。
+5. 实验显示 Seq-xQuAD-Tripartite 牺牲一部分离线准确性，但把 ETA、超时率、订单吞吐和平台效用纳入同一套系统级权衡。
 6. 局限是骑手数据为合成 proxy，后续可以接入真实派单数据或更复杂图模型。
 
 ## 13. PPT 页数与结构

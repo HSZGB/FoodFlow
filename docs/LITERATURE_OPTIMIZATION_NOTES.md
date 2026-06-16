@@ -1,6 +1,6 @@
 # FoodFlow 论文调研与可落地优化点
 
-> 说明：本文记录模型扩展和消融探索，包含 Seq-Hybrid、Seq-Tuned-xQuAD、Ours-Full 等历史候选；当前默认运行、demo、报告和 PPT 主线已收敛为 Popular、BPR-MF、UserOnly、Seq-Tuned、Seq-xQuAD-Tripartite。
+> 说明：本文记录模型扩展和消融探索，包含 Seq-Hybrid、Seq-Tuned-xQuAD、Ours-Full 等历史候选；其中仿真数值来自引入 MNL 选择模型和批量匹配前的历史实验。当前正式默认运行、demo、报告和 PPT 主线以 `outputs/results/*.csv` 为准，已收敛为 Popular、BPR-MF、UserOnly、Seq-Tuned、LightGBM-LTR、Seq-xQuAD-Tripartite 及 6 条仿真链路。
 
 ## 调研结论
 
@@ -73,9 +73,9 @@ list_score =
 
 本轮继续实现了 `Seq-Tripartite`：在 `Seq-Hybrid` 的序列偏好底座上轻量加入公平、ETA 和供给约束。它的 NDCG@20 和 HitRate@20 高于 UserOnly，仿真平台效用也高于 `Seq-Hybrid + MinETA`，说明序列准确性可以和三方约束结合。
 
-仿真结果中，`Seq-xQuAD-Tripartite` 取得当前最高平台效用 `0.5264`、最低平均 ETA `50.33` 和最低超时率 `0.5319`。答辩故事因此更自然：`Seq-Tuned` 证明推荐准确性可以继续提升；`Seq-Tuned-xQuAD` 证明高准确序列模型可以兼顾曝光与校准；`Seq-xQuAD-Tripartite` 证明高准确序列模型接入三方约束后可以改善履约；`Ours-Full` 作为原始三方重排对照，说明外卖平台不能只看准确性，还要看 ETA、超时率、商家曝光和骑手负载。
+历史仿真结果中，`Seq-xQuAD-Tripartite` 取得平台效用 `0.5264`、平均 ETA `50.33` 和超时率 `0.5319`。最新版正式结果已经切换到 MNL 选择模型，并增加 `LightGBM-LTR + MinETA` 与 `Seq-xQuAD-Tripartite + Greedy / batch` 对照；答辩故事以 `report/实验报告.md` 和 `outputs/results/simulation_metrics.csv` 为准。
 
-进一步做了 Tuned 序列底座接入三方重排的消融。`Seq-Tuned-xQuAD-Tripartite-ETA` 可以把平均 ETA 降到 `49.04`，但平台效用只有 `0.5166`，仍低于 `Seq-xQuAD-Tripartite` 的 `0.5264`。因此当前不把 Tuned 三方候选纳入默认策略：`Seq-Tuned` 负责离线准确率前沿，`Seq-xQuAD-Tripartite` 负责系统效用前沿，两条线分开讲更符合多目标推荐的实际权衡。
+进一步做了 Tuned 序列底座接入三方重排的历史消融。`Seq-Tuned-xQuAD-Tripartite-ETA` 可以把平均 ETA 降到 `49.04`，但平台效用只有 `0.5166`，仍低于当时的 `Seq-xQuAD-Tripartite`。因此这些候选保留为过程记录，不进入最新版默认策略。
 
 ## 下一步可继续尝试
 

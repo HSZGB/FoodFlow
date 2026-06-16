@@ -44,13 +44,13 @@ Slide 6: 离线推荐指标结果
     ![Tradeoff](../../outputs/figures/tradeoff_ndcg_gini.png)
 
 Slide 7: 动态履约仿真设计
-- Key points: 午餐高峰多时间步；推荐列表产生模拟订单；最近骑手、最小 ETA、负载感知三类匹配；骑手状态随订单更新。
+- Key points: 午餐高峰多时间步；推荐列表经过 softmax/MNL 选择产生模拟订单；最近骑手、最小 ETA、负载感知逐单派单与批量最大权匹配；骑手状态随订单更新。
 - Visual idea: 离散时间仿真循环图。
 - Layout role and intent: process explanation。
 - Required source images: none。
 
 Slide 8: 三方策略的系统级指标
-- Key points: 对比 Popular + Nearest、UserOnly + MinETA、Seq-Tuned + MinETA、Seq-xQuAD-Tripartite；展示 ETA、超时率、骑手负载和平台效用。
+- Key points: 对比 Popular + Nearest、UserOnly + MinETA、Seq-Tuned + MinETA、LightGBM-LTR + MinETA、Seq-xQuAD-Tripartite + Greedy、Seq-xQuAD-Tripartite；展示 ETA、超时率、骑手负载、完成订单数和平台效用。
 - Visual idea: 仿真指标四联图。
 - Layout role and intent: data evidence。
 - Required source images:

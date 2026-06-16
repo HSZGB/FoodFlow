@@ -1,5 +1,7 @@
 # Tuned 序列底座接入三方重排的消融记录
 
+> 说明：本文是引入 softmax/MNL 选择模型、LightGBM-LTR 默认评估和批量匹配前的历史消融记录。最新版正式结果以 `outputs/results/offline_metrics.csv`、`outputs/results/simulation_metrics.csv` 和 `report/实验报告.md` 为准。
+
 ## 验证问题
 
 `Seq-Tuned` 已经把离线推荐 Recall@20 提升到 `0.4675`。一个自然问题是：是否应该把 Tuned 序列底座直接接入三方重排，替换当前的 `Seq-xQuAD-Tripartite`？

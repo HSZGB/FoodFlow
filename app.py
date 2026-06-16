@@ -26,6 +26,8 @@ from foodflow.recommenders import (
     SeqTunedRecommender,
     SeqXQuadTripartiteRecommender,
     UserOnlyRecommender,
+    build_learned_ltr_recommender,
+    learned_ltr_model_name,
 )
 from foodflow.rider_sim import generate_riders
 
@@ -35,8 +37,16 @@ st.set_page_config(page_title="FoodFlow", layout="wide")
 st.title("FoodFlow 外卖推荐与配送仿真")
 st.caption("把一次下单拆开看：用户看到哪些商家，商家拿到多少曝光，订单最后派给哪位骑手。")
 
-DEMO_STRATEGIES = ["UserOnly", "Seq-Tuned", "Seq-xQuAD-Tripartite"]
-PEAK_POLICIES = ["Popular + Nearest", "UserOnly + MinETA", "Seq-Tuned + MinETA", "Seq-xQuAD-Tripartite"]
+LEARNED_LTR_MODEL = learned_ltr_model_name()
+LEARNED_LTR_POLICY = f"{LEARNED_LTR_MODEL} + MinETA"
+DEMO_STRATEGIES = ["UserOnly", "Seq-Tuned", LEARNED_LTR_MODEL, "Seq-xQuAD-Tripartite"]
+PEAK_POLICIES = [
+    "Popular + Nearest",
+    "UserOnly + MinETA",
+    "Seq-Tuned + MinETA",
+    LEARNED_LTR_POLICY,
+    "Seq-xQuAD-Tripartite + Greedy",
+]
 
 processed_dir = Path("data/processed")
 if not (processed_dir / "users.csv").exists():
@@ -86,6 +96,7 @@ def load_model(strategy: str, data_key: str, _data: PreparedData) -> object:
         "Popular": PopularRecommender,
         "UserOnly": UserOnlyRecommender,
         "Seq-Tuned": SeqTunedRecommender,
+        LEARNED_LTR_MODEL: lambda: build_learned_ltr_recommender(seed=42),
         "Seq-xQuAD-Tripartite": SeqXQuadTripartiteRecommender,
     }
     return factories[strategy]().fit(_data)
@@ -103,7 +114,11 @@ def load_peak_trace(
         "Popular + Nearest": (load_model("Popular", data_key, _data), "nearest"),
         "UserOnly + MinETA": (load_model("UserOnly", data_key, _data), "min_eta"),
         "Seq-Tuned + MinETA": (load_model("Seq-Tuned", data_key, _data), "min_eta"),
-        "Seq-xQuAD-Tripartite": (load_model("Seq-xQuAD-Tripartite", data_key, _data), "load_aware"),
+        LEARNED_LTR_POLICY: (load_model(LEARNED_LTR_MODEL, data_key, _data), "min_eta"),
+        "Seq-xQuAD-Tripartite + Greedy": (
+            load_model("Seq-xQuAD-Tripartite", data_key, _data),
+            "load_aware",
+        ),
     }
     policies = {name: all_policies[name] for name in PEAK_POLICIES}
     return build_peak_trace(
@@ -119,6 +134,9 @@ def load_peak_trace(
 DEMO_COLORS = {
     "Popular": "#64748B",
     "Seq-Tuned": "#B45309",
+    "LightGBM-LTR": "#7C3AED",
+    "Logistic-LTR": "#7C3AED",
+    "Seq-xQuAD-Tripartite + Greedy": "#F97316",
     "Seq-xQuAD-Tripartite": "#B5121B",
     "UserOnly": "#2563EB",
 }

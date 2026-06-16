@@ -20,6 +20,16 @@ class RiderState:
     assigned: int = 0
 
 
+ASSIGNMENT_COLUMNS = [
+    "order_id",
+    "user_id",
+    "merchant_id",
+    "rider_id",
+    "eta",
+    "score",
+]
+
+
 def generate_riders(merchants: pd.DataFrame, n_riders: int = 80, seed: int = 42) -> pd.DataFrame:
     rng = np.random.default_rng(seed)
     anchors = merchants.sample(n=n_riders, replace=True, random_state=seed).reset_index(drop=True)
@@ -104,6 +114,96 @@ def assign_order(
     else:
         raise ValueError(f"Unknown rider policy: {policy}")
     return str(chosen["rider_id"]), float(chosen["eta"])
+
+
+def assign_orders_batch(
+    orders: list[dict[str, object]],
+    riders: pd.DataFrame,
+    policy: str,
+    period: str = "lunch",
+    current_time: int = 0,
+) -> pd.DataFrame:
+    """Assign a batch of orders with one maximum-weight bipartite matching."""
+    if not orders or riders.empty:
+        return pd.DataFrame(columns=ASSIGNMENT_COLUMNS)
+
+    try:
+        from scipy.optimize import linear_sum_assignment
+    except ImportError:
+        rows = []
+        remaining = riders.copy()
+        for order in orders:
+            rider_id, eta = assign_order(
+                order["user_row"],
+                order["merchant_row"],
+                remaining,
+                policy,
+                period,
+                current_time,
+            )
+            if rider_id is None:
+                continue
+            rider_row = remaining[remaining["rider_id"].astype(str) == str(rider_id)]
+            score = rider_score(float(eta), rider_row.iloc[0]) if not rider_row.empty else 0.0
+            rows.append(
+                {
+                    "order_id": str(order["order_id"]),
+                    "user_id": str(order["user_id"]),
+                    "merchant_id": str(order["merchant_id"]),
+                    "rider_id": str(rider_id),
+                    "eta": float(eta),
+                    "score": float(score),
+                }
+            )
+            remaining = remaining[remaining["rider_id"].astype(str) != str(rider_id)]
+            if remaining.empty:
+                break
+        return pd.DataFrame(rows, columns=ASSIGNMENT_COLUMNS)
+
+    candidates = riders.copy().reset_index(drop=True)
+    costs = np.zeros((len(orders), len(candidates)), dtype=float)
+    etas = np.zeros_like(costs)
+    scores = np.zeros_like(costs)
+
+    for order_index, order in enumerate(orders):
+        user_row = order["user_row"]
+        merchant_row = order["merchant_row"]
+        for rider_index, (_, rider_row) in enumerate(candidates.iterrows()):
+            eta = estimate_order_eta(user_row, merchant_row, rider_row, period, current_time)
+            score = rider_score(float(eta), rider_row)
+            etas[order_index, rider_index] = eta
+            scores[order_index, rider_index] = score
+            if policy == "nearest":
+                pickup_distance = haversine_km(
+                    float(rider_row["lng"]),
+                    float(rider_row["lat"]),
+                    float(merchant_row.get("lng", 116.40)),
+                    float(merchant_row.get("lat", 39.92)),
+                )
+                costs[order_index, rider_index] = pickup_distance + eta * 1e-4
+            elif policy == "min_eta":
+                costs[order_index, rider_index] = eta
+            elif policy == "load_aware":
+                costs[order_index, rider_index] = -score + eta * 1e-4
+            else:
+                raise ValueError(f"Unknown rider policy: {policy}")
+
+    order_indices, rider_indices = linear_sum_assignment(costs)
+    rows = []
+    for order_index, rider_index in zip(order_indices, rider_indices):
+        order = orders[int(order_index)]
+        rider_row = candidates.iloc[int(rider_index)]
+        rows.append(
+            {
+                "order_id": str(order["order_id"]),
+                "user_id": str(order["user_id"]),
+                "merchant_id": str(order["merchant_id"]),
+                "rider_id": str(rider_row["rider_id"]),
+                "eta": float(etas[order_index, rider_index]),
+                "score": float(scores[order_index, rider_index]),
+            }
+        )
+    return pd.DataFrame(rows, columns=ASSIGNMENT_COLUMNS)
 
 
 def update_rider_after_assignment(riders: pd.DataFrame, rider_id: str, eta: float, current_time: int) -> None:

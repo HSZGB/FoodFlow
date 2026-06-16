@@ -7,7 +7,7 @@ from foodflow.figures import generate_figures
 from foodflow.mock_data import make_mock_trd
 from foodflow.preprocess import preprocess
 from foodflow.report import build_report
-from foodflow.simulator import run_simulation
+from foodflow.simulator import learned_ltr_policy_name, run_simulation
 
 
 def test_tiny_pipeline(tmp_path: Path):
@@ -23,8 +23,11 @@ def test_tiny_pipeline(tmp_path: Path):
     data = PreparedData.load(processed)
     sim = run_simulation(data, seed=123, requests_per_step=8, steps=3, top_k=10)
     sim.to_csv(results / "simulation_metrics.csv", index=False)
-    assert len(sim) >= 5
-    assert "LightGBM-LTR + MinETA" in set(sim["policy"])
+    assert len(sim) >= 6
+    assert learned_ltr_policy_name() in set(sim["policy"])
+    assert "Seq-xQuAD-Tripartite + Greedy" in set(sim["policy"])
+    assert "Seq-xQuAD-Tripartite" in set(sim["policy"])
+    assert {"assignment_mode", "choice_model", "unassigned_orders"}.issubset(sim.columns)
     audit = audit_data(raw, processed, results / "data_audit.json", tmp_path / "DATA_AUDIT.md")
     assert audit["required_raw_files_present"]
     assert audit["processed_train_orders"] > 0

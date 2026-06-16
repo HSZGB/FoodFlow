@@ -17,7 +17,7 @@
 ]
 ```
 
-其中 `LightGBMRankerRecommender` 是新增的学习排序模型，用来替代原先仅靠 `SEQ_TUNED_WEIGHTS` 的硬编码序列加权模型。`SeqTunedRecommender` 仍保留，作为可解释规则基线和 LightGBM 不可用时的 fallback。
+其中 `LightGBMRankerRecommender` 是新增的学习排序模型，用来替代原先仅靠 `SEQ_TUNED_WEIGHTS` 的硬编码序列加权模型。`SeqTunedRecommender` 仍保留，作为可解释规则基线；如果某台机器缺少 LightGBM，代码会显式退到 `Logistic-LTR`，避免结果表把规则模型误写成学习排序。
 
 ## 2. PopularRecommender
 
@@ -229,7 +229,7 @@ max_train_users   = 1000
 candidate_limit   = 160
 ```
 
-若运行环境没有安装 LightGBM，`LightGBMRankerRecommender` 会回退到 Seq-Tuned 逻辑，保证 smoke/test 不因可选依赖失败。
+当前项目环境已安装 `lightgbm==4.5.0`，默认输出会包含真正的 `LightGBM-LTR`。若运行环境没有安装 LightGBM，`build_recommenders()` 会改用 `LogisticLTRRecommender`，它基于同一组序列特征训练带类别均衡的 Logistic Regression 后备排序器，并在结果中明确显示为 `Logistic-LTR`。
 
 ## 7. SeqXQuadTripartiteRecommender
 
@@ -296,10 +296,32 @@ Popular + Nearest
 UserOnly + MinETA
 Seq-Tuned + MinETA
 LightGBM-LTR + MinETA
+Seq-xQuAD-Tripartite + Greedy
 Seq-xQuAD-Tripartite
 ```
 
-其中 `LightGBM-LTR + MinETA` 用来测试学习排序模型进入履约链路后的表现：推荐列表先由 LightGBM-LTR 生成，再用最小 ETA 策略派单。
+其中 `LightGBM-LTR + MinETA` 用来测试学习排序模型进入履约链路后的表现：推荐列表先由 LightGBM-LTR 生成，再用最小 ETA 策略派单。`Seq-xQuAD-Tripartite + Greedy` 保留逐单负载感知派单作为对照；`Seq-xQuAD-Tripartite` 使用同一推荐策略，但在每个时间步内对新订单和可用骑手做批量最大权二分图匹配。
+
+用户选择从固定概率改为 softmax/MNL：
+
+```math
+P(choice=m|u,t)=
+\frac{\exp(V_{u,m,t})}
+\exp(V_{\varnothing})+\sum_{j\in Rec(u,t)}\exp(V_{u,j,t})
+```
+
+其中 `V_{\varnothing}` 是不下单基准效用，`V_{u,m,t}` 由归一化推荐分、排序位置和测试集命中奖励组成。这样推荐分数会真实影响仿真订单分布，同时仍允许用户不下单。
+
+批量派单使用线性分配求解：
+
+```math
+\max \sum_{o\in O_t}\sum_{r\in R_t}x_{or}W(o,r),
+\quad
+\sum_r x_{or}\le 1,\quad
+\sum_o x_{or}\le 1
+```
+
+代码中用 `scipy.optimize.linear_sum_assignment` 在成本矩阵上求解；`load_aware` 策略把骑手可靠性、ETA 和当前负载合成为边权。
 
 ## 9. 数据与仿真边界
 
