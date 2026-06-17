@@ -956,6 +956,12 @@ with tab_method:
             model_metric_text("Seq-Tuned", "Recall@20", "Recall@20"),
         ),
         (
+            "学习排序",
+            f"{LEARNED_LTR_MODEL}：用数据学习候选排序",
+            "默认使用 LightGBM LambdaRank；如果运行环境缺少 LightGBM，会显式显示 Logistic-LTR 后备排序器。",
+            model_metric_text(LEARNED_LTR_MODEL, "Coverage@20", "Coverage@20"),
+        ),
+        (
             "商家侧",
             "三方重排：不只照顾用户点击",
             "把曝光公平、ETA 和供给情况一起放进排序，避免平台只推少数头部店。",
@@ -978,6 +984,7 @@ with tab_method:
         pd.DataFrame(
             [
                 {"评价对象": "用户偏好", "项目做法": "用最近订单、复购次数和店铺转移来排商家", "对应模块": "Seq-Tuned"},
+                {"评价对象": "学习排序", "项目做法": "用同一批序列特征训练学习排序器", "对应模块": LEARNED_LTR_MODEL},
                 {"评价对象": "商家曝光", "项目做法": "把曝光公平、ETA 和供给情况接到重排里", "对应模块": "Seq-xQuAD-Tripartite"},
                 {"评价对象": "订单履约", "项目做法": "模拟骑手候选排序和负载感知派单", "对应模块": "骑手仿真"},
             ]
