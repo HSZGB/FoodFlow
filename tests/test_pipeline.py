@@ -6,8 +6,22 @@ from foodflow.evaluate import run_offline_eval
 from foodflow.figures import generate_figures
 from foodflow.mock_data import make_mock_trd
 from foodflow.preprocess import preprocess
+from foodflow.recommenders import build_recommenders, learned_ltr_model_name
 from foodflow.report import build_report
 from foodflow.simulator import learned_ltr_policy_name, run_simulation
+
+
+def test_default_recommenders_include_explicit_learned_ltr():
+    names = [recommender.name for recommender in build_recommenders(seed=123)]
+    assert names == [
+        "Popular",
+        "BPR-MF",
+        "UserOnly",
+        learned_ltr_model_name(),
+        "Seq-Tuned",
+        "Seq-xQuAD-Tripartite",
+    ]
+    assert learned_ltr_model_name() in {"LightGBM-LTR", "Logistic-LTR"}
 
 
 def test_tiny_pipeline(tmp_path: Path):

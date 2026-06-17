@@ -11,13 +11,13 @@
     PopularRecommender(),
     BPRMFRecommender(seed=seed),
     UserOnlyRecommender(),
-    LightGBMRankerRecommender(seed=seed),
-    SeqTunedRecommender(), # 用于与LightGBM 进行对比
+    build_learned_ltr_recommender(seed=seed), # LightGBM-LTR，缺少 LightGBM 时为 Logistic-LTR
+    SeqTunedRecommender(), # 用于与学习排序进行对比
     SeqXQuadTripartiteRecommender(),
 ]
 ```
 
-其中 `LightGBMRankerRecommender` 是新增的学习排序模型，用来替代原先仅靠 `SEQ_TUNED_WEIGHTS` 的硬编码序列加权模型。`SeqTunedRecommender` 仍保留，作为可解释规则基线；如果某台机器缺少 LightGBM，代码会显式退到 `Logistic-LTR`，避免结果表把规则模型误写成学习排序。
+其中 `build_learned_ltr_recommender()` 是学习排序入口：当前项目依赖中包含 `lightgbm==4.5.0`，默认会返回 `LightGBMRankerRecommender`；如果某台机器缺少 LightGBM，代码会显式退到 `LogisticLTRRecommender`，结果表显示为 `Logistic-LTR`，避免把规则模型误写成学习排序。`SeqTunedRecommender` 仍保留，作为可解释规则基线和学习排序对照。
 
 ## 2. PopularRecommender
 
