@@ -31,6 +31,7 @@ Then paste `prompts/notebooklm_master_prompt.md` as the generation prompt.
 - `results/tripartite_frontier.csv`
 - `sources/DATA_AUDIT.md`
 - `sources/DATA_SOURCE.md`
+- `sources/DELIVERY_AUDIT.md`
 - `sources/ppt_outline.md`
 - `sources/ppt_outline_approval.md`
 - `sources/slide_07_local_draft_prompt.md`

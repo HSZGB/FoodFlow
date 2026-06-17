@@ -268,6 +268,7 @@ python3 scripts/prepare_notebooklm_pack.py
 - 硬性要求：`硬性要求.md`
 - 项目计划：`PROJECT_PLAN.md`
 - 数据来源说明：`docs/DATA_SOURCE.md`
+- 交付验收审计：`docs/DELIVERY_AUDIT.md`
 - 权重敏感性分析：`docs/WEIGHT_SENSITIVITY.md`
 - Seq-Tuned 权重搜索：`docs/SEQ_TUNED_SEARCH.md`
 - Tuned 三方消融：`docs/TRIPARTITE_TUNED_ABLATION.md`

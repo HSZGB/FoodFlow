@@ -18,6 +18,7 @@ NotebookLM 上传时建议保留原文件名。图表页要优先使用 PNG 作�
 |---|---|
 | `sources/实验报告.md` | 项目目标、数据来源、算法、指标、结果和结论 |
 | `sources/DATA_SOURCE.md` | TRD 数据来源、Zenodo DOI、合成骑手边界 |
+| `sources/DELIVERY_AUDIT.md` | 课程硬性要求与当前交付证据映射 |
 | `sources/ppt_outline.md` | 已确认的 11 页答辩结构 |
 | `sources/ppt_outline_approval.md` | Codex PPT 大纲审批摘要和严格输入图片映射 |
 | `sources/作业要求.md` | 课程评分与展示要求 |
