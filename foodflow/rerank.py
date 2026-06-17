@@ -30,7 +30,7 @@ def estimate_user_merchant_eta(user_row: pd.Series, merchant_row: pd.Series, per
         float(merchant_row.get("lng", 116.40)),
         float(merchant_row.get("lat", 39.92)),
     )
-    prep = 10.0 + (1.0 - float(merchant_row.get("delivery_comment_avg_score", 4.2)) / 5.0) * 8.0
+    prep = 10.0 + (1.0 - float(merchant_row.get("delivery_comment_avg_score", 4.2)) / 5.0) * 8.0 # 商户准备时间，基于配送评分调整
     peak = 6.0 if period in {"lunch", "dinner"} else 2.0
     return float(prep + distance / 18.0 * 60.0 + peak)
 
