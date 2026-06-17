@@ -24,7 +24,7 @@
 ./.venv/bin/python -m pytest -q
 ```
 
-结果：`13 passed`。
+结果：`14 passed`。
 
 ```bash
 test -s report/实验报告.md \
