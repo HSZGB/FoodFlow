@@ -99,7 +99,7 @@ quality(m)=\frac{s_m-s_{\min}}{s_{\max}-s_{\min}}
 poplarity_{norm}(m)=\frac{o_m-o_{\min}}{o_{\max}-o_{\min}}
 ```
 
-则有 
+则有
 
 ```math
 novelty(m)=1-poplarity_{norm}(m)
@@ -216,7 +216,7 @@ metric    = ndcg
 Rec(u,K)=TopK_m\left(\hat{s}_{u,m}\right)
 ```
 
-当前默认训练配置：
+当前默认训练配置：（训练时间较长可修改，但性能也会下降）
 
 ```text
 n_estimators      = 80
@@ -297,9 +297,49 @@ UserOnly + MinETA
 Seq-Tuned + MinETA
 LightGBM-LTR + MinETA
 Seq-xQuAD-Tripartite
+Seq-xQuAD-Tripartite-Batch
 ```
 
 其中 `LightGBM-LTR + MinETA` 用来测试学习排序模型进入履约链路后的表现：推荐列表先由 LightGBM-LTR 生成，再用最小 ETA 策略派单。
+`Seq-xQuAD-Tripartite-Batch` 将同一时间步内产生的一批订单和在线骑手容量槽位构造成二分图，用最大权匹配替代逐单贪心，减少局部最优派单。仿真中请求用户流、选择噪声和初始骑手池使用固定 seed；同一推荐器下不同派单策略面对同一批订单，因此可以更公平地比较 `load_aware` 与 `batch_max_weight`。
+
+骑手侧不再只使用静态距离最近规则。合成骑手包含 `speed_kmh`、`service_radius_km`、`acceptance_rate`、`reliability`、`load` 和 `available_at` 等状态。单个订单的骑手分为：
+
+```math
+score_{rider}(o,r)=
+0.50\left(1-\min\left(\frac{ETA(o,r)}{80},1\right)\right)
++0.20\,rel_r
++0.15\frac{1}{1+load_r}
++0.15\,P(accept\mid o,r)
+```
+
+接单概率用骑手基础接单率、可靠性、服务半径、负载和 ETA 衰减构造：
+
+```math
+\begin{aligned}
+P(accept\mid o,r)=\operatorname{clip}(&accept_r\cdot rel_r
+\cdot e^{-\max(d_{pickup}+d_{delivery}-radius_r,0)/3}\\
+&\cdot \frac{1}{1+0.35\,load_r}
+\cdot \left(1-\min\left(\frac{\max(ETA(o,r)-35,0)}{80},0.75\right)\right),0.02,0.99)
+\end{aligned}
+```
+
+批量派单将订单集合 `O` 和骑手容量槽位集合 `S` 构造成二分图。一个骑手 `r` 会按剩余容量展开为 `max_load-load_r` 个槽位，槽位上的有效负载随槽位序号递增，用来近似排队接单的额外压力。边权为骑手分减去超时风险：
+
+```math
+W_{os}=score_{rider}(o,r(s))-0.20\min\left(\max\left(\frac{ETA(o,r(s))-45}{60},0\right),1\right)
+```
+
+最大权匹配目标为：
+
+```math
+\max_x \sum_{o\in O}\sum_{s\in S}W_{os}x_{os}
+\quad
+s.t.\quad
+\sum_{s\in S}x_{os}\le 1,\quad
+\sum_{o\in O}x_{os}\le 1,\quad
+x_{os}\in\{0,1\}
+```
 
 ## 9. 数据与仿真边界
 
@@ -325,10 +365,18 @@ lat\sim\mathcal{N}(39.92,0.035)
 ```math
 \begin{aligned}
 ETA=&wait+prep+peak
-+\frac{dist(rider,merchant)}{20}\times60\\
-&+\frac{dist(merchant,user)}{22}\times60
++\frac{dist(rider,merchant)}{speed_r}\times60\\
+&+\frac{dist(merchant,user)}{1.08\,speed_r}\times60
 +5\cdot load
 \end{aligned}
 ```
 
-这些仿真变量用于比较推荐策略对履约时间、超时率、骑手负载和平台效用的影响，不声明为真实骑手数据。
+这些仿真变量用于比较推荐策略对履约时间、超时率、骑手负载、骑手收入分布、活跃骑手比例和平台效用的影响，不声明为真实骑手数据。
+
+由于公开数据集中没有真实配送轨迹和配送时长，因此采用启发式 ETA 估计模型，仅用于构造履约约束和比较不同推荐策略下的相对表现，而非追求 ETA 的绝对预测精度。
+
+## 10.骑手数据仿真
+
+
+* [ ] TODO：可以增加ETA `estimate_user_merchant_eta` 中对配送速度等估计值进行扰动，衡量模型敏感性
+* [ ] TODO：骑手模拟时貌似没有到商家取餐的计算？

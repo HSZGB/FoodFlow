@@ -1,6 +1,6 @@
 {
-  "raw_dir": "data/raw",
-  "processed_dir": "data/processed",
+  "raw_dir": "data\\raw",
+  "processed_dir": "data\\processed",
   "required_raw_files_present": true,
   "raw_files": {
     "users.txt": {
@@ -37,32 +37,32 @@
   "processed_files": {
     "users.csv": {
       "exists": true,
-      "bytes": 16543513,
+      "bytes": 16743514,
       "rows": 200000
     },
     "merchants.csv": {
       "exists": true,
-      "bytes": 4697590,
+      "bytes": 4726663,
       "rows": 29072
     },
     "spus.csv": {
       "exists": true,
-      "bytes": 16908698,
+      "bytes": 17088477,
       "rows": 179778
     },
     "orders_train.csv": {
       "exists": true,
-      "bytes": 73900028,
+      "bytes": 74968524,
       "rows": 1068495
     },
     "orders_test.csv": {
       "exists": true,
-      "bytes": 12841724,
+      "bytes": 13072275,
       "rows": 230550
     },
     "test_interactions.csv": {
       "exists": true,
-      "bytes": 4404411,
+      "bytes": 4634962,
       "rows": 230550
     }
   },

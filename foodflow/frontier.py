@@ -7,7 +7,9 @@ POLICY_MODEL_MAP = {
     "Popular + Nearest": "Popular",
     "UserOnly + MinETA": "UserOnly",
     "Seq-Tuned + MinETA": "Seq-Tuned",
+    "LightGBM-LTR + MinETA": "LightGBM-LTR",
     "Seq-xQuAD-Tripartite": "Seq-xQuAD-Tripartite",
+    "Seq-xQuAD-Tripartite-Batch": "Seq-xQuAD-Tripartite",
 }
 
 

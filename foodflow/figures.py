@@ -15,6 +15,7 @@ HIGHLIGHT = {
     "BPR-MF": "#94A3B8",
     "UserOnly": "#2563EB",
     "Seq-Tuned": "#B45309",
+    "LightGBM-LTR": "#0F766E",
     "Seq-xQuAD-Tripartite": "#B5121B",
 }
 DEFAULT_COLOR = "#CBD5E1"
@@ -35,6 +36,7 @@ def _annotate_highlights(ax, df: pd.DataFrame, x: str, y: str, label_col: str) -
         "BPR-MF": (8, 8),
         "UserOnly": (8, -12),
         "Seq-Tuned": (8, 16),
+        "LightGBM-LTR": (8, -16),
         "Seq-xQuAD-Tripartite": (8, 13),
     }
     for _, row in df.iterrows():
@@ -161,7 +163,9 @@ def _save_frontier_plot(frontier: pd.DataFrame, path: Path) -> None:
         "Popular + Nearest": (8, -14),
         "UserOnly + MinETA": (8, -14),
         "Seq-Tuned + MinETA": (8, 16),
+        "LightGBM-LTR + MinETA": (8, -16),
         "Seq-xQuAD-Tripartite": (8, 12),
+        "Seq-xQuAD-Tripartite-Batch": (8, -18),
     }
     for _, row in plot_df.iterrows():
         label = str(row["policy"])
@@ -278,8 +282,11 @@ def generate_figures(results_dir: Path, figures_dir: Path) -> list[Path]:
         sim = pd.read_csv(sim_path)
         for metric, filename, title in [
             ("avg_eta", "simulation_avg_eta.png", "Average delivery ETA"),
+            ("p95_eta", "simulation_p95_eta.png", "P95 delivery ETA"),
             ("timeout_rate", "simulation_timeout_rate.png", "Timeout rate"),
             ("rider_load_std", "simulation_rider_load_std.png", "Rider load standard deviation"),
+            ("active_rider_rate", "simulation_active_rider_rate.png", "Active rider rate"),
+            ("rider_income_gini", "simulation_rider_income_gini.png", "Rider income Gini"),
             ("platform_utility", "simulation_platform_utility.png", "Platform utility"),
             ("merchant_exposure_gini", "simulation_exposure_gini.png", "Simulation merchant exposure Gini"),
         ]:
@@ -291,7 +298,7 @@ def generate_figures(results_dir: Path, figures_dir: Path) -> list[Path]:
                     metric,
                     title,
                     out,
-                    higher_better=metric in {"platform_utility"},
+                    higher_better=metric in {"platform_utility", "active_rider_rate"},
                 )
                 made.append(out)
         if {"avg_eta", "platform_utility", "completed_orders"}.issubset(sim.columns):
