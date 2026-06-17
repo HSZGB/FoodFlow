@@ -18,6 +18,6 @@ No final `deck_spec.json`, `speech.md`, prompt job files, slide images, or `.ppt
 NotebookLM fallback:
 
 - Because the current environment cannot reliably generate slide images, `ppt/notebooklm/` provides a fallback upload pack.
-- The fallback pack follows the same 11-page outline and focuses the deck on five offline strategies and four fulfillment simulation chains.
+- The fallback pack follows the same 11-page outline and focuses the deck on six offline strategies and six fulfillment simulation chains.
 - If a future image-based PPT is generated with `codex-ppt`, restart from the approval gates above, keep one confirmed image backend, generate one approved sample first, then assemble final image slides and speaker notes.
 - If a future generated image/PDF/PPTX deck needs object-level editability, use `image-to-editable-ppt`; it is a reconstruction workflow based on `editppt prepare -> page worker -> record -> finalize`, not the authoring workflow for this project.

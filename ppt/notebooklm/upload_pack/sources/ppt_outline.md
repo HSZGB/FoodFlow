@@ -25,13 +25,13 @@ Slide 4: 系统总体架构
 - Required source images: none。
 
 Slide 5: 推荐算法与三方重排
-- Key points: Popular/BPR-MF/UserOnly/Seq-Tuned/Seq-xQuAD-Tripartite；Seq-xQuAD-Tripartite 在用户偏好外加入列表覆盖、商家公平、ETA 和供给分；解释只引用真实参与打分的特征。
+- Key points: Popular/BPR-MF/UserOnly/Seq-Tuned/LightGBM-LTR/Seq-xQuAD-Tripartite；LightGBM-LTR 展示真正训练出来的学习排序；Seq-xQuAD-Tripartite 在用户偏好外加入列表覆盖、商家公平、ETA 和供给分；解释只引用真实参与打分的特征。
 - Visual idea: 打分公式拆解和模型对照表。
 - Layout role and intent: method comparison。
 - Required source images: none。
 
 Slide 6: 离线推荐指标结果
-- Key points: 展示 Recall@20、NDCG@20、Coverage@20 和 Exposure Gini；说明准确性和曝光公平的 trade-off。
+- Key points: Seq-Tuned 的 Recall@20 = 0.4675、NDCG@20 = 0.3652，为离线准确率前沿；LightGBM-LTR 的 Recall@20 = 0.4424、Coverage@20 = 0.4345、Exposure Gini = 0.7942，展示学习排序和覆盖改善；Seq-xQuAD-Tripartite 的 Recall@20 = 0.4180、NDCG@20 = 0.3439，牺牲一部分离线准确性换取系统级约束。
 - Visual idea: 指标柱状图 + trade-off 散点图。
 - Layout role and intent: data evidence。
 - Required source images:
@@ -50,7 +50,7 @@ Slide 7: 动态履约仿真设计
 - Required source images: none。
 
 Slide 8: 三方策略的系统级指标
-- Key points: 对比 Popular + Nearest、UserOnly + MinETA、Seq-Tuned + MinETA、LightGBM-LTR + MinETA、Seq-xQuAD-Tripartite + Greedy、Seq-xQuAD-Tripartite；展示 ETA、超时率、骑手负载、完成订单数和平台效用。
+- Key points: 对比 Popular + Nearest、UserOnly + MinETA、Seq-Tuned + MinETA、LightGBM-LTR + MinETA、Seq-xQuAD-Tripartite + Greedy、Seq-xQuAD-Tripartite；Seq-xQuAD-Tripartite + Greedy 的 Avg ETA = 46.82、Timeout Rate = 0.5333、Platform Utility = 0.4726；批量匹配版本完成订单 92 单，Platform Utility = 0.4725，体现吞吐和效用取舍。
 - Visual idea: 仿真指标四联图。
 - Layout role and intent: data evidence。
 - Required source images:
@@ -67,7 +67,7 @@ Slide 9: 案例解释：一次推荐如何兼顾三方
 - Required source images: none。
 
 Slide 10: 结论、局限与改进方向
-- Key points: 推荐有效、重排改善商家公平、履约感知提升系统指标；局限是骑手为合成 proxy；后续可接入真实派单或图模型。
+- Key points: Seq-Tuned 证明序列偏好能提升离线推荐；LightGBM-LTR 补上学习排序与覆盖改善；Seq-xQuAD-Tripartite 把商家公平和履约感知纳入系统效用；局限是骑手为合成 proxy；后续可接入真实派单或图模型。
 - Visual idea: 三个结论卡片 + 一个局限说明。
 - Layout role and intent: summary。
 - Required source images: none。
