@@ -32,6 +32,7 @@ Then paste `prompts/notebooklm_master_prompt.md` as the generation prompt.
 - `sources/DATA_AUDIT.md`
 - `sources/DATA_SOURCE.md`
 - `sources/ppt_outline.md`
+- `sources/ppt_outline_approval.md`
 - `sources/slide_07_local_draft_prompt.md`
 - `sources/作业要求.md`
 - `sources/实验报告.md`

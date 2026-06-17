@@ -26,6 +26,7 @@ SOURCE_FILES = [
 ]
 
 OPTIONAL_SOURCE_FILES = [
+    (ROOT / "ppt" / "FoodFlow" / "outline_approval.md", "ppt_outline_approval.md"),
     (ROOT / "ppt" / "FoodFlow" / "drafts" / "slide_07_sample_prompt.md", "slide_07_local_draft_prompt.md"),
 ]
 
