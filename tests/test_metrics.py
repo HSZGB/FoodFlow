@@ -76,6 +76,13 @@ def test_tripartite_frontier_marks_dominated_rows():
                 "ExposureGini": 0.7,
                 "Coverage@20": 0.25,
             },
+            {
+                "model": "LightGBM-LTR",
+                "Recall@20": 0.42,
+                "NDCG@20": 0.32,
+                "ExposureGini": 0.75,
+                "Coverage@20": 0.22,
+            },
         ]
     )
     simulation = pd.DataFrame(
@@ -96,8 +103,26 @@ def test_tripartite_frontier_marks_dominated_rows():
                 "user_satisfaction": 0.75,
                 "platform_utility": 0.5,
             },
+            {
+                "policy": "Seq-xQuAD-Tripartite-Batch",
+                "avg_eta": 48.0,
+                "timeout_rate": 0.45,
+                "on_time_rate": 0.55,
+                "user_satisfaction": 0.76,
+                "platform_utility": 0.53,
+            },
+            {
+                "policy": "LightGBM-LTR + MinETA",
+                "avg_eta": 54.0,
+                "timeout_rate": 0.55,
+                "on_time_rate": 0.45,
+                "user_satisfaction": 0.82,
+                "platform_utility": 0.49,
+            },
         ]
     )
     frontier = build_tripartite_frontier(offline, simulation)
     assert {"policy", "model", "is_frontier"}.issubset(frontier.columns)
+    assert "LightGBM-LTR + MinETA" in set(frontier["policy"])
+    assert "Seq-xQuAD-Tripartite-Batch" in set(frontier["policy"])
     assert frontier["is_frontier"].any()

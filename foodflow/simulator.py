@@ -17,7 +17,7 @@ from .recommenders import (
     SeqXQuadTripartiteRecommender,
     UserOnlyRecommender,
 )
-from .rider_sim import assign_order, generate_riders, update_rider_after_assignment
+from .rider_sim import assign_order, assign_orders_batch, generate_riders, update_rider_after_delivery
 
 
 @dataclass(frozen=True)
@@ -34,6 +34,7 @@ DEFAULT_POLICIES = [
     SimulationPolicy("Seq-Tuned + MinETA", "seq_tuned", "min_eta"),
     SimulationPolicy("LightGBM-LTR + MinETA", "lightgbm_ltr", "min_eta"),
     SimulationPolicy("Seq-xQuAD-Tripartite", "seq_xquad_tripartite", "load_aware", fairness=True),
+    SimulationPolicy("Seq-xQuAD-Tripartite-Batch", "seq_xquad_tripartite", "batch_max_weight", fairness=True),
 ]
 
 
@@ -98,17 +99,20 @@ def run_simulation(
     users_df = data.users.set_index("user_id", drop=False)
     merchants_df = data.merchants.set_index("wm_poi_id", drop=False)
     results = []
+    request_seed = _stable_policy_seed(seed, "request-users")
+    rider_seed = _stable_policy_seed(seed, "riders")
 
     for policy_index, policy in enumerate(policies, start=1):
-        policy_seed = _stable_policy_seed(seed, policy.name)
-        rng = np.random.default_rng(policy_seed)
+        recommender_seed = _stable_policy_seed(seed, policy.recommender)
+        request_rng = np.random.default_rng(request_seed)
+        choice_rng = np.random.default_rng(_stable_policy_seed(seed, f"choice:{policy.recommender}"))
         if verbose:
             print(
                 f"[simulate] {policy_index}/{len(policies)} {policy.name}: fitting recommender...",
                 flush=True,
             )
         fit_started = perf_counter()
-        recommender = _select_recommender(data, policy.recommender, seed)
+        recommender = _select_recommender(data, policy.recommender, recommender_seed)
         fit_done = perf_counter()
         if verbose:
             print(
@@ -116,7 +120,7 @@ def run_simulation(
                 f"running {steps} steps x {requests_per_step} requests...",
                 flush=True,
             )
-        riders = generate_riders(data.merchants, n_riders=120, seed=policy_seed)
+        riders = generate_riders(data.merchants, n_riders=120, seed=rider_seed)
         exposure = Counter()
         completed = 0
         total_orders = 0
@@ -126,34 +130,63 @@ def run_simulation(
 
         for step in range(steps):
             current_time = step * 5
-            riders.loc[riders["available_at"] <= current_time, "load"] = riders.loc[
-                riders["available_at"] <= current_time, "load"
-            ].clip(upper=1)
-            request_users = rng.choice(eval_users, size=min(requests_per_step, len(eval_users)), replace=False)
+            ready = riders["available_at"] <= current_time
+            riders.loc[ready, "load"] = (
+                pd.to_numeric(riders.loc[ready, "load"], errors="coerce").fillna(0).astype(int) - 1
+            ).clip(lower=0)
+            request_users = request_rng.choice(eval_users, size=min(requests_per_step, len(eval_users)), replace=False)
             periods = {u: "lunch" for u in request_users}
             rec_result = recommender.recommend(list(request_users), top_k, periods)
+            pending_orders: list[dict] = []
             for user_id in request_users:
                 recs = rec_result.recommendations[user_id]
                 for rank, merchant_id in enumerate(recs, start=1):
                     exposure[merchant_id] += 1.0 / np.log2(rank + 1)
-                chosen = _choice_model(recs, truth.get(user_id, set()), rng)
+                chosen = _choice_model(recs, truth.get(user_id, set()), choice_rng)
                 if chosen is None or chosen not in merchants_df.index or user_id not in users_df.index:
                     continue
                 total_orders += 1
                 user_row = users_df.loc[user_id]
                 merchant_row = merchants_df.loc[chosen]
+                matched_truth = chosen in truth.get(user_id, set())
+                if policy.rider_policy == "batch_max_weight":
+                    pending_orders.append(
+                        {
+                            "order_id": f"{policy_index}-{step}-{user_id}",
+                            "user_id": user_id,
+                            "merchant_id": chosen,
+                            "user_row": user_row,
+                            "merchant_row": merchant_row,
+                            "matched_truth": matched_truth,
+                        }
+                    )
+                    continue
                 available = riders[riders["load"] <= 2].copy()
                 rider_id, eta = assign_order(user_row, merchant_row, available, policy.rider_policy, "lunch", current_time)
                 if rider_id is None:
                     continue
-                update_rider_after_assignment(riders, rider_id, eta, current_time)
+                update_rider_after_delivery(riders, rider_id, user_row, eta, current_time)
                 completed += 1
                 etas.append(eta)
                 timeouts += int(eta > 45.0)
-                satisfaction.append(1.0 if chosen in truth.get(user_id, set()) else 0.45)
+                satisfaction.append(1.0 if matched_truth else 0.45)
+            if policy.rider_policy == "batch_max_weight" and pending_orders:
+                available = riders[riders["load"] <= 2].copy()
+                assignments = assign_orders_batch(pending_orders, available, "lunch", current_time)
+                for assignment in assignments:
+                    order = pending_orders[int(assignment["order_index"])]
+                    eta = float(assignment["eta"])
+                    update_rider_after_delivery(riders, str(assignment["rider_id"]), order["user_row"], eta, current_time)
+                    completed += 1
+                    etas.append(eta)
+                    timeouts += int(eta > 45.0)
+                    satisfaction.append(1.0 if order["matched_truth"] else 0.45)
 
         exposure_values = [exposure[m] for m in data.merchant_ids]
         load_values = pd.to_numeric(riders["assigned"], errors="coerce").fillna(0).to_numpy(dtype=float)
+        current_load_values = pd.to_numeric(riders["load"], errors="coerce").fillna(0).to_numpy(dtype=float)
+        income_values = pd.to_numeric(riders["income"], errors="coerce").fillna(0).to_numpy(dtype=float)
+        active_riders = float((load_values > 0).sum())
         load_cv = float(load_values.std() / load_values.mean()) if load_values.mean() > 0 else 0.0
         row = {
             "policy": policy.name,
@@ -161,10 +194,14 @@ def run_simulation(
             "total_orders": total_orders,
             "completion_rate": completed / max(total_orders, 1),
             "avg_eta": float(np.mean(etas)) if etas else 0.0,
+            "p95_eta": float(np.percentile(etas, 95)) if etas else 0.0,
             "timeout_rate": timeouts / max(completed, 1),
             "on_time_rate": 1.0 - timeouts / max(completed, 1),
+            "avg_rider_load": float(current_load_values.mean()) if len(current_load_values) else 0.0,
             "rider_load_std": float(load_values.std()),
             "rider_load_cv": min(load_cv, 1.0),
+            "active_rider_rate": active_riders / max(float(len(load_values)), 1.0),
+            "rider_income_gini": gini(income_values),
             "merchant_exposure_gini": gini(exposure_values),
             "user_satisfaction": float(np.mean(satisfaction)) if satisfaction else 0.0,
         }

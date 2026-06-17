@@ -23,8 +23,13 @@ def test_tiny_pipeline(tmp_path: Path):
     data = PreparedData.load(processed)
     sim = run_simulation(data, seed=123, requests_per_step=8, steps=3, top_k=10)
     sim.to_csv(results / "simulation_metrics.csv", index=False)
-    assert len(sim) >= 5
-    assert "LightGBM-LTR + MinETA" in set(sim["policy"])
+    assert len(sim) >= 6
+    policies = set(sim["policy"])
+    assert "LightGBM-LTR + MinETA" in policies
+    assert "Seq-xQuAD-Tripartite-Batch" in policies
+    assert {"p95_eta", "active_rider_rate", "rider_income_gini"}.issubset(sim.columns)
+    seq_rows = sim.set_index("policy").loc[["Seq-xQuAD-Tripartite", "Seq-xQuAD-Tripartite-Batch"]]
+    assert seq_rows["total_orders"].nunique() == 1
     audit = audit_data(raw, processed, results / "data_audit.json", tmp_path / "DATA_AUDIT.md")
     assert audit["required_raw_files_present"]
     assert audit["processed_train_orders"] > 0
