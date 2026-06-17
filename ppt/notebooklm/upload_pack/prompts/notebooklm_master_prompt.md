@@ -45,7 +45,7 @@
 - `UserOnly`：Recall@20 = `0.4287`，NDCG@20 = `0.3423`，HitRate@20 = `0.5733`。
 - `Seq-Tuned`：Recall@20 = `0.4675`，NDCG@20 = `0.3652`，HitRate@20 = `0.6267`。
 - `LightGBM-LTR`：Recall@20 = `0.4424`，NDCG@20 = `0.3243`，HitRate@20 = `0.5900`，Coverage@20 = `0.4345`，Exposure Gini = `0.7942`。
-- `Seq-xQuAD-Tripartite`：Recall@20 = `0.4180`，NDCG@20 = `0.3440`，HitRate@20 = `0.5733`。
+- `Seq-xQuAD-Tripartite`：Recall@20 = `0.4180`，NDCG@20 = `0.3439`，HitRate@20 = `0.5733`，Coverage@20 = `0.2823`，Exposure Gini = `0.8934`。
 - `BPR-MF`：Recall@20 = `0.1620`，NDCG@20 = `0.1068`，HitRate@20 = `0.2433`。
 - `Popular`：Recall@20 = `0.0470`，NDCG@20 = `0.0210`，HitRate@20 = `0.0900`。
 
@@ -55,10 +55,10 @@
 - `UserOnly + MinETA`：Avg ETA = `53.40`，Timeout Rate = `0.7113`，Platform Utility = `0.4240`。
 - `Seq-Tuned + MinETA`：Avg ETA = `56.04`，Timeout Rate = `0.7097`，Platform Utility = `0.4147`。
 - `LightGBM-LTR + MinETA`：Avg ETA = `54.81`，Timeout Rate = `0.7419`，Platform Utility = `0.3922`。
-- `Seq-xQuAD-Tripartite + Greedy`：Avg ETA = `46.87`，Timeout Rate = `0.5200`，Platform Utility = `0.4767`。
-- `Seq-xQuAD-Tripartite`：Avg ETA = `48.98`，Timeout Rate = `0.5543`，Platform Utility = `0.4662`。
+- `Seq-xQuAD-Tripartite + Greedy`：Avg ETA = `46.82`，Timeout Rate = `0.5333`，Platform Utility = `0.4726`。
+- `Seq-xQuAD-Tripartite`：Avg ETA = `48.40`，Timeout Rate = `0.5435`，Platform Utility = `0.4725`。
 
-结论必须表达为：Seq-Tuned 是离线推荐指标最强策略；LightGBM-LTR 展示学习排序和覆盖改善；Seq-xQuAD-Tripartite 牺牲一部分离线准确性，把履约效率、超时风险、订单吞吐和平台综合效用纳入同一套系统级权衡。
+结论必须表达为：Seq-Tuned 是离线推荐指标最强策略；LightGBM-LTR 展示学习排序和覆盖改善；Seq-xQuAD-Tripartite 牺牲一部分离线准确性，把商家公平、履约效率、超时风险、订单吞吐和平台综合效用纳入同一套系统级权衡。
 
 ## 视觉风格
 

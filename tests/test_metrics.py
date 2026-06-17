@@ -11,6 +11,7 @@ from foodflow.metrics import (
     ndcg_at_k,
     recall_at_k,
 )
+from foodflow.recommenders import _normalize_tripartite_components
 
 
 def test_ranking_metrics():
@@ -101,3 +102,18 @@ def test_tripartite_frontier_marks_dominated_rows():
     frontier = build_tripartite_frontier(offline, simulation)
     assert {"policy", "model", "is_frontier"}.issubset(frontier.columns)
     assert frontier["is_frontier"].any()
+
+
+def test_tripartite_component_normalization():
+    rows = {
+        "m1": {"user_score": 10.0, "merchant_fairness": 0.2, "eta_score": 0.5, "supply_score": 5.0, "final_score": 0.0},
+        "m2": {"user_score": 20.0, "merchant_fairness": 0.8, "eta_score": 0.5, "supply_score": 9.0, "final_score": 0.0},
+    }
+    normalized = _normalize_tripartite_components(
+        rows,
+        {"user_score": 1.0, "merchant_fairness": 1.0, "eta_score": 1.0, "supply_score": 1.0},
+    )
+    assert normalized["m1"]["user_score_norm"] == 0.0
+    assert normalized["m2"]["user_score_norm"] == 1.0
+    assert normalized["m1"]["eta_score_norm"] == 0.0
+    assert normalized["m2"]["final_score"] > normalized["m1"]["final_score"]

@@ -231,7 +231,7 @@ python3 scripts/prepare_notebooklm_pack.py
 
 当前提交的结果已经使用完整 TRD `orders_train.txt`，数据审计显示原始训练订单 `1,068,495` 条，处理后训练订单 `1,068,495` 条，训练订单使用比例 `1.0000`。
 
-离线推荐中，`Seq-Tuned` 的 Recall@20 最高，为 `0.4675`，NDCG@20 为 `0.3652`，HitRate@20 为 `0.6267`。`LightGBM-LTR` 的 Recall@20 为 `0.4424`，并把 Coverage@20 提升到 `0.4345`、Exposure Gini 降到 `0.7942`。`Seq-xQuAD-Tripartite` 的离线准确性低于纯用户侧序列模型，但能进入后续履约链路做系统级比较。
+离线推荐中，`Seq-Tuned` 的 Recall@20 最高，为 `0.4675`，NDCG@20 为 `0.3652`，HitRate@20 为 `0.6267`。`LightGBM-LTR` 的 Recall@20 为 `0.4424`，Coverage@20 为 `0.4345`，Exposure Gini 降到 `0.7942`，说明默认评估中已经包含真正训练出来的学习排序。归一化后的 `Seq-xQuAD-Tripartite` 的 Recall@20 为 `0.4180`，NDCG@20 为 `0.3439`，把商家公平、ETA、供给分和列表级覆盖纳入同一套重排。
 
 动态履约仿真中，`Seq-xQuAD-Tripartite + Greedy` 取得最低平均 ETA、最低超时率和最高平台综合效用；批量匹配版本完成订单更多，但 ETA 和平台效用相对逐单贪心有取舍：
 
@@ -241,10 +241,10 @@ python3 scripts/prepare_notebooklm_pack.py
 | UserOnly + MinETA | 53.40 | 0.7113 | 0.4240 |
 | Seq-Tuned + MinETA | 56.04 | 0.7097 | 0.4147 |
 | LightGBM-LTR + MinETA | 54.81 | 0.7419 | 0.3922 |
-| Seq-xQuAD-Tripartite + Greedy | 46.87 | 0.5200 | 0.4767 |
-| Seq-xQuAD-Tripartite | 48.98 | 0.5543 | 0.4662 |
+| Seq-xQuAD-Tripartite + Greedy | 46.82 | 0.5333 | 0.4726 |
+| Seq-xQuAD-Tripartite | 48.40 | 0.5435 | 0.4725 |
 
-结论不是“单一模型在所有指标上最优”，而是：`Seq-Tuned` 取得最强离线推荐准确性；`LightGBM-LTR` 带来更高覆盖和更低曝光集中度；`Seq-xQuAD-Tripartite` 牺牲一部分离线准确性，把 ETA、超时率、订单吞吐和平台效用纳入同一套系统级权衡。
+结论不是“单一模型在所有指标上最优”，而是：`Seq-Tuned` 取得最强离线推荐准确性；`LightGBM-LTR` 展示学习排序和覆盖改善；`Seq-xQuAD-Tripartite` 牺牲一部分离线准确性，把商家公平、ETA、超时率、订单吞吐和平台效用纳入同一套系统级权衡。
 
 ## 图表示例
 

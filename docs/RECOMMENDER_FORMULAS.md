@@ -264,6 +264,25 @@ score_{tri}(u,m)=&
 \end{aligned}
 ```
 
+实际排序前会在当前候选集合内对四个分量做 min-max 归一化，避免用户分、曝光公平、ETA 和供给分的原始尺度不同导致权重不可解释：
+
+```math
+\widetilde{x}_{m}=\frac{x_m-\min_{c\in\mathcal{C}}x_c}
+{\max_{c\in\mathcal{C}}x_c-\min_{c\in\mathcal{C}}x_c+\epsilon}
+```
+
+最终用于排序的是：
+
+```math
+score_{tri}(u,m)=
+\frac{
+0.93\,\widetilde{user}(u,m)
++0.025\,\widetilde{fair}(m)
++0.03\,\widetilde{eta}(u,m)
++0.015\,\widetilde{supply}(m)}
+{0.93+0.025+0.03+0.015}
+```
+
 xQuAD 逐步选商家：
 
 ```math

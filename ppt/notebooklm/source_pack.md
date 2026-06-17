@@ -142,7 +142,7 @@ score = user_preference
 - `Seq-Tuned` 是离线命中最强策略，Recall@20 = `0.4675`，NDCG@20 = `0.3652`，HitRate@20 = `0.6267`。
 - `UserOnly` Recall@20 = `0.4287`，NDCG@20 = `0.3423`，说明用户画像特征已经明显优于热门基线。
 - `LightGBM-LTR` Recall@20 = `0.4424`，Coverage@20 = `0.4345`，Exposure Gini = `0.7942`，说明学习排序进入默认评估并改善覆盖/曝光集中度。
-- `Seq-xQuAD-Tripartite` Recall@20 = `0.4180`，NDCG@20 = `0.3440`，不是追求单一 Recall 最大，而是在准确性、商家曝光和履约之间折中。
+- `Seq-xQuAD-Tripartite` Recall@20 = `0.4180`，NDCG@20 = `0.3439`，Coverage@20 = `0.2823`，Exposure Gini = `0.8934`，说明归一化三方重排不是追求单一 Recall 最大，而是在准确性、商家公平和履约之间折中。
 - `BPR-MF` 和 `Popular` 用于证明传统基线和朴素热度基线的差距。
 
 因为三方策略还要考虑商家公平和履约，不能只用 Recall 判断优劣。
@@ -157,15 +157,15 @@ score = user_preference
 - `UserOnly + MinETA`：Avg ETA = `53.40`，Timeout Rate = `0.7113`，Utility = `0.4240`。
 - `Seq-Tuned + MinETA`：Avg ETA = `56.04`，Timeout Rate = `0.7097`，Utility = `0.4147`。
 - `LightGBM-LTR + MinETA`：Avg ETA = `54.81`，Timeout Rate = `0.7419`，Utility = `0.3922`。
-- `Seq-xQuAD-Tripartite + Greedy`：Avg ETA = `46.87`，Timeout Rate = `0.5200`，Utility = `0.4767`。
-- `Seq-xQuAD-Tripartite`：Avg ETA = `48.98`，Timeout Rate = `0.5543`，Utility = `0.4662`。
+- `Seq-xQuAD-Tripartite + Greedy`：Avg ETA = `46.82`，Timeout Rate = `0.5333`，Utility = `0.4726`。
+- `Seq-xQuAD-Tripartite`：Avg ETA = `48.40`，Timeout Rate = `0.5435`，Utility = `0.4725`。
 
 结果分析：
 
 - 只看热门推荐和最近骑手会造成较高 ETA 和超时率。
 - `UserOnly + MinETA` 显著降低 ETA，说明订单推荐给骑手时需要考虑 ETA。
 - `Seq-xQuAD-Tripartite + Greedy` 平均 ETA 最低、超时率最低、平台综合效用最高。
-- 批量匹配版 `Seq-xQuAD-Tripartite` 完成订单更多，但 ETA 和效用相对逐单贪心有取舍。
+- 批量匹配版 `Seq-xQuAD-Tripartite` 完成订单更多，但 ETA、超时率和效用相对逐单贪心有取舍。
 - 因此项目结论不是“单一模型在所有指标上最大”，而是“多方重排把准确率、履约效率、订单吞吐和平台效用放进同一套权衡”。
 
 ## 10. 平台效用定义

@@ -11,6 +11,7 @@
 - [x] 当前默认主线已收敛为 6 个离线策略：Popular、BPR-MF、UserOnly、Seq-Tuned、LightGBM-LTR、Seq-xQuAD-Tripartite。
 - [x] 当前默认仿真已收敛为 6 条链路：Popular + Nearest、UserOnly + MinETA、Seq-Tuned + MinETA、LightGBM-LTR + MinETA、Seq-xQuAD-Tripartite + Greedy、Seq-xQuAD-Tripartite。
 - [x] 轻量 KG 路径解释已落地：支持 user-ordered-poi、user-prefers-category、poi-has-category、poi-located-in-area、price-range 等证据路径。
+- [x] 三方重排分量已做候选内 min-max 归一化，Pareto 图和结果表已按新口径刷新。
 - [x] 保留 `scripts/search_seq_weights.py` 和消融文档作为过程记录，但 PPT 与 demo 不再展开全部历史候选。
 - [x] `simulate` CLI 增加策略级进度日志和耗时统计，长任务不再无反馈。
 - [ ] PPT 最终图片页和 `.pptx` 等待 `codex-ppt` 审批门禁。

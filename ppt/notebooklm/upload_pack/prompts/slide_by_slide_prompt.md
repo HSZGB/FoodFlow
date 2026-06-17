@@ -139,7 +139,7 @@ list_score = relevance + category_coverage + long_tail_gain
 
 - Seq-Tuned Recall@20 = 0.4675，NDCG@20 = 0.3652，HitRate@20 = 0.6267
 - UserOnly Recall@20 = 0.4287，NDCG@20 = 0.3423
-- Seq-xQuAD-Tripartite Recall@20 = 0.4180，NDCG@20 = 0.3440
+- Seq-xQuAD-Tripartite Recall@20 = 0.4180，Coverage@20 = 0.2823，Exposure Gini = 0.8934
 - BPR-MF Recall@20 = 0.1620，Popular Recall@20 = 0.0470
 - Seq-xQuAD-Tripartite 不是追求单一 Recall 最大，而是在准确性、公平性和履约之间折中
 
@@ -197,8 +197,8 @@ list_score = relevance + category_coverage + long_tail_gain
 - UserOnly + MinETA：Avg ETA = 53.40，Timeout Rate = 0.7113，Utility = 0.4240
 - Seq-Tuned + MinETA：Avg ETA = 56.04，Timeout Rate = 0.7097，Utility = 0.4147
 - LightGBM-LTR + MinETA：Avg ETA = 54.81，Timeout Rate = 0.7419，Utility = 0.3922
-- Seq-xQuAD-Tripartite + Greedy：Avg ETA = 46.87，Timeout Rate = 0.5200，Utility = 0.4767
-- Seq-xQuAD-Tripartite：Avg ETA = 48.98，Timeout Rate = 0.5543，Utility = 0.4662
+- Seq-xQuAD-Tripartite + Greedy：Avg ETA = 46.82，Timeout Rate = 0.5333，Utility = 0.4726
+- Seq-xQuAD-Tripartite：Avg ETA = 48.40，Timeout Rate = 0.5435，Utility = 0.4725
 - Pareto 视角：Seq-Tuned 是离线准确率前沿，三方履约策略是系统效用前沿
 
 视觉布局：
@@ -206,7 +206,7 @@ list_score = relevance + category_coverage + long_tail_gain
 - 上方放两个主图：平均 ETA、平台效用。
 - 右侧或下方补 `pareto_recall_utility.png`，展示准确性与平台效用前沿。
 - 下方放小表格，列出六条策略的 ETA、超时率、效用。
-- 用正式红突出 Seq-xQuAD-Tripartite + Greedy 的 `0.4767`，并标注批量匹配版完成订单更多但效用略低。
+- 用正式红突出 Seq-xQuAD-Tripartite + Greedy 的 `0.4726`，并标注批量匹配版完成订单更多但效用几乎持平。
 
 演讲备注：
 
@@ -252,7 +252,7 @@ list_score = relevance + category_coverage + long_tail_gain
 
 - 上方三个结论卡片。
 - 下方一个“局限与后续”横条。
-- 右侧放关键数字摘要：Seq-Tuned Recall@20 0.4675、LightGBM-LTR Coverage@20 0.4345、Seq-xQuAD-Tripartite + Greedy Avg ETA 46.87、Utility 0.4767。
+- 右侧放关键数字摘要：Seq-Tuned Recall@20 0.4675、LightGBM-LTR Coverage@20 0.4345、Seq-xQuAD-Tripartite + Greedy Avg ETA 46.82、Utility 0.4726。
 
 演讲备注：
 

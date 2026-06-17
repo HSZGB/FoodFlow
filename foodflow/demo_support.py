@@ -112,12 +112,15 @@ def build_recommendation_frame(data: PreparedData, model, user_id: str, recs: li
     repeat_counts = Counter(history["wm_poi_id"].astype(str))
     category_profile = user_category_profile(data, user_id, top_n=20)
     category_counts = dict(zip(category_profile["category"].astype(str), category_profile["orders"].astype(int)))
+    normalized_components = {}
+    if hasattr(model, "_component_scores_for_candidates"):
+        normalized_components = model._component_scores_for_candidates(user_id, list(recs), period)
 
     rows = []
     for rank, merchant_id in enumerate(recs, start=1):
         merchant = merchants.loc[merchant_id]
         if hasattr(model, "component_scores"):
-            components = model.component_scores(user_id, merchant_id, period)
+            components = normalized_components.get(merchant_id, model.component_scores(user_id, merchant_id, period))
             user_weight = float(getattr(model, "user_weight", 1.0))
             fairness_weight = float(getattr(model, "fairness_weight", 0.0))
             eta_weight = float(getattr(model, "eta_weight", 0.0))
@@ -187,10 +190,12 @@ def build_recommendation_frame(data: PreparedData, model, user_id: str, recs: li
                 "eta_minutes": float(components["eta_minutes"]),
                 "eta_score": float(components["eta_score"]),
                 "supply": float(components["supply_score"]),
-                "user_contrib": float(user_weight * components["user_score"]),
-                "fairness_contrib": float(fairness_weight * components["merchant_fairness"]),
-                "eta_contrib": float(eta_weight * components["eta_score"]),
-                "supply_contrib": float(supply_weight * components["supply_score"]),
+                "user_contrib": float(user_weight * components.get("user_score_norm", components["user_score"])),
+                "fairness_contrib": float(
+                    fairness_weight * components.get("merchant_fairness_norm", components["merchant_fairness"])
+                ),
+                "eta_contrib": float(eta_weight * components.get("eta_score_norm", components["eta_score"])),
+                "supply_contrib": float(supply_weight * components.get("supply_score_norm", components["supply_score"])),
                 "reason": " / ".join(reasons),
                 "lng": float(merchant.get("lng", 116.40)),
                 "lat": float(merchant.get("lat", 39.92)),

@@ -112,6 +112,8 @@ def build_report(
 
 轻量 KG 解释用于吸收知识图谱路线的可解释性亮点，但不引入高风险图神经网络训练。系统从训练订单、商家品类、商圈/区域和价格段构造 `user-ordered-poi`、`user-prefers-category`、`poi-has-category`、`poi-located-in-area`、`has-price-range` 等路径。`explain-case` 会输出类似 “user -> category <- poi” 的证据路径，并同时保留 ETA、曝光补偿等真实打分字段，避免空泛模板解释。
 
+三方重排的用户分、公平分、ETA 分和供给分在候选集合内做 min-max 归一化后再加权合成，避免不同数值尺度让权重失去解释性。离线表中 `LightGBM-LTR` 更突出覆盖改善和曝光集中度下降；`Seq-xQuAD-Tripartite` 的价值则主要体现在把商家公平、ETA、供给和列表级覆盖纳入排序，并需要结合后续履约仿真判断系统级收益。
+
 ## 4. 离线推荐结果
 
 {offline_table}

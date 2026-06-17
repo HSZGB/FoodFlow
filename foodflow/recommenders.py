@@ -41,6 +41,13 @@ SEQUENCE_FEATURE_NAMES = [
     "quality",
 ]
 
+TRIPARTITE_COMPONENT_NAMES = [
+    "user_score",
+    "merchant_fairness",
+    "eta_score",
+    "supply_score",
+]
+
 
 @dataclass
 class RecommendationResult:
@@ -371,6 +378,33 @@ class SequentialHybridRecommender(UserOnlyRecommender):
         return recs, {m: scores.get(m, float(self.popular.get(m, 0))) for m in recs}
 
 
+def _normalize_tripartite_components(
+    components_by_item: dict[str, dict[str, float]],
+    weights: dict[str, float],
+) -> dict[str, dict[str, float]]:
+    if not components_by_item:
+        return components_by_item
+    frame = pd.DataFrame.from_dict(components_by_item, orient="index")
+    for name in TRIPARTITE_COMPONENT_NAMES:
+        values = pd.to_numeric(frame.get(name, 0.0), errors="coerce").fillna(0.0)
+        lo = float(values.min())
+        hi = float(values.max())
+        if hi - lo <= 1e-12:
+            normalized = pd.Series(np.zeros(len(values)), index=values.index)
+        else:
+            normalized = (values - lo) / (hi - lo)
+        frame[f"{name}_norm"] = normalized.astype(float)
+    weight_sum = max(float(sum(weights.values())), 1e-12)
+    frame["raw_final_score"] = pd.to_numeric(frame.get("final_score", 0.0), errors="coerce").fillna(0.0)
+    frame["final_score"] = sum(
+        float(weight) * frame[f"{name}_norm"] for name, weight in weights.items()
+    ) / weight_sum
+    return {
+        str(index): {key: float(value) for key, value in row.dropna().items()}
+        for index, row in frame.iterrows()
+    }
+
+
 class WeightedSequentialRecommender(SequentialHybridRecommender):
     name = "Seq-Weighted"
 
@@ -622,10 +656,24 @@ class SeqTripartiteRecommender(SequentialHybridRecommender):
             "final_score": final,
         }
 
+    def _component_scores_for_candidates(
+        self,
+        user_id: str,
+        candidates: list[str],
+        period: str = "lunch",
+    ) -> dict[str, dict[str, float]]:
+        components = {merchant_id: self.component_scores(user_id, merchant_id, period) for merchant_id in candidates}
+        weights = {
+            "user_score": self.user_weight,
+            "merchant_fairness": self.fairness_weight,
+            "eta_score": self.eta_weight,
+            "supply_score": self.supply_weight,
+        }
+        return _normalize_tripartite_components(components, weights)
+
     def recommend_for_user(self, user_id: str, k: int, period: str = "lunch") -> tuple[list[str], dict[str, float]]:
-        scores = {}
-        for merchant_id in self._sequential_candidates(user_id):
-            scores[merchant_id] = self.component_scores(user_id, merchant_id, period)["final_score"]
+        components = self._component_scores_for_candidates(user_id, self._sequential_candidates(user_id), period)
+        scores = {merchant_id: values["final_score"] for merchant_id, values in components.items()}
         ranked = sorted(scores, key=scores.get, reverse=True)
         recs = self._remove_seen_and_backfill(user_id, ranked, k)
         return recs, {m: scores[m] for m in recs}
@@ -761,10 +809,8 @@ class SeqXQuadTripartiteRecommender(SeqTripartiteRecommender):
         return selected
 
     def recommend_for_user(self, user_id: str, k: int, period: str = "lunch") -> tuple[list[str], dict[str, float]]:
-        scores = {
-            merchant_id: self.component_scores(user_id, merchant_id, period)["final_score"]
-            for merchant_id in self._sequential_candidates(user_id)
-        }
+        components = self._component_scores_for_candidates(user_id, self._sequential_candidates(user_id), period)
+        scores = {merchant_id: values["final_score"] for merchant_id, values in components.items()}
         recs = self._rerank_xquad(scores, k)
         recs = self._remove_seen_and_backfill(user_id, recs, k)
         return recs, {m: scores.get(m, float(self.popular.get(m, 0))) for m in recs}
