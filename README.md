@@ -224,7 +224,7 @@ ppt/notebooklm/upload_pack/               # NotebookLM PPT 上传素材包
 重新生成 NotebookLM 上传包：
 
 ```bash
-python3 scripts/prepare_notebooklm_pack.py
+make notebooklm-pack
 ```
 
 ## 实验结果摘要
