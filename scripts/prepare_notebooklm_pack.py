@@ -21,6 +21,7 @@ SOURCE_FILES = [
     (ROOT / "docs" / "DATA_SOURCE.md", "DATA_SOURCE.md"),
     (ROOT / "docs" / "DATA_AUDIT.md", "DATA_AUDIT.md"),
     (ROOT / "docs" / "DELIVERY_AUDIT.md", "DELIVERY_AUDIT.md"),
+    (ROOT / "docs" / "REPORT_ROUTE_COVERAGE.md", "REPORT_ROUTE_COVERAGE.md"),
     (ROOT / "ppt" / "FoodFlow" / "outline.md", "ppt_outline.md"),
     (ROOT / "作业要求.md", "作业要求.md"),
     (ROOT / "硬性要求.md", "硬性要求.md"),

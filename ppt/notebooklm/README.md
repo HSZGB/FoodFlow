@@ -7,7 +7,7 @@
 - `source_pack.md`：压缩后的项目事实材料，适合直接上传给 NotebookLM。
 - `notebooklm_master_prompt.md`：一键生成整套 11 页 PPT 的总提示词。
 - `slide_by_slide_prompt.md`：逐页生成或修订时使用的详细提示词。
-- `assets_manifest.md`：图表、CSV、报告、交付验收审计、PPT 大纲审批摘要和课程要求文件的上传清单。
+- `assets_manifest.md`：图表、CSV、报告、交付验收审计、调研路线覆盖审计、PPT 大纲审批摘要和课程要求文件的上传清单。
 - `quality_checklist.md`：生成后逐页检查清单，防止指标、三方逻辑和数据来源被漏掉。
 
 ## 一键准备上传包

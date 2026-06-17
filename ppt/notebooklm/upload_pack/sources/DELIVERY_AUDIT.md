@@ -11,6 +11,8 @@
 | 说明数据集来源 | 已满足 | `docs/DATA_SOURCE.md`；`docs/DATA_AUDIT.md`；`outputs/results/data_audit.json`；报告第 2 节 |
 | 需要做出 PPT | 部分满足，等待审批门禁 | `ppt/FoodFlow/outline.md`、`ppt/FoodFlow/outline_approval.md`、`ppt/notebooklm/upload_pack/` 已准备；最终图片页和 `.pptx` 需先批准大纲、风格、图片后端和样张 |
 
+路线覆盖另见 `docs/REPORT_ROUTE_COVERAGE.md`，该文件逐项对照最新版调研报告中的 P0-P6 优化路线，避免把历史消融或展望能力误写成正式主线。
+
 ## 关键实验证据
 
 - 数据审计显示必需 TRD 原始文件齐全，训练集处理模式为 `full`，原始训练订单和处理后训练订单均为 `1,068,495` 条。
