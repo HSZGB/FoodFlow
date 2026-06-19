@@ -39,37 +39,61 @@ def _price_interval_to_midpoint(value: object) -> float:
     return pd.to_numeric(text, errors="coerce")
 
 
-def _build_session_interactions(raw_dir: Path, test: pd.DataFrame) -> pd.DataFrame:
+def _merge_order_context(frame: pd.DataFrame, orders: pd.DataFrame) -> pd.DataFrame:
+    if "wm_order_id" not in frame.columns or "wm_order_id" not in orders.columns:
+        return frame
+    join_keys = ["wm_order_id"]
+    if "dt" in frame.columns and "dt" in orders.columns:
+        frame = frame.copy()
+        orders = orders.copy()
+        frame["dt"] = frame["dt"].astype(str)
+        orders["dt"] = orders["dt"].astype(str)
+        join_keys.append("dt")
+    context_columns = join_keys + [
+        column
+        for column in ["user_id", "wm_poi_id", "split", "order_timestamp"]
+        if column in orders.columns
+    ]
+    context = orders[context_columns].drop_duplicates(join_keys)
+    existing_context = [column for column in context_columns if column not in join_keys and column in frame.columns]
+    return frame.drop(columns=existing_context).merge(context, on=join_keys, how="left")
+
+
+def _build_session_interactions(raw_dir: Path, train: pd.DataFrame, test: pd.DataFrame) -> pd.DataFrame:
     path = raw_dir / "orders_poi_session.txt"
-    columns = ["wm_order_id", "user_id", "wm_poi_id", "rank"]
+    columns = ["wm_order_id", "user_id", "wm_poi_id", "rank", "split", "dt", "order_timestamp"]
     if not path.exists():
         return pd.DataFrame(columns=columns)
 
     sessions = _safe_read(raw_dir, "orders_poi_session.txt")
-    if "user_id" not in sessions.columns and "wm_order_id" in sessions.columns and "user_id" in test.columns:
-        sessions = sessions.merge(test[["wm_order_id", "user_id"]].drop_duplicates("wm_order_id"), on="wm_order_id", how="left")
+    orders = pd.concat([train, test], ignore_index=True, sort=False)
+    sessions = _merge_order_context(sessions, orders)
 
-    rows: list[dict[str, object]] = []
+    if "split" in sessions.columns:
+        sessions = sessions[sessions["split"].astype(str).eq("train")].copy()
+
     if "clicks" in sessions.columns:
-        for _, row in sessions.iterrows():
-            clicked = [item.strip() for item in str(row.get("clicks", "")).split(",") if item.strip()]
-            for rank, merchant_id in enumerate(clicked, start=1):
-                rows.append(
-                    {
-                        "wm_order_id": row.get("wm_order_id", ""),
-                        "user_id": row.get("user_id", ""),
-                        "wm_poi_id": merchant_id,
-                        "rank": rank,
-                    }
-                )
+        sessions = sessions.rename(columns={"wm_poi_id": "ordered_wm_poi_id"})
+        sessions["wm_poi_id"] = sessions["clicks"].astype(str).str.split(r"[#,]", regex=True)
+        out = sessions.explode("wm_poi_id", ignore_index=True)
+        out["wm_poi_id"] = out["wm_poi_id"].astype(str).str.strip()
+        out = out[
+            out["wm_poi_id"].ne("")
+            & ~out["wm_poi_id"].str.lower().isin({"null", "nan"})
+        ].copy()
+        rank_keys = [column for column in ["wm_order_id", "dt", "user_id"] if column in out.columns]
+        out["rank"] = out.groupby(rank_keys, sort=False).cumcount() + 1
+        out = out.reindex(columns=columns)
     elif "wm_poi_id" in sessions.columns:
-        keep = [col for col in ["wm_order_id", "user_id", "wm_poi_id"] if col in sessions.columns]
+        keep = [col for col in columns if col != "rank" and col in sessions.columns]
         long_sessions = sessions[keep].dropna(subset=["user_id", "wm_poi_id"]).copy()
         long_sessions["rank"] = long_sessions.groupby(["wm_order_id", "user_id"]).cumcount() + 1
-        rows = long_sessions[columns].to_dict("records")
+        out = long_sessions.reindex(columns=columns)
+    else:
+        out = pd.DataFrame(columns=columns)
 
-    out = pd.DataFrame(rows, columns=columns)
-    return out.dropna(subset=["user_id", "wm_poi_id"]).copy()
+    out = out.dropna(subset=["user_id", "wm_poi_id"]).copy()
+    return out[out["user_id"].astype(str).ne("") & out["wm_poi_id"].astype(str).ne("")]
 
 
 def _build_order_spus(raw_dir: Path, name: str, orders: pd.DataFrame) -> pd.DataFrame:
@@ -81,14 +105,9 @@ def _build_order_spus(raw_dir: Path, name: str, orders: pd.DataFrame) -> pd.Data
     spu_col = "wm_food_spu_id" if "wm_food_spu_id" in order_spus.columns else "label_spu_id"
     if spu_col not in order_spus.columns:
         return pd.DataFrame(columns=columns)
-    keep = [col for col in ["wm_order_id", spu_col] if col in order_spus.columns]
+    keep = [col for col in ["wm_order_id", "dt", spu_col] if col in order_spus.columns]
     out = order_spus[keep].rename(columns={spu_col: "wm_food_spu_id"}).dropna(subset=["wm_food_spu_id"])
-    if "wm_order_id" in out.columns and "wm_order_id" in orders.columns:
-        out = out.merge(
-            orders[["wm_order_id", "user_id", "wm_poi_id"]].drop_duplicates("wm_order_id"),
-            on="wm_order_id",
-            how="left",
-        )
+    out = _merge_order_context(out, orders)
     return out[columns].dropna(subset=["user_id", "wm_poi_id", "wm_food_spu_id"]).copy()
 
 
@@ -206,9 +225,9 @@ def preprocess(raw_dir: Path, processed_dir: Path, sample_orders: int | None = 5
 
     train["split"] = "train"
     test["split"] = "test"
-    session_interactions = _build_session_interactions(raw_dir, test)
+    session_interactions = _build_session_interactions(raw_dir, train, test)
     order_spus_train = _build_order_spus(raw_dir, "orders_spu_train.txt", train)
-    order_spus_test = _build_order_spus(raw_dir, "orders_test_spu.txt", test)
+    order_spus_test = _build_order_spus(raw_dir, "orders_spu_test_label.txt", test)
 
     write_csv(users, processed_dir / "users.csv")
     write_csv(pois, processed_dir / "merchants.csv")

@@ -24,11 +24,11 @@
 - 使用用户、商家、菜品、训练订单、测试订单和测试标签。
 - 不下载约 1.8GB 的 `graph.bin`，因为本项目核心实现不依赖 DGL 图文件。
 - 骑手位置、在线状态、负载、可靠性和收入是固定 seed 合成 proxy，只用于仿真，不能说成真实骑手数据。
-- 答辩主线只展开 5 个代表推荐策略：Popular、BPR-MF、UserOnly、Seq-Tuned、Seq-xQuAD-Tripartite。
+- 答辩主线只展开 6 个代表推荐策略：Popular、BPR-MF、UserOnly、Seq-Tuned、LightGBM-LTR、Seq-xQuAD-Tripartite。
 - 项目代码中保留历史消融类，PPT 不要逐一展开，避免主线臃肿。
 - Seq-Tuned = 复购、商家转移和品类偏好权重增强的短序列推荐。
 - Seq-xQuAD-Tripartite = 序列偏好 + 列表级覆盖 + 商家公平 + ETA + 供给分。
-- 答辩主线只展开 4 条仿真链路：Popular + Nearest、UserOnly + MinETA、Seq-Tuned + MinETA、Seq-xQuAD-Tripartite。
+- 答辩主线只展开 6 条仿真链路：Popular + Nearest、UserOnly + MinETA、Seq-Tuned + MinETA、LightGBM-LTR + MinETA、Seq-xQuAD-Tripartite + Greedy、Seq-xQuAD-Tripartite。
 - 三方推荐必须体现为：
   - 用户侧：给用户推荐商家/菜品。
   - 商家侧：通过公平重排让商家获得更合理曝光。
@@ -44,18 +44,23 @@
 
 - `UserOnly`：Recall@20 = `0.4287`，NDCG@20 = `0.3423`，HitRate@20 = `0.5733`。
 - `Seq-Tuned`：Recall@20 = `0.4675`，NDCG@20 = `0.3652`，HitRate@20 = `0.6267`。
-- `Seq-xQuAD-Tripartite`：Recall@20 = `0.4180`，NDCG@20 = `0.3440`，HitRate@20 = `0.5733`。
+- `LightGBM-LTR`：Recall@20 = `0.4424`，NDCG@20 = `0.3243`，HitRate@20 = `0.5900`，Coverage@20 = `0.4345`，Exposure Gini = `0.7942`。
+- `Seq-xQuAD-Tripartite`：Recall@20 = `0.4180`，NDCG@20 = `0.3439`，HitRate@20 = `0.5733`，Coverage@20 = `0.2823`，Exposure Gini = `0.8934`。
+- `Session-SPU-Tripartite`：Recall@20 = `0.4147`，NDCG@20 = `0.3431`，HitRate@20 = `0.5700`。
 - `BPR-MF`：Recall@20 = `0.1620`，NDCG@20 = `0.1068`，HitRate@20 = `0.2433`。
 - `Popular`：Recall@20 = `0.0470`，NDCG@20 = `0.0210`，HitRate@20 = `0.0900`。
 
 动态履约仿真：
 
-- `Popular + Nearest`：Avg ETA = `84.71`，Timeout Rate = `0.7903`，Platform Utility = `0.3365`。
-- `UserOnly + MinETA`：Avg ETA = `55.33`，Timeout Rate = `0.6701`，Platform Utility = `0.4831`。
-- `Seq-Tuned + MinETA`：Avg ETA = `54.74`，Timeout Rate = `0.7320`，Platform Utility = `0.4664`。
-- `Seq-xQuAD-Tripartite`：Avg ETA = `50.33`，Timeout Rate = `0.5319`，Platform Utility = `0.5264`。
+- `Popular + Nearest`：Avg ETA = `89.68`，Timeout Rate = `0.8025`，Platform Utility = `0.3218`。
+- `UserOnly + MinETA`：Avg ETA = `52.14`，Timeout Rate = `0.6897`，Platform Utility = `0.4060`。
+- `Seq-Tuned + MinETA`：Avg ETA = `50.51`，Timeout Rate = `0.6163`，Platform Utility = `0.4205`。
+- `LightGBM-LTR + MinETA`：Avg ETA = `53.96`，Timeout Rate = `0.6854`，Platform Utility = `0.3903`。
+- `Seq-xQuAD-Tripartite + Greedy`：Avg ETA = `49.33`，Timeout Rate = `0.5604`，Platform Utility = `0.4568`。
+- `Seq-xQuAD-Tripartite + Batch`：Avg ETA = `48.32`，Timeout Rate = `0.5275`，Platform Utility = `0.4581`。
+- `Session-SPU-Tripartite + Greedy`：Avg ETA = `46.47`，Timeout Rate = `0.4941`，Platform Utility = `0.4694`。
 
-结论必须表达为：Seq-Tuned 是离线推荐指标最强策略；Seq-xQuAD-Tripartite 牺牲一部分离线准确性，但换来更好的履约效率、更低超时风险和最高平台综合效用。
+结论必须表达为：Seq-Tuned 是离线推荐指标最强策略；LightGBM-LTR 展示学习排序和覆盖改善；Seq-xQuAD-Tripartite 牺牲一部分离线准确性，把商家公平、履约效率、超时风险、订单吞吐和平台综合效用纳入同一套系统级权衡。
 
 ## 视觉风格
 
@@ -86,7 +91,7 @@
    展示数据处理 -> 推荐召回排序 -> 三方重排 -> 骑手匹配 -> 动态仿真 -> 指标评估。
 
 5. **推荐算法与三方重排**  
-   对比 Popular、BPR-MF、UserOnly、Seq-Tuned、Seq-xQuAD-Tripartite；展示 Seq-xQuAD-Tripartite 的三方重排拆解。
+   对比七个默认模型；展示 Seq-xQuAD-Tripartite 的三方重排拆解和 Session-SPU-Tripartite 的训练期信号边界。
 
 6. **离线推荐指标结果**  
    使用 `offline_recall20.png`、`tradeoff_ndcg_gini.png` 和 `offline_category_jsd20.png`，也可引用 `offline_metrics.csv` 生成小表。说明标准推荐指标、商家曝光指标与品类校准指标。
@@ -95,7 +100,7 @@
    展示午餐高峰多时间步、推荐列表产生订单、订单推荐/匹配给骑手、状态更新闭环。
 
 8. **三方策略的系统级指标**  
-   使用 `simulation_avg_eta.png`、`simulation_platform_utility.png` 和 `pareto_recall_utility.png`，也可补充超时率和骑手负载。强调 Seq-xQuAD-Tripartite 的系统级优势，同时说明 Seq-Tuned 是离线准确率前沿。
+   使用 `simulation_avg_eta.png`、`simulation_platform_utility.png` 和 `pareto_recall_utility.png`，也可补充超时率和骑手负载。强调三方策略相对用户侧链路的系统级优势，同时说明 Seq-Tuned 是离线准确率前沿。
 
 9. **案例解释：一次推荐如何兼顾三方**  
    用一个案例串起用户画像、Top-K 商家推荐、推荐解释、下单、骑手匹配、ETA/超时风险。

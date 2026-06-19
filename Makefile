@@ -12,7 +12,7 @@ SMOKE_REPORT ?= outputs/smoke/report.md
 SEQ_SEARCH_RESULTS ?= outputs/experiments/seq_weight_search_smoke.csv
 RIDER_TASKS ?=
 
-.PHONY: setup conda-setup conda-test conda-smoke seq-tune-smoke download mock preprocess preprocess-full eval simulate simulate-calibrated audit figures report demo demo-full demo-check test smoke clean
+.PHONY: setup conda-setup conda-test conda-smoke seq-tune-smoke download mock preprocess preprocess-full eval simulate simulate-calibrated audit figures report notebooklm-pack demo demo-full demo-check test smoke clean
 
 setup:
 	python3 -m venv .venv
@@ -71,6 +71,9 @@ figures:
 
 report:
 	$(PYTHON) -m foodflow.cli report --results-dir outputs/results --figures-dir outputs/figures --output report/实验报告.md --data-audit outputs/results/data_audit.json
+
+notebooklm-pack:
+	$(PYTHON) scripts/prepare_notebooklm_pack.py
 
 demo-check:
 	@printf "\nChecking common Streamlit ports...\n"

@@ -8,8 +8,15 @@
 - [x] 真实 TRD 必需 txt 文件已下载并通过 md5 校验；正式指标和报告已由完整 TRD `orders_train.txt` 生成。
 - [x] `make smoke` 已改为隔离目录，不会覆盖真实 TRD raw/processed/outputs。
 - [x] 新增 conda 环境、数据审计、三方可视化看板和历史消融记录。
-- [x] 当前默认主线已收敛为 6 个离线策略：Popular、BPR-MF、UserOnly、Seq-Tuned、Seq-xQuAD-Tripartite、Session-SPU-Tripartite。
-- [x] 当前默认仿真已收敛为 5 条链路：Popular + Nearest、UserOnly + MinETA、Seq-Tuned + MinETA、Seq-xQuAD-Tripartite、Session-SPU-Tripartite。
+- [x] 当前默认主线包含 7 个离线策略：Popular、BPR-MF、UserOnly、Seq-Tuned、LightGBM/Logistic-LTR、Seq-xQuAD-Tripartite、Session-SPU-Tripartite。
+- [x] 当前默认仿真包含 7 条链路：3 条基础链路、学习排序、三方逐单/批量匹配和 Session-SPU 增强链路。
+- [x] 轻量 KG 路径解释已落地：支持 user-ordered-poi、user-prefers-category、poi-has-category、poi-located-in-area、price-range 等证据路径。
+- [x] 离线指标已补 RepeatRecall/ExploreRecall，能拆分复购命中和探索新商家命中。
+- [x] 三方重排分量已做候选内 min-max 归一化，Pareto 图和结果表已按新口径刷新。
+- [x] 交付验收审计已补充，硬性要求映射到报告、数据审计、结果表、图表和 PPT 审批包。
+- [x] 最新版调研报告 P0-P6 路线覆盖审计已补充，明确 P5/P6 的部分完成与展望边界。
+- [x] 会话点击解析兼容真实 TRD `#` 分隔符，Session-SPU 只使用训练期信号，避免测试泄漏。
+- [x] 骑手参数支持外部配送任务校准，批量匹配按剩余容量槽位求最大权分配。
 - [x] 保留 `scripts/search_seq_weights.py` 和消融文档作为过程记录，但 PPT 与 demo 不再展开全部历史候选。
 - [x] `simulate` CLI 增加策略级进度日志和耗时统计，长任务不再无反馈。
 - [ ] PPT 最终图片页和 `.pptx` 等待 `codex-ppt` 审批门禁。
@@ -57,8 +64,9 @@
 
 ### 阶段 3：推荐与指标
 
-- [x] 默认评估 Popular、BPR-MF、UserOnly、Seq-Tuned、Seq-xQuAD-Tripartite
+- [x] 默认评估 Popular、BPR-MF、UserOnly、Seq-Tuned、LightGBM/Logistic-LTR、Seq-xQuAD-Tripartite、Session-SPU-Tripartite
 - [x] Recall@K、NDCG@K、MRR@K、HitRate@K
+- [x] RepeatRecall@K、ExploreRecall@K
 - [x] Coverage、Long-tail Exposure、Exposure Gini
 - [x] 历史消融类保留在代码中，默认输出不再铺开。
 - 验收命令：`make eval`
@@ -67,8 +75,10 @@
 
 - [x] 合成骑手状态
 - [x] ETA、最近骑手、最小 ETA、负载感知匹配
+- [x] softmax/MNL 用户选择模型
+- [x] 批量最大权二分图骑手匹配，并保留逐单贪心对照
 - [x] 午餐高峰多时间步仿真
-- [x] Avg ETA、Timeout Rate、Rider Load Std、Platform Utility
+- [x] Avg/P95 ETA、Timeout Rate、Rider Load Std、Active Rider Rate、Rider Income Gini、Platform Utility
 - 验收命令：`make simulate`
 
 ### 阶段 5：图表、报告、Demo
@@ -77,6 +87,7 @@
 - [x] trade-off 图、三方 scorecard 与 Streamlit 三页看板
 - [x] 实验报告 Markdown
 - [x] Streamlit demo
+- [x] 推荐解释接入轻量 KG 路径证据
 - [x] 方法与指标面板、空间供需调度图、NotebookLM 上传包已同步最新指标。
 - 验收命令：`make figures report`
 
@@ -96,8 +107,8 @@
 - [x] `make smoke` 通过。
 - [x] `make preprocess-full eval simulate audit figures report` 已在完整 TRD 必需文件上通过。
 - [x] `make conda-setup` 和 `make conda-test` 已通过。
-- [x] 至少 5 种推荐策略有离线指标。
-- [x] 至少 4 种三方策略有仿真指标。
+- [x] 至少 6 种推荐策略有离线指标。
+- [x] 至少 6 种三方策略有仿真指标。
 - [ ] 报告包含数据来源、指标表、对比图和结果分析；PPT 最终产物等待审批后生成。
 
 ## 设计决策
@@ -105,4 +116,4 @@
 - 主数据源：Takeout Recommendation Dataset (TRD), Zenodo DOI `10.5281/zenodo.8025855`。
 - 不下载 `graph.bin`：体积约 1.8GB，本项目不依赖 DGL 图。
 - 骑手数据：合成仿真，不伪装成真实数据；报告中说明生成规则。
-- 模型边界：CPU 可运行，BPR-MF 为轻量 NumPy 实现；LightGCN/KGAT 作为调研背景，不作为核心代码验收。
+- 模型边界：CPU 可运行，BPR-MF 为轻量 NumPy 实现；LightGBM-LTR 已进入默认评估；LightGCN/KGAT 作为调研背景，不作为核心代码验收。

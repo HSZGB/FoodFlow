@@ -6,11 +6,12 @@
 
 ## 项目亮点
 
-- 用户侧推荐：默认实验聚焦 Popular、BPR-MF、UserOnly、Seq-Tuned、Seq-xQuAD-Tripartite，并提供 Session-SPU-Tripartite 作为点击会话与菜品信号增强策略。
+- 用户侧推荐：默认实验包含 Popular、BPR-MF、UserOnly、Seq-Tuned、LightGBM/Logistic-LTR、Seq-xQuAD-Tripartite 和 Session-SPU-Tripartite。
 - 商家侧公平：在重排中引入商家曝光公平、长尾曝光与 Exposure Gini 等指标。
-- 骑手侧履约：模拟订单-骑手匹配，比较最近骑手、最小 ETA、负载感知与外部任务校准后的骑手参数。
+- 骑手侧履约：比较最近骑手、最小 ETA、负载感知逐单派单和容量槽位批量最大权匹配，并支持外部任务数据校准参数。
 - 动态仿真：模拟午餐高峰多时间步请求，持续更新骑手状态和订单履约结果。
-- 多指标评估：同时输出 Recall、NDCG、MRR、HitRate、Coverage、Exposure Gini、Avg ETA、Timeout Rate、Rider Load Std、Platform Utility。
+- 轻量 KG 解释：从历史下单、品类、区域和价格段构造路径证据，解释推荐原因。
+- 多指标评估：同时输出 Recall、NDCG、MRR、HitRate、Repeat/Explore Recall、Coverage、Exposure Gini、Avg ETA、Timeout Rate、Rider Load Std、Platform Utility。
 - 工程闭环：提供 Makefile、CLI、测试、图表、实验报告、Streamlit demo 和 NotebookLM PPT 素材包。
 
 ## 数据来源
@@ -40,7 +41,7 @@ TRD 数据下载与清洗
   -> 指标、图表、报告与 demo
 ```
 
-`Seq-Tuned` 借鉴 FPMC/下一篮子推荐和会话推荐思想，把外卖复购、最近订单时间衰减和商家转移概率加入排序，是当前离线准确率最强策略。`Seq-xQuAD-Tripartite` 则把列表级覆盖、商家公平、ETA 和供给约束接到同一个重排器中，是当前已提交全量 TRD 仿真结果里的平台效用最强策略。`Session-SPU-Tripartite` 进一步使用 TRD optional 的下单前点击商家序列和菜品 SPU 画像，扩展候选集和排序解释；重新运行 `make eval simulate` 后会进入新的默认评估与仿真结果。
+`Seq-Tuned` 用复购、时间衰减和商家转移概率构造可解释序列排序；`LightGBM-LTR` 使用同一候选和特征训练学习排序模型，不可用时回退到 `Logistic-LTR`。`Seq-xQuAD-Tripartite` 把列表覆盖、商家公平、ETA 和供给约束接入重排，并分别进入逐单和批量派单。`Session-SPU-Tripartite` 仅使用训练期点击会话与菜品画像扩展候选和解释，避免测试期信息泄漏。
 
 三方重排分数采用可解释加权：
 
@@ -63,6 +64,7 @@ foodflow/
   data.py            # 处理后数据加载
   recommenders.py    # 推荐基线、序列模型与三方重排
   rerank.py          # ETA、公平分、供给分等重排特征
+  kg.py              # 轻量知识图谱三元组与路径解释
   rider_sim.py       # 骑手生成、ETA 估计、订单匹配
   simulator.py       # 动态履约仿真
   metrics.py         # 推荐与公平指标
@@ -209,7 +211,7 @@ make STREAMLIT_FLAGS="--server.port 8502" demo
 make demo-check
 ```
 
-demo 默认展示用户 `8`，也提供复购活跃型、高消费型、价格敏感型等快速案例；侧边栏可手动输入其它用户 ID，并在 `UserOnly`、`Seq-Tuned`、`Seq-xQuAD-Tripartite` 三个主线策略之间切换。当前界面包含推荐商家、用户品类偏好、主线策略对比、分数组成、骑手候选榜、当前订单路径、午餐高峰回放、方法与指标、实验结果。
+demo 默认展示用户 `8`，也提供复购活跃型、高消费型、价格敏感型等快速案例；侧边栏可手动输入其它用户 ID，并在 `UserOnly`、`Seq-Tuned`、`LightGBM-LTR`、`Seq-xQuAD-Tripartite` 等主线策略之间切换。当前界面包含推荐商家、用户品类偏好、主线策略对比、分数组成、骑手候选榜、当前订单路径、午餐高峰回放、方法与指标、实验结果。
 当前 demo 首屏会先给出用户、策略、Top1 商家、平均 ETA 和在线骑手数。空间图聚焦当前订单附近，展示附近用户样本、附近商家样本、近场骑手、Top 派单候选、两个 2.5km 参考圈、取餐段和配送段；这两个圆只是距离参考，不是等高线、热力图或真实配送边界。高峰回放默认 16 个时间步，也可以在页面里调长或调短。
 
 ## 主要输出
@@ -228,25 +230,28 @@ ppt/notebooklm/upload_pack/               # NotebookLM PPT 上传素材包
 重新生成 NotebookLM 上传包：
 
 ```bash
-python3 scripts/prepare_notebooklm_pack.py
+make notebooklm-pack
 ```
 
 ## 实验结果摘要
 
 当前提交的结果已经使用完整 TRD `orders_train.txt`，数据审计显示原始训练订单 `1,068,495` 条，处理后训练订单 `1,068,495` 条，训练订单使用比例 `1.0000`。
 
-离线推荐中，`Seq-Tuned` 的 Recall@20 最高，为 `0.4675`，NDCG@20 为 `0.3652`，HitRate@20 为 `0.6267`。`Seq-xQuAD-Tripartite` 的离线准确性低于纯用户侧序列模型，但能改善后续履约表现。
+离线推荐中，`Seq-Tuned` 的 Recall@20 最高，为 `0.4675`，NDCG@20 为 `0.3652`，HitRate@20 为 `0.6267`，并取得最高 ExploreRecall@20 `0.1246`。`LightGBM-LTR` 的 Recall@20 为 `0.4424`，Coverage@20 为 `0.4345`，Exposure Gini 降到 `0.7942`，ExploreRecall@20 为 `0.0974`，说明默认评估中已经包含真正训练出来的学习排序。归一化后的 `Seq-xQuAD-Tripartite` 的 Recall@20 为 `0.4180`，NDCG@20 为 `0.3439`，把商家公平、ETA、供给分和列表级覆盖纳入同一套重排。
 
-动态履约仿真中，`Seq-xQuAD-Tripartite` 取得最低平均 ETA、最低超时率和最高平台综合效用：
+动态履约仿真中，`Session-SPU-Tripartite + Greedy` 取得最低平均 ETA、最低超时率和最高平台综合效用；在同一批 91 个订单上，批量三方匹配相较逐单版本进一步降低 ETA 和超时率：
 
 | 策略 | Avg ETA | Timeout Rate | Platform Utility |
 |---|---:|---:|---:|
-| Popular + Nearest | 84.71 | 0.7903 | 0.3365 |
-| UserOnly + MinETA | 55.33 | 0.6701 | 0.4831 |
-| Seq-Tuned + MinETA | 54.74 | 0.7320 | 0.4664 |
-| Seq-xQuAD-Tripartite | 50.33 | 0.5319 | 0.5264 |
+| Popular + Nearest | 89.68 | 0.8025 | 0.3218 |
+| UserOnly + MinETA | 52.14 | 0.6897 | 0.4060 |
+| Seq-Tuned + MinETA | 50.51 | 0.6163 | 0.4205 |
+| LightGBM-LTR + MinETA | 53.96 | 0.6854 | 0.3903 |
+| Seq-xQuAD-Tripartite + Greedy | 49.33 | 0.5604 | 0.4568 |
+| Seq-xQuAD-Tripartite + Batch | 48.32 | 0.5275 | 0.4581 |
+| Session-SPU-Tripartite + Greedy | 46.47 | 0.4941 | 0.4694 |
 
-结论不是“单一模型在所有指标上最优”，而是：`Seq-Tuned` 取得最强离线推荐准确性；`Seq-xQuAD-Tripartite` 牺牲一部分离线准确性，换取更低超时率和更高平台综合效用，更符合外卖平台的多主体优化目标。
+结论不是“单一模型在所有指标上最优”，而是：`Seq-Tuned` 取得最强离线推荐准确性；`LightGBM-LTR` 展示学习排序和覆盖改善；三方匹配改善履约；`Session-SPU-Tripartite` 进一步利用训练期会话与菜品信号取得当前最高平台效用。
 
 ## 图表示例
 
@@ -260,7 +265,7 @@ python3 scripts/prepare_notebooklm_pack.py
 
 - 骑手数据为合成 proxy，不能替代真实派单数据。
 - BPR-MF 是轻量实现，未追求大规模深度模型最优性能。
-- 项目没有实现 LightGCN、KGAT 或完整知识图谱模型，这些作为调研背景和后续增强方向。
+- 项目实现的是轻量 KG 路径解释，没有实现 LightGCN、KGAT 或完整知识图谱训练模型，这些作为调研背景和后续增强方向。
 - 平台效用权重是课程项目中的解释性设置，后续可做权重敏感性分析。
 - 当前三方优化采用“推荐重排 + 下单后骑手匹配”的解耦闭环，不是工业级端到端联合调度系统。
 
@@ -270,6 +275,8 @@ python3 scripts/prepare_notebooklm_pack.py
 - 硬性要求：`硬性要求.md`
 - 项目计划：`PROJECT_PLAN.md`
 - 数据来源说明：`docs/DATA_SOURCE.md`
+- 交付验收审计：`docs/DELIVERY_AUDIT.md`
+- 调研路线覆盖审计：`docs/REPORT_ROUTE_COVERAGE.md`
 - 权重敏感性分析：`docs/WEIGHT_SENSITIVITY.md`
 - Seq-Tuned 权重搜索：`docs/SEQ_TUNED_SEARCH.md`
 - Tuned 三方消融：`docs/TRIPARTITE_TUNED_ABLATION.md`

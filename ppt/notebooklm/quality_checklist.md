@@ -30,10 +30,15 @@
 
 - [ ] `UserOnly`：Recall@20 = `0.4287`，NDCG@20 = `0.3423`，HitRate@20 = `0.5733`。
 - [ ] `Seq-Tuned`：Recall@20 = `0.4675`，NDCG@20 = `0.3652`，HitRate@20 = `0.6267`。
-- [ ] `Seq-xQuAD-Tripartite`：Recall@20 = `0.4180`，NDCG@20 = `0.3440`，HitRate@20 = `0.5733`。
+- [ ] `LightGBM-LTR`：Recall@20 = `0.4424`，NDCG@20 = `0.3243`，HitRate@20 = `0.5900`。
+- [ ] `Seq-xQuAD-Tripartite`：Recall@20 = `0.4180`，NDCG@20 = `0.3439`，HitRate@20 = `0.5733`。
+- [ ] `Session-SPU-Tripartite`：Recall@20 = `0.4147`，NDCG@20 = `0.3431`，HitRate@20 = `0.5700`。
 - [ ] `BPR-MF`：Recall@20 = `0.1620`，NDCG@20 = `0.1068`，HitRate@20 = `0.2433`。
 - [ ] `Popular`：Recall@20 = `0.0470`，NDCG@20 = `0.0210`，HitRate@20 = `0.0900`。
-- [ ] `Popular + Nearest`：Avg ETA = `84.71`，Timeout Rate = `0.7903`，Utility = `0.3365`。
-- [ ] `UserOnly + MinETA`：Avg ETA = `55.33`，Timeout Rate = `0.6701`，Utility = `0.4831`。
-- [ ] `Seq-Tuned + MinETA`：Avg ETA = `54.74`，Timeout Rate = `0.7320`，Utility = `0.4664`。
-- [ ] `Seq-xQuAD-Tripartite`：Avg ETA = `50.33`，Timeout Rate = `0.5319`，Utility = `0.5264`。
+- [ ] `Popular + Nearest`：Avg ETA = `89.68`，Timeout Rate = `0.8025`，Utility = `0.3218`。
+- [ ] `UserOnly + MinETA`：Avg ETA = `52.14`，Timeout Rate = `0.6897`，Utility = `0.4060`。
+- [ ] `Seq-Tuned + MinETA`：Avg ETA = `50.51`，Timeout Rate = `0.6163`，Utility = `0.4205`。
+- [ ] `LightGBM-LTR + MinETA`：Avg ETA = `53.96`，Timeout Rate = `0.6854`，Utility = `0.3903`。
+- [ ] `Seq-xQuAD-Tripartite + Greedy`：Avg ETA = `49.33`，Timeout Rate = `0.5604`，Utility = `0.4568`。
+- [ ] `Seq-xQuAD-Tripartite + Batch`：Avg ETA = `48.32`，Timeout Rate = `0.5275`，Utility = `0.4581`。
+- [ ] `Session-SPU-Tripartite + Greedy`：Avg ETA = `46.47`，Timeout Rate = `0.4941`，Utility = `0.4694`。

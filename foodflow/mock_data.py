@@ -98,9 +98,9 @@ def make_mock_trd(raw_dir: Path, seed: int = 42, users: int = 80, merchants: int
     test = pd.DataFrame([sample_order(2000 + i, int(rng.integers(21, 28))) for i in range(280)])
     test_label = test[["wm_order_id", "user_id", "wm_poi_id"]].copy()
 
-    session = test[["wm_order_id"]].copy()
+    session = pd.concat([train, test], ignore_index=True)[["wm_order_id", "dt"]].copy()
     session["clicks"] = [
-        ",".join(rng.choice(merchant_ids, size=5, replace=False).tolist()) for _ in range(len(session))
+        "#".join(rng.choice(merchant_ids, size=5, replace=False).tolist()) for _ in range(len(session))
     ]
 
     spu_train = train[["wm_order_id", "wm_food_spu_id"]].copy()

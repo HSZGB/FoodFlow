@@ -11,13 +11,13 @@
     PopularRecommender(),
     BPRMFRecommender(seed=seed),
     UserOnlyRecommender(),
-    LightGBMRankerRecommender(seed=seed),
-    SeqTunedRecommender(), # 用于与LightGBM 进行对比
+    build_learned_ltr_recommender(seed=seed), # LightGBM-LTR，缺少 LightGBM 时为 Logistic-LTR
+    SeqTunedRecommender(), # 用于与学习排序进行对比
     SeqXQuadTripartiteRecommender(),
 ]
 ```
 
-其中 `LightGBMRankerRecommender` 是新增的学习排序模型，用来替代原先仅靠 `SEQ_TUNED_WEIGHTS` 的硬编码序列加权模型。`SeqTunedRecommender` 仍保留，作为可解释规则基线和 LightGBM 不可用时的 fallback。
+其中 `build_learned_ltr_recommender()` 是学习排序入口：当前项目依赖中包含 `lightgbm==4.5.0`，默认会返回 `LightGBMRankerRecommender`；如果某台机器缺少 LightGBM，代码会显式退到 `LogisticLTRRecommender`，结果表显示为 `Logistic-LTR`，避免把规则模型误写成学习排序。`SeqTunedRecommender` 仍保留，作为可解释规则基线和学习排序对照。
 
 ## 2. PopularRecommender
 
@@ -229,7 +229,7 @@ max_train_users   = 1000
 candidate_limit   = 160
 ```
 
-若运行环境没有安装 LightGBM，`LightGBMRankerRecommender` 会回退到 Seq-Tuned 逻辑，保证 smoke/test 不因可选依赖失败。
+当前项目环境已安装 `lightgbm==4.5.0`，默认输出会包含真正的 `LightGBM-LTR`。若运行环境没有安装 LightGBM，`build_recommenders()` 会改用 `LogisticLTRRecommender`，它基于同一组序列特征训练带类别均衡的 Logistic Regression 后备排序器，并在结果中明确显示为 `Logistic-LTR`。
 
 ## 7. SeqXQuadTripartiteRecommender
 
@@ -264,6 +264,25 @@ score_{tri}(u,m)=&
 \end{aligned}
 ```
 
+实际排序前会在当前候选集合内对四个分量做 min-max 归一化，避免用户分、曝光公平、ETA 和供给分的原始尺度不同导致权重不可解释：
+
+```math
+\widetilde{x}_{m}=\frac{x_m-\min_{c\in\mathcal{C}}x_c}
+{\max_{c\in\mathcal{C}}x_c-\min_{c\in\mathcal{C}}x_c+\epsilon}
+```
+
+最终用于排序的是：
+
+```math
+score_{tri}(u,m)=
+\frac{
+0.93\,\widetilde{user}(u,m)
++0.025\,\widetilde{fair}(m)
++0.03\,\widetilde{eta}(u,m)
++0.015\,\widetilde{supply}(m)}
+{0.93+0.025+0.03+0.015}
+```
+
 xQuAD 逐步选商家：
 
 ```math
@@ -296,14 +315,15 @@ Popular + Nearest
 UserOnly + MinETA
 Seq-Tuned + MinETA
 LightGBM-LTR + MinETA
-Seq-xQuAD-Tripartite
-Seq-xQuAD-Tripartite-Batch
+Seq-xQuAD-Tripartite + Greedy
+Seq-xQuAD-Tripartite + Batch
+Session-SPU-Tripartite + Greedy
 ```
 
 其中 `LightGBM-LTR + MinETA` 用来测试学习排序模型进入履约链路后的表现：推荐列表先由 LightGBM-LTR 生成，再用最小 ETA 策略派单。
-`Seq-xQuAD-Tripartite-Batch` 将同一时间步内产生的一批订单和在线骑手容量槽位构造成二分图，用最大权匹配替代逐单贪心，减少局部最优派单。仿真中请求用户流、选择噪声和初始骑手池使用固定 seed；同一推荐器下不同派单策略面对同一批订单，因此可以更公平地比较 `load_aware` 与 `batch_max_weight`。
+`Seq-xQuAD-Tripartite + Batch` 将同一时间步内产生的一批订单和在线骑手容量槽位构造成二分图，用最大权匹配替代逐单贪心，减少局部最优派单。仿真中请求用户流、选择噪声和初始骑手池使用固定 seed；同一推荐器下不同派单策略面对同一批订单，因此可以更公平地比较逐单与批量匹配。
 
-骑手侧不再只使用静态距离最近规则。合成骑手包含 `speed_kmh`、`service_radius_km`、`acceptance_rate`、`reliability`、`load` 和 `available_at` 等状态。单个订单的骑手分为：
+骑手侧不再只使用静态距离最近规则。合成骑手包含 `speed_kmph`、`service_radius_km`、`acceptance_rate`、`reliability`、`load` 和 `available_at` 等状态。单个订单的骑手分为：
 
 ```math
 score_{rider}(o,r)=
@@ -341,7 +361,41 @@ s.t.\quad
 x_{os}\in\{0,1\}
 ```
 
-## 9. 数据与仿真边界
+用户选择从固定概率改为 softmax/MNL：
+
+```math
+P(choice=m|u,t)=
+\frac{\exp(V_{u,m,t})}
+\exp(V_{\varnothing})+\sum_{j\in Rec(u,t)}\exp(V_{u,j,t})
+```
+
+其中 `V_{\varnothing}` 是不下单基准效用，`V_{u,m,t}` 由归一化推荐分、排序位置和测试集命中奖励组成。这样推荐分数会真实影响仿真订单分布，同时仍允许用户不下单。
+
+批量派单使用线性分配求解：
+
+```math
+\max \sum_{o\in O_t}\sum_{r\in R_t}x_{or}W(o,r),
+\quad
+\sum_r x_{or}\le 1,\quad
+\sum_o x_{or}\le 1
+```
+
+代码中用 `scipy.optimize.linear_sum_assignment` 在成本矩阵上求解；`load_aware` 策略把骑手可靠性、ETA 和当前负载合成为边权。
+
+## 9. 轻量 KG 路径解释
+
+`foodflow.kg` 不训练 LightGCN/KGAT，而是把现有结构化字段转成可解释路径：
+
+```text
+user --ordered_poi--> poi
+user --prefers_category--> category <--has_category-- poi
+user --orders_in_area--> area <--located_in_area-- poi
+user --has_price_range--> price <--has_price_range-- poi
+```
+
+这些路径来自 `orders_train`、`users.favorite_category`、`merchants.primary_first_tag_id`、`merchants.aor_id` 和价格段。`foodflow explain-case` 会把路径证据、ETA 和曝光补偿一起输出，保证解释引用真实参与推荐/重排的字段。
+
+## 10. 数据与仿真边界
 
 真实推荐数据来自 Takeout Recommendation Dataset (TRD)，Zenodo DOI：`10.5281/zenodo.8025855`。项目使用用户、商家、菜品、训练订单、测试订单和测试标签文本文件。
 

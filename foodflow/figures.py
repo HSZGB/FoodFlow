@@ -15,8 +15,11 @@ HIGHLIGHT = {
     "BPR-MF": "#94A3B8",
     "UserOnly": "#2563EB",
     "Seq-Tuned": "#B45309",
-    "LightGBM-LTR": "#0F766E",
+    "LightGBM-LTR": "#7C3AED",
+    "Logistic-LTR": "#7C3AED",
+    "Seq-xQuAD-Tripartite + Greedy": "#F97316",
     "Seq-xQuAD-Tripartite": "#B5121B",
+    "Session-SPU-Tripartite": "#0F766E",
 }
 DEFAULT_COLOR = "#CBD5E1"
 TEXT_COLOR = "#0F172A"
@@ -36,8 +39,11 @@ def _annotate_highlights(ax, df: pd.DataFrame, x: str, y: str, label_col: str) -
         "BPR-MF": (8, 8),
         "UserOnly": (8, -12),
         "Seq-Tuned": (8, 16),
-        "LightGBM-LTR": (8, -16),
+        "LightGBM-LTR": (8, 10),
+        "Logistic-LTR": (8, 10),
+        "Seq-xQuAD-Tripartite + Greedy": (8, -16),
         "Seq-xQuAD-Tripartite": (8, 13),
+        "Session-SPU-Tripartite": (8, -16),
     }
     for _, row in df.iterrows():
         label = str(row[label_col])
@@ -163,9 +169,11 @@ def _save_frontier_plot(frontier: pd.DataFrame, path: Path) -> None:
         "Popular + Nearest": (8, -14),
         "UserOnly + MinETA": (8, -14),
         "Seq-Tuned + MinETA": (8, 16),
-        "LightGBM-LTR + MinETA": (8, -16),
-        "Seq-xQuAD-Tripartite": (8, 12),
-        "Seq-xQuAD-Tripartite-Batch": (8, -18),
+        "LightGBM-LTR + MinETA": (8, 10),
+        "Logistic-LTR + MinETA": (8, 10),
+        "Seq-xQuAD-Tripartite + Greedy": (8, -16),
+        "Seq-xQuAD-Tripartite + Batch": (8, 12),
+        "Session-SPU-Tripartite + Greedy": (8, -18),
     }
     for _, row in plot_df.iterrows():
         label = str(row["policy"])

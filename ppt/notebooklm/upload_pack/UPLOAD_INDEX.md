@@ -11,9 +11,12 @@ Then paste `prompts/notebooklm_master_prompt.md` as the generation prompt.
 - `figures/offline_ndcg20.png`
 - `figures/offline_recall20.png`
 - `figures/pareto_recall_utility.png`
+- `figures/simulation_active_rider_rate.png`
 - `figures/simulation_avg_eta.png`
 - `figures/simulation_exposure_gini.png`
+- `figures/simulation_p95_eta.png`
 - `figures/simulation_platform_utility.png`
+- `figures/simulation_rider_income_gini.png`
 - `figures/simulation_rider_load_std.png`
 - `figures/simulation_timeout_rate.png`
 - `figures/tradeoff_eta_utility.png`
@@ -31,7 +34,10 @@ Then paste `prompts/notebooklm_master_prompt.md` as the generation prompt.
 - `results/tripartite_frontier.csv`
 - `sources/DATA_AUDIT.md`
 - `sources/DATA_SOURCE.md`
+- `sources/DELIVERY_AUDIT.md`
+- `sources/REPORT_ROUTE_COVERAGE.md`
 - `sources/ppt_outline.md`
+- `sources/ppt_outline_approval.md`
 - `sources/slide_07_local_draft_prompt.md`
 - `sources/作业要求.md`
 - `sources/实验报告.md`

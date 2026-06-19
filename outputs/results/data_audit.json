@@ -1,6 +1,6 @@
 {
-  "raw_dir": "data\\raw",
-  "processed_dir": "data\\processed",
+  "raw_dir": "data/raw",
+  "processed_dir": "data/processed",
   "required_raw_files_present": true,
   "raw_files": {
     "users.txt": {
@@ -37,32 +37,32 @@
   "processed_files": {
     "users.csv": {
       "exists": true,
-      "bytes": 16743514,
+      "bytes": 16543513,
       "rows": 200000
     },
     "merchants.csv": {
       "exists": true,
-      "bytes": 4726663,
+      "bytes": 4697590,
       "rows": 29072
     },
     "spus.csv": {
       "exists": true,
-      "bytes": 17088477,
+      "bytes": 16908698,
       "rows": 179778
     },
     "orders_train.csv": {
       "exists": true,
-      "bytes": 74968524,
+      "bytes": 73900028,
       "rows": 1068495
     },
     "orders_test.csv": {
       "exists": true,
-      "bytes": 13072275,
+      "bytes": 12841724,
       "rows": 230550
     },
     "test_interactions.csv": {
       "exists": true,
-      "bytes": 4634962,
+      "bytes": 4404411,
       "rows": 230550
     }
   },
@@ -74,6 +74,9 @@
     "test_orders": 230550,
     "raw_test_orders": 230550,
     "test_labels": 230550,
+    "session_interactions": 4021488,
+    "order_spus_train": 3445180,
+    "order_spus_test": 752447,
     "users": 200000,
     "merchants": 29072,
     "sample_orders": 0,

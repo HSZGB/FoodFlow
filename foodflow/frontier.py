@@ -8,8 +8,13 @@ POLICY_MODEL_MAP = {
     "UserOnly + MinETA": "UserOnly",
     "Seq-Tuned + MinETA": "Seq-Tuned",
     "LightGBM-LTR + MinETA": "LightGBM-LTR",
+    "Logistic-LTR + MinETA": "Logistic-LTR",
+    "Seq-xQuAD-Tripartite + Greedy": "Seq-xQuAD-Tripartite",
+    "Seq-xQuAD-Tripartite + Batch": "Seq-xQuAD-Tripartite",
+    "Session-SPU-Tripartite + Greedy": "Session-SPU-Tripartite",
     "Seq-xQuAD-Tripartite": "Seq-xQuAD-Tripartite",
     "Seq-xQuAD-Tripartite-Batch": "Seq-xQuAD-Tripartite",
+    "Session-SPU-Tripartite": "Session-SPU-Tripartite",
 }
 
 

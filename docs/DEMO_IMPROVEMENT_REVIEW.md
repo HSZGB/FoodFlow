@@ -25,7 +25,7 @@
    - 推荐卡片中将复购、品类偏好、价格匹配、履约较快、曝光补偿做成可筛选标签。
 8. 增加午餐高峰仿真回放页。
    - 按时间步展示累计订单数、平均 ETA、超时率和骑手接单负载波动。
-   - 可直接比较 `Popular + Nearest`、`UserOnly + MinETA`、`Seq-Tuned + MinETA`、`Seq-xQuAD-Tripartite` 的动态表现。
+   - 可直接比较 `Popular + Nearest`、`UserOnly + MinETA`、`Seq-Tuned + MinETA`、`LightGBM-LTR + MinETA`、`Seq-xQuAD-Tripartite + Greedy` 的动态表现；完整批量匹配结果以仿真 CSV 和报告为准。
 9. 优化空间分布和高峰图表观感。
    - 空间分布从单个骑手点升级为骑手供给云、推荐商家、选中骑手和履约路径。
    - 高峰回放主图从折线图改为最终 KPI 条形图与策略-时间步热力图，更接近业务看板。

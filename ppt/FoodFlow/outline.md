@@ -25,13 +25,13 @@ Slide 4: 系统总体架构
 - Required source images: none。
 
 Slide 5: 推荐算法与三方重排
-- Key points: Popular/BPR-MF/UserOnly/Seq-Tuned/Seq-xQuAD-Tripartite；Seq-xQuAD-Tripartite 在用户偏好外加入列表覆盖、商家公平、ETA 和供给分；解释只引用真实参与打分的特征。
+- Key points: 七个默认模型覆盖热门、矩阵分解、用户画像、序列排序、学习排序、三方重排和训练期 Session/SPU 增强；解释只引用真实参与打分的特征。
 - Visual idea: 打分公式拆解和模型对照表。
 - Layout role and intent: method comparison。
 - Required source images: none。
 
 Slide 6: 离线推荐指标结果
-- Key points: 展示 Recall@20、NDCG@20、Coverage@20 和 Exposure Gini；说明准确性和曝光公平的 trade-off。
+- Key points: Seq-Tuned 的 Recall@20 = 0.4675、NDCG@20 = 0.3652，为离线准确率前沿，ExploreRecall@20 = 0.1246 也最高；LightGBM-LTR 的 Recall@20 = 0.4424、Coverage@20 = 0.4345、Exposure Gini = 0.7942，展示学习排序和覆盖改善；Seq-xQuAD-Tripartite 的 Recall@20 = 0.4180、NDCG@20 = 0.3439，牺牲一部分离线准确性换取系统级约束。
 - Visual idea: 指标柱状图 + trade-off 散点图。
 - Layout role and intent: data evidence。
 - Required source images:
@@ -44,13 +44,13 @@ Slide 6: 离线推荐指标结果
     ![Tradeoff](../../outputs/figures/tradeoff_ndcg_gini.png)
 
 Slide 7: 动态履约仿真设计
-- Key points: 午餐高峰多时间步；推荐列表产生模拟订单；最近骑手、最小 ETA、负载感知三类匹配；骑手状态随订单更新。
+- Key points: 午餐高峰多时间步；推荐列表经过 softmax/MNL 选择产生模拟订单；最近骑手、最小 ETA、负载感知逐单派单与批量最大权匹配；骑手状态随订单更新。
 - Visual idea: 离散时间仿真循环图。
 - Layout role and intent: process explanation。
 - Required source images: none。
 
 Slide 8: 三方策略的系统级指标
-- Key points: 对比 Popular + Nearest、UserOnly + MinETA、Seq-Tuned + MinETA、Seq-xQuAD-Tripartite；展示 ETA、超时率、骑手负载和平台效用。
+- Key points: 七条链路对比；同一批 91 个订单上，批量三方匹配将 Avg ETA 从 49.33 降至 48.32、Timeout Rate 从 0.5604 降至 0.5275；Session-SPU-Tripartite + Greedy 的 Avg ETA = 46.47、Timeout Rate = 0.4941、Platform Utility = 0.4694，为当前系统效用前沿。
 - Visual idea: 仿真指标四联图。
 - Layout role and intent: data evidence。
 - Required source images:
@@ -67,7 +67,7 @@ Slide 9: 案例解释：一次推荐如何兼顾三方
 - Required source images: none。
 
 Slide 10: 结论、局限与改进方向
-- Key points: 推荐有效、重排改善商家公平、履约感知提升系统指标；局限是骑手为合成 proxy；后续可接入真实派单或图模型。
+- Key points: Seq-Tuned 证明序列偏好能提升离线推荐；LightGBM-LTR 补上学习排序与覆盖改善；Seq-xQuAD-Tripartite 把商家公平和履约感知纳入系统效用；局限是骑手为合成 proxy；后续可接入真实派单或图模型。
 - Visual idea: 三个结论卡片 + 一个局限说明。
 - Layout role and intent: summary。
 - Required source images: none。
