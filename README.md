@@ -11,7 +11,7 @@
 - 骑手侧履约：模拟订单-骑手匹配，比较最近骑手、最小 ETA、负载感知逐单派单和批量最大权匹配。
 - 动态仿真：模拟午餐高峰多时间步请求，持续更新骑手状态和订单履约结果。
 - 轻量 KG 解释：从历史下单、品类、区域和价格段构造路径证据，解释推荐原因。
-- 多指标评估：同时输出 Recall、NDCG、MRR、HitRate、Coverage、Exposure Gini、Avg ETA、Timeout Rate、Rider Load Std、Platform Utility。
+- 多指标评估：同时输出 Recall、NDCG、MRR、HitRate、Repeat/Explore Recall、Coverage、Exposure Gini、Avg ETA、Timeout Rate、Rider Load Std、Platform Utility。
 - 工程闭环：提供 Makefile、CLI、测试、图表、实验报告、Streamlit demo 和 NotebookLM PPT 素材包。
 
 ## 数据来源
@@ -231,7 +231,7 @@ make notebooklm-pack
 
 当前提交的结果已经使用完整 TRD `orders_train.txt`，数据审计显示原始训练订单 `1,068,495` 条，处理后训练订单 `1,068,495` 条，训练订单使用比例 `1.0000`。
 
-离线推荐中，`Seq-Tuned` 的 Recall@20 最高，为 `0.4675`，NDCG@20 为 `0.3652`，HitRate@20 为 `0.6267`。`LightGBM-LTR` 的 Recall@20 为 `0.4424`，Coverage@20 为 `0.4345`，Exposure Gini 降到 `0.7942`，说明默认评估中已经包含真正训练出来的学习排序。归一化后的 `Seq-xQuAD-Tripartite` 的 Recall@20 为 `0.4180`，NDCG@20 为 `0.3439`，把商家公平、ETA、供给分和列表级覆盖纳入同一套重排。
+离线推荐中，`Seq-Tuned` 的 Recall@20 最高，为 `0.4675`，NDCG@20 为 `0.3652`，HitRate@20 为 `0.6267`，并取得最高 ExploreRecall@20 `0.1246`。`LightGBM-LTR` 的 Recall@20 为 `0.4424`，Coverage@20 为 `0.4345`，Exposure Gini 降到 `0.7942`，ExploreRecall@20 为 `0.0974`，说明默认评估中已经包含真正训练出来的学习排序。归一化后的 `Seq-xQuAD-Tripartite` 的 Recall@20 为 `0.4180`，NDCG@20 为 `0.3439`，把商家公平、ETA、供给分和列表级覆盖纳入同一套重排。
 
 动态履约仿真中，`Seq-xQuAD-Tripartite + Greedy` 取得最低平均 ETA、最低超时率和最高平台综合效用；批量匹配版本完成订单更多，但 ETA 和平台效用相对逐单贪心有取舍：
 

@@ -56,6 +56,34 @@ def test_category_calibration_metric():
     assert metrics["CategoryJSD@2"] > 0.0
 
 
+def test_repeat_and_explore_recall_segments():
+    merchants = pd.DataFrame(
+        [
+            {"wm_poi_id": "m1", "order_count": 10},
+            {"wm_poi_id": "m2", "order_count": 5},
+            {"wm_poi_id": "m3", "order_count": 2},
+        ]
+    )
+    metrics = evaluate_recommendations(
+        {
+            "u1": ["m1", "m3"],
+            "u2": ["m3", "m1"],
+        },
+        {
+            "u1": {"m1", "m2"},
+            "u2": {"m3"},
+        },
+        merchants,
+        [2],
+        {
+            "u1": ["m1", "m4"],
+            "u2": ["m5"],
+        },
+    )
+    assert metrics["RepeatRecall@2"] == 1.0
+    assert metrics["ExploreRecall@2"] == 0.5
+
+
 def test_tripartite_frontier_marks_dominated_rows():
     points = pd.DataFrame(
         [

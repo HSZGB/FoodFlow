@@ -31,7 +31,7 @@ Slide 5: 推荐算法与三方重排
 - Required source images: none。
 
 Slide 6: 离线推荐指标结果
-- Key points: Seq-Tuned 的 Recall@20 = 0.4675、NDCG@20 = 0.3652，为离线准确率前沿；LightGBM-LTR 的 Recall@20 = 0.4424、Coverage@20 = 0.4345、Exposure Gini = 0.7942，展示学习排序和覆盖改善；Seq-xQuAD-Tripartite 的 Recall@20 = 0.4180、NDCG@20 = 0.3439，牺牲一部分离线准确性换取系统级约束。
+- Key points: Seq-Tuned 的 Recall@20 = 0.4675、NDCG@20 = 0.3652，为离线准确率前沿，ExploreRecall@20 = 0.1246 也最高；LightGBM-LTR 的 Recall@20 = 0.4424、Coverage@20 = 0.4345、Exposure Gini = 0.7942，展示学习排序和覆盖改善；Seq-xQuAD-Tripartite 的 Recall@20 = 0.4180、NDCG@20 = 0.3439，牺牲一部分离线准确性换取系统级约束。
 - Visual idea: 指标柱状图 + trade-off 散点图。
 - Layout role and intent: data evidence。
 - Required source images:

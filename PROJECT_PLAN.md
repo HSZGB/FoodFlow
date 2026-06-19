@@ -11,6 +11,7 @@
 - [x] 当前默认主线已收敛为 6 个离线策略：Popular、BPR-MF、UserOnly、Seq-Tuned、LightGBM-LTR、Seq-xQuAD-Tripartite。
 - [x] 当前默认仿真已收敛为 6 条链路：Popular + Nearest、UserOnly + MinETA、Seq-Tuned + MinETA、LightGBM-LTR + MinETA、Seq-xQuAD-Tripartite + Greedy、Seq-xQuAD-Tripartite。
 - [x] 轻量 KG 路径解释已落地：支持 user-ordered-poi、user-prefers-category、poi-has-category、poi-located-in-area、price-range 等证据路径。
+- [x] 离线指标已补 RepeatRecall/ExploreRecall，能拆分复购命中和探索新商家命中。
 - [x] 三方重排分量已做候选内 min-max 归一化，Pareto 图和结果表已按新口径刷新。
 - [x] 交付验收审计已补充，硬性要求映射到报告、数据审计、结果表、图表和 PPT 审批包。
 - [x] 最新版调研报告 P0-P6 路线覆盖审计已补充，明确 P5/P6 的部分完成与展望边界。
@@ -63,6 +64,7 @@
 
 - [x] 默认评估 Popular、BPR-MF、UserOnly、Seq-Tuned、LightGBM-LTR、Seq-xQuAD-Tripartite
 - [x] Recall@K、NDCG@K、MRR@K、HitRate@K
+- [x] RepeatRecall@K、ExploreRecall@K
 - [x] Coverage、Long-tail Exposure、Exposure Gini
 - [x] 历史消融类保留在代码中，默认输出不再铺开。
 - 验收命令：`make eval`

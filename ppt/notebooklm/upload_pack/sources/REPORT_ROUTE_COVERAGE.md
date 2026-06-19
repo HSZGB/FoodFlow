@@ -6,7 +6,7 @@
 
 ## 总体结论
 
-当前仓库已经按“报告B工程闭环为主、报告A轻量增强为辅”的路线完成核心交付：TRD 数据处理、默认六模型离线评估、六条动态履约仿真、LightGBM/Logistic 学习排序入口、MNL 用户选择、批量骑手匹配、轻量 KG 解释、三方分量归一化、Pareto 前沿、报告和 NotebookLM PPT 素材包。  
+当前仓库已经按“报告B工程闭环为主、报告A轻量增强为辅”的路线完成核心交付：TRD 数据处理、默认六模型离线评估、Repeat/Explore 分段指标、六条动态履约仿真、LightGBM/Logistic 学习排序入口、MNL 用户选择、批量骑手匹配、轻量 KG 解释、三方分量归一化、Pareto 前沿、报告和 NotebookLM PPT 素材包。
 
 仍需明确边界：完整 LightGCN/KGAT/KGCN 不是当前主线实现；三方权重网格搜索保留为历史/后续分析，不作为正式指标结论；最终图片页 PPTX 受 `codex-ppt` 审批门禁约束，尚未生成。
 
@@ -14,7 +14,7 @@
 
 | 阶段 | 调研报告目标 | 当前状态 | 证据 |
 |---|---|---|---|
-| P0 | 修复依赖和文档一致性，统一策略、结果、图表和报告口径 | 已完成 | `requirements.txt`、`environment.yml` 均包含 `lightgbm==4.5.0`；`outputs/results/*.csv`、`report/实验报告.md`、`ppt/notebooklm/upload_pack/` 已同步六模型/六链路口径 |
+| P0 | 修复依赖和文档一致性，统一策略、结果、图表和报告口径 | 已完成 | `requirements.txt`、`environment.yml` 均包含 `lightgbm==4.5.0`；`outputs/results/*.csv`、`report/实验报告.md`、`ppt/notebooklm/upload_pack/` 已同步六模型/六链路口径；离线表新增 RepeatRecall/ExploreRecall |
 | P1 | 新增批量最大权骑手匹配，并与逐单贪心对比 | 已完成 | `foodflow/rider_sim.py` 中批量匹配；`outputs/results/simulation_metrics.csv` 同时包含 `Seq-xQuAD-Tripartite + Greedy` 和 batch 版 `Seq-xQuAD-Tripartite` |
 | P2 | 新增 softmax/MNL 用户选择模型 | 已完成 | `foodflow/simulator.py` 的 `choice_model=mnl_softmax`；仿真结果表包含 `choice_model` 列 |
 | P3 | 学习排序进入默认评估 | 已完成 | `foodflow/recommenders.py` 的 `build_learned_ltr_recommender()`；`tests/test_pipeline.py` 覆盖默认学习排序名称；正式结果含 `LightGBM-LTR` |
