@@ -869,6 +869,7 @@ def build_recommenders(seed: int = 42) -> list[BaseRecommender]:
         learned_seq_recommender = LightGBMRankerRecommender(seed=seed)
     else:
         learned_seq_recommender = SeqTunedRecommender()
+        learned_seq_recommender.name = "Seq-Tuned (LightGBM fallback)"
     return [
         PopularRecommender(),
         BPRMFRecommender(seed=seed),

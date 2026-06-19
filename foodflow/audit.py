@@ -83,7 +83,7 @@ def audit_data(
         "processed_train_orders": processed_train,
         "train_sample_fraction": sample_fraction,
         "train_mode": "full" if uses_full_train else "sampled",
-        "rider_data": "synthetic proxy; TRD has no full rider state or dispatch records",
+        "rider_data": "default synthetic proxy; LaDe delivery CSV can calibrate rider parameters, but TRD has no full rider state or dispatch records",
     }
 
     ensure_dir(output.parent)
@@ -108,7 +108,7 @@ def _write_markdown_audit(audit: dict[str, object], markdown: Path) -> None:
 - 原始训练订单数：`{audit["raw_train_orders"]}`
 - 处理后训练订单数：`{audit["processed_train_orders"]}`
 - 训练订单使用比例：`{sample_fraction:.4f}`
-- 骑手数据边界：TRD 不包含完整骑手状态与派单记录，本项目使用固定 seed 合成 proxy。
+- 骑手数据边界：TRD 不包含完整骑手状态与派单记录；默认使用固定 seed 合成 proxy，也可用 LaDe delivery CSV 校准骑手速度、服务时长和负载分布。
 
 如果 `train_mode` 为 `sampled`，说明当前结果使用真实 TRD 数据的固定 seed 抽样版本；如果为 `full`，说明当前处理后的训练订单覆盖完整 `orders_train.txt`。
 

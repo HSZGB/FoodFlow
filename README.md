@@ -23,7 +23,7 @@
 - 时间：2021-03-01 至 2021-03-28
 - 使用文件：用户、商家、菜品、训练订单、测试订单和测试标签
 
-项目默认下载 TRD 的 txt 文件，不下载约 1.8GB 的 `graph.bin`，因为核心实现不依赖 DGL 图文件。TRD 不包含完整骑手状态和真实派单记录，因此骑手位置、在线状态、负载、可靠性和收入为固定 seed 合成 proxy，仅用于履约仿真，不声称为真实骑手数据。若有外部末端配送任务 CSV，可通过 `--rider-tasks` 校准骑手速度、服务时长和负载分布。
+项目默认下载 TRD 的 txt 文件，不下载约 1.8GB 的 `graph.bin`，因为核心实现不依赖 DGL 图文件。TRD 不包含完整骑手状态和真实派单记录，因此骑手位置、在线状态、负载、可靠性和收入为固定 seed 合成 proxy，仅用于履约仿真，不声称为真实骑手数据。若有 LaDe 等公开末端配送任务 CSV，可通过 `--rider-tasks` 校准骑手速度、服务时长和负载分布。
 
 ## 方法概览
 
@@ -132,11 +132,13 @@ make download preprocess eval simulate audit figures report
 python -m foodflow.cli simulate --quiet
 ```
 
-如果有外部配送任务数据，可校准骑手仿真参数：
+如果有 LaDe 末端配送任务数据，可校准骑手仿真参数：
 
 ```bash
-make simulate-calibrated RIDER_TASKS=/path/to/delivery_tasks.csv
+make simulate-calibrated RIDER_TASKS=/path/to/lade_delivery.csv
 ```
+
+`--rider-tasks` 同时支持项目通用字段 `courier_id,accept_time,finish_time,pickup_lng,pickup_lat,delivery_lng,delivery_lat`，以及 LaDe delivery 文件中的 `courier_id,accept_time,accept_gps_lng,accept_gps_lat,delivery_time,delivery_gps_lng,delivery_gps_lat`。LaDe 不是外卖平台数据，因此只用于骑手速度、任务时长、任务重叠负载和可靠性 proxy 的估计，不参与用户-商家推荐训练。
 
 如果要使用完整 TRD 训练集：
 
@@ -237,16 +239,19 @@ python3 scripts/prepare_notebooklm_pack.py
 
 离线推荐中，`Seq-Tuned` 的 Recall@20 最高，为 `0.4675`，NDCG@20 为 `0.3652`，HitRate@20 为 `0.6267`。`Seq-xQuAD-Tripartite` 的离线准确性低于纯用户侧序列模型，但能改善后续履约表现。
 
-动态履约仿真中，`Seq-xQuAD-Tripartite` 取得最低平均 ETA、最低超时率和最高平台综合效用：
+动态履约仿真中，`Seq-xQuAD-Tripartite-Batch` 取得最低平均 ETA、最低超时率和最高平台综合效用；新增的 `Session-SPU-Tripartite` 在引入 session 点击和菜品 SPU 信号后，平台效用与三方重排主线接近：
 
 | 策略 | Avg ETA | Timeout Rate | Platform Utility |
 |---|---:|---:|---:|
-| Popular + Nearest | 84.71 | 0.7903 | 0.3365 |
-| UserOnly + MinETA | 55.33 | 0.6701 | 0.4831 |
-| Seq-Tuned + MinETA | 54.74 | 0.7320 | 0.4664 |
-| Seq-xQuAD-Tripartite | 50.33 | 0.5319 | 0.5264 |
+| Popular + Nearest | 63.98 | 0.6364 | 0.3791 |
+| UserOnly + MinETA | 52.13 | 0.7011 | 0.4531 |
+| Seq-Tuned + MinETA | 50.84 | 0.7158 | 0.4534 |
+| LightGBM-LTR + MinETA | 51.00 | 0.7021 | 0.4587 |
+| Seq-xQuAD-Tripartite | 46.70 | 0.5250 | 0.5117 |
+| Seq-xQuAD-Tripartite-Batch | 45.68 | 0.4500 | 0.5281 |
+| Session-SPU-Tripartite | 48.96 | 0.5412 | 0.5118 |
 
-结论不是“单一模型在所有指标上最优”，而是：`Seq-Tuned` 取得最强离线推荐准确性；`Seq-xQuAD-Tripartite` 牺牲一部分离线准确性，换取更低超时率和更高平台综合效用，更符合外卖平台的多主体优化目标。
+结论不是“单一模型在所有指标上最优”，而是：`Seq-Tuned` 取得最强离线推荐准确性；`Seq-xQuAD-Tripartite-Batch` 牺牲一部分离线准确性，换取更低超时率和更高平台综合效用；`Session-SPU-Tripartite` 证明 TRD 的 session 点击和菜品 SPU 信号可以接入三方重排链路。
 
 ## 图表示例
 
@@ -258,7 +263,7 @@ python3 scripts/prepare_notebooklm_pack.py
 
 ## 局限与说明
 
-- 骑手数据为合成 proxy，不能替代真实派单数据。
+- 骑手数据默认为合成 proxy；如提供 LaDe delivery CSV，可校准速度、服务时长和负载分布，但 LaDe 仍不能替代真实外卖派单数据。
 - BPR-MF 是轻量实现，未追求大规模深度模型最优性能。
 - 项目没有实现 LightGCN、KGAT 或完整知识图谱模型，这些作为调研背景和后续增强方向。
 - 平台效用权重是课程项目中的解释性设置，后续可做权重敏感性分析。

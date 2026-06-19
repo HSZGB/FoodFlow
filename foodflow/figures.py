@@ -17,6 +17,7 @@ HIGHLIGHT = {
     "Seq-Tuned": "#B45309",
     "LightGBM-LTR": "#0F766E",
     "Seq-xQuAD-Tripartite": "#B5121B",
+    "Session-SPU-Tripartite": "#7C3AED",
 }
 DEFAULT_COLOR = "#CBD5E1"
 TEXT_COLOR = "#0F172A"
