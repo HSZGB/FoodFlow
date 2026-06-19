@@ -13,10 +13,12 @@ from .metrics import gini
 from .recommenders import (
     LightGBMRankerRecommender,
     PopularRecommender,
+    SessionSpuTripartiteRecommender,
     SeqTunedRecommender,
     SeqXQuadTripartiteRecommender,
     UserOnlyRecommender,
 )
+from .rider_data import RiderCalibration
 from .rider_sim import assign_order, assign_orders_batch, generate_riders, update_rider_after_delivery
 
 
@@ -35,6 +37,7 @@ DEFAULT_POLICIES = [
     SimulationPolicy("LightGBM-LTR + MinETA", "lightgbm_ltr", "min_eta"),
     SimulationPolicy("Seq-xQuAD-Tripartite", "seq_xquad_tripartite", "load_aware", fairness=True),
     SimulationPolicy("Seq-xQuAD-Tripartite-Batch", "seq_xquad_tripartite", "batch_max_weight", fairness=True),
+    SimulationPolicy("Session-SPU-Tripartite", "session_spu_tripartite", "load_aware", fairness=True),
 ]
 
 
@@ -49,6 +52,8 @@ def _select_recommender(data: PreparedData, name: str, seed: int):
         return LightGBMRankerRecommender(seed=seed).fit(data)
     if name == "seq_xquad_tripartite":
         return SeqXQuadTripartiteRecommender().fit(data)
+    if name == "session_spu_tripartite":
+        return SessionSpuTripartiteRecommender().fit(data)
     raise ValueError(name)
 
 
@@ -90,6 +95,7 @@ def run_simulation(
     steps: int = 8,
     top_k: int = 10,
     verbose: bool = False,
+    rider_calibration: RiderCalibration | None = None,
 ) -> pd.DataFrame:
     policies = policies or DEFAULT_POLICIES
     truth = data.truth_by_user()
@@ -120,7 +126,7 @@ def run_simulation(
                 f"running {steps} steps x {requests_per_step} requests...",
                 flush=True,
             )
-        riders = generate_riders(data.merchants, n_riders=120, seed=rider_seed)
+        riders = generate_riders(data.merchants, n_riders=120, seed=rider_seed, calibration=rider_calibration)
         exposure = Counter()
         completed = 0
         total_orders = 0
@@ -204,6 +210,8 @@ def run_simulation(
             "rider_income_gini": gini(income_values),
             "merchant_exposure_gini": gini(exposure_values),
             "user_satisfaction": float(np.mean(satisfaction)) if satisfaction else 0.0,
+            "rider_speed_kmph": float(pd.to_numeric(riders.get("speed_kmh", riders.get("speed_kmph", 0)), errors="coerce").mean()),
+            "rider_service_minutes": float(pd.to_numeric(riders.get("service_minutes", 0), errors="coerce").mean()),
         }
         row["platform_utility"] = platform_utility(row)
         results.append(row)

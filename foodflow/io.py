@@ -55,13 +55,21 @@ def md5sum(path: Path | str, chunk_size: int = 1024 * 1024) -> str:
 def download_file(url: str, out_path: Path | str, expected_size: int | None = None) -> None:
     out_path = Path(out_path)
     ensure_dir(out_path.parent)
-    if out_path.exists() and expected_size is not None and out_path.stat().st_size != expected_size:
-        out_path.unlink()
-    with requests.get(url, stream=True, timeout=60) as resp:
+    resume_from = out_path.stat().st_size if out_path.exists() else 0
+    headers = {"Range": f"bytes={resume_from}-"} if resume_from else None
+    if expected_size is not None and resume_from >= expected_size:
+        return
+    with requests.get(url, stream=True, timeout=(30, 300), headers=headers) as resp:
         resp.raise_for_status()
+        if resume_from and resp.status_code != 206:
+            resume_from = 0
+            out_path.unlink(missing_ok=True)
         total = int(resp.headers.get("content-length", 0))
-        with out_path.open("wb") as fh, tqdm(
+        if expected_size is not None and resume_from:
+            total = expected_size
+        with out_path.open("ab" if resume_from else "wb") as fh, tqdm(
             total=total,
+            initial=resume_from if total else 0,
             unit="B",
             unit_scale=True,
             desc=out_path.name,

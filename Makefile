@@ -10,8 +10,9 @@ SMOKE_RESULTS ?= outputs/smoke/results
 SMOKE_FIGURES ?= outputs/smoke/figures
 SMOKE_REPORT ?= outputs/smoke/report.md
 SEQ_SEARCH_RESULTS ?= outputs/experiments/seq_weight_search_smoke.csv
+RIDER_TASKS ?=
 
-.PHONY: setup conda-setup conda-test conda-smoke seq-tune-smoke download mock preprocess preprocess-full eval simulate audit figures report demo demo-full demo-check test smoke clean
+.PHONY: setup conda-setup conda-test conda-smoke seq-tune-smoke download mock preprocess preprocess-full eval simulate simulate-calibrated audit figures report demo demo-full demo-check test smoke clean
 
 setup:
 	python3 -m venv .venv
@@ -54,6 +55,13 @@ eval:
 
 simulate:
 	$(PYTHON) -m foodflow.cli simulate --processed-dir data/processed --output outputs/results/simulation_metrics.csv --seed 42
+
+simulate-calibrated:
+	@if [ -z "$(RIDER_TASKS)" ]; then \
+		printf "Set RIDER_TASKS=/path/to/delivery_tasks.csv before running simulate-calibrated.\n"; \
+		exit 1; \
+	fi
+	$(PYTHON) -m foodflow.cli simulate --processed-dir data/processed --output outputs/results/simulation_metrics_calibrated.csv --seed 42 --rider-tasks $(RIDER_TASKS)
 
 audit:
 	$(PYTHON) -m foodflow.cli audit-data --raw-dir data/raw --processed-dir data/processed --output outputs/results/data_audit.json --markdown docs/DATA_AUDIT.md

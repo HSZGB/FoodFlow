@@ -39,6 +39,59 @@ def _price_interval_to_midpoint(value: object) -> float:
     return pd.to_numeric(text, errors="coerce")
 
 
+def _build_session_interactions(raw_dir: Path, test: pd.DataFrame) -> pd.DataFrame:
+    path = raw_dir / "orders_poi_session.txt"
+    columns = ["wm_order_id", "user_id", "wm_poi_id", "rank"]
+    if not path.exists():
+        return pd.DataFrame(columns=columns)
+
+    sessions = _safe_read(raw_dir, "orders_poi_session.txt")
+    if "user_id" not in sessions.columns and "wm_order_id" in sessions.columns and "user_id" in test.columns:
+        sessions = sessions.merge(test[["wm_order_id", "user_id"]].drop_duplicates("wm_order_id"), on="wm_order_id", how="left")
+
+    rows: list[dict[str, object]] = []
+    if "clicks" in sessions.columns:
+        for _, row in sessions.iterrows():
+            clicked = [item.strip() for item in str(row.get("clicks", "")).split(",") if item.strip()]
+            for rank, merchant_id in enumerate(clicked, start=1):
+                rows.append(
+                    {
+                        "wm_order_id": row.get("wm_order_id", ""),
+                        "user_id": row.get("user_id", ""),
+                        "wm_poi_id": merchant_id,
+                        "rank": rank,
+                    }
+                )
+    elif "wm_poi_id" in sessions.columns:
+        keep = [col for col in ["wm_order_id", "user_id", "wm_poi_id"] if col in sessions.columns]
+        long_sessions = sessions[keep].dropna(subset=["user_id", "wm_poi_id"]).copy()
+        long_sessions["rank"] = long_sessions.groupby(["wm_order_id", "user_id"]).cumcount() + 1
+        rows = long_sessions[columns].to_dict("records")
+
+    out = pd.DataFrame(rows, columns=columns)
+    return out.dropna(subset=["user_id", "wm_poi_id"]).copy()
+
+
+def _build_order_spus(raw_dir: Path, name: str, orders: pd.DataFrame) -> pd.DataFrame:
+    path = raw_dir / name
+    columns = ["wm_order_id", "user_id", "wm_poi_id", "wm_food_spu_id"]
+    if not path.exists():
+        return pd.DataFrame(columns=columns)
+    order_spus = _safe_read(raw_dir, name)
+    spu_col = "wm_food_spu_id" if "wm_food_spu_id" in order_spus.columns else "label_spu_id"
+    if spu_col not in order_spus.columns:
+        return pd.DataFrame(columns=columns)
+    keep = [col for col in ["wm_order_id", spu_col] if col in order_spus.columns]
+    out = order_spus[keep].rename(columns={spu_col: "wm_food_spu_id"}).dropna(subset=["wm_food_spu_id"])
+    if "wm_order_id" in out.columns and "wm_order_id" in orders.columns:
+        out = out.merge(
+            orders[["wm_order_id", "user_id", "wm_poi_id"]].drop_duplicates("wm_order_id"),
+            on="wm_order_id",
+            how="left",
+        )
+    return out[columns].dropna(subset=["user_id", "wm_poi_id", "wm_food_spu_id"]).copy()
+
+
 def preprocess(raw_dir: Path, processed_dir: Path, sample_orders: int | None = 50000, seed: int = 42) -> None:
     raw_dir = Path(raw_dir)
     processed_dir = ensure_dir(processed_dir)
@@ -153,6 +206,9 @@ def preprocess(raw_dir: Path, processed_dir: Path, sample_orders: int | None = 5
 
     train["split"] = "train"
     test["split"] = "test"
+    session_interactions = _build_session_interactions(raw_dir, test)
+    order_spus_train = _build_order_spus(raw_dir, "orders_spu_train.txt", train)
+    order_spus_test = _build_order_spus(raw_dir, "orders_test_spu.txt", test)
 
     write_csv(users, processed_dir / "users.csv")
     write_csv(pois, processed_dir / "merchants.csv")
@@ -160,6 +216,9 @@ def preprocess(raw_dir: Path, processed_dir: Path, sample_orders: int | None = 5
     write_csv(train, processed_dir / "orders_train.csv")
     write_csv(test, processed_dir / "orders_test.csv")
     write_csv(labels, processed_dir / "test_interactions.csv")
+    write_csv(session_interactions, processed_dir / "session_interactions.csv")
+    write_csv(order_spus_train, processed_dir / "order_spus_train.csv")
+    write_csv(order_spus_test, processed_dir / "order_spus_test.csv")
 
     data_note = {
         "source": "Takeout Recommendation Dataset (TRD), Zenodo DOI 10.5281/zenodo.8025855",
@@ -169,6 +228,9 @@ def preprocess(raw_dir: Path, processed_dir: Path, sample_orders: int | None = 5
         "test_orders": int(len(test)),
         "raw_test_orders": int(raw_test_orders),
         "test_labels": int(len(labels)),
+        "session_interactions": int(len(session_interactions)),
+        "order_spus_train": int(len(order_spus_train)),
+        "order_spus_test": int(len(order_spus_test)),
         "users": int(len(users)),
         "merchants": int(len(pois)),
         "sample_orders": sample_orders,

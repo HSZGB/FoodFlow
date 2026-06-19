@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 import pandas as pd
@@ -16,10 +16,20 @@ class PreparedData:
     orders_test: pd.DataFrame
     test_interactions: pd.DataFrame
     spus: pd.DataFrame
+    session_interactions: pd.DataFrame = field(default_factory=pd.DataFrame)
+    order_spus_train: pd.DataFrame = field(default_factory=pd.DataFrame)
+    order_spus_test: pd.DataFrame = field(default_factory=pd.DataFrame)
 
     @classmethod
     def load(cls, processed_dir: Path | str) -> "PreparedData":
         base = Path(processed_dir)
+
+        def optional_csv(name: str) -> pd.DataFrame:
+            path = base / name
+            if not path.exists():
+                return pd.DataFrame()
+            return pd.read_csv(path, dtype=str).infer_objects()
+
         return cls(
             users=pd.read_csv(base / "users.csv", dtype=str).infer_objects(),
             merchants=pd.read_csv(base / "merchants.csv", dtype=str).infer_objects(),
@@ -27,10 +37,23 @@ class PreparedData:
             orders_test=pd.read_csv(base / "orders_test.csv", dtype=str).infer_objects(),
             test_interactions=pd.read_csv(base / "test_interactions.csv", dtype=str).infer_objects(),
             spus=pd.read_csv(base / "spus.csv", dtype=str).infer_objects(),
+            session_interactions=optional_csv("session_interactions.csv"),
+            order_spus_train=optional_csv("order_spus_train.csv"),
+            order_spus_test=optional_csv("order_spus_test.csv"),
         ).coerce()
 
     def coerce(self) -> "PreparedData":
-        for df in [self.users, self.merchants, self.orders_train, self.orders_test, self.test_interactions, self.spus]:
+        for df in [
+            self.users,
+            self.merchants,
+            self.orders_train,
+            self.orders_test,
+            self.test_interactions,
+            self.spus,
+            self.session_interactions,
+            self.order_spus_train,
+            self.order_spus_test,
+        ]:
             for col in df.columns:
                 if col.endswith("_id") or col in {"user_id", "wm_poi_id", "wm_food_spu_id", "wm_order_id"}:
                     df[col] = df[col].map(canonical_id)
@@ -42,6 +65,10 @@ class PreparedData:
                 self.users[col] = pd.to_numeric(self.users[col], errors="coerce")
         for df in [self.orders_train, self.orders_test]:
             for col in ["order_price", "order_timestamp"]:
+                if col in df.columns:
+                    df[col] = pd.to_numeric(df[col], errors="coerce")
+        for df in [self.session_interactions]:
+            for col in ["rank"]:
                 if col in df.columns:
                     df[col] = pd.to_numeric(df[col], errors="coerce")
         return self

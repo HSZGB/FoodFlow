@@ -6,6 +6,7 @@ import numpy as np
 import pandas as pd
 from scipy.optimize import linear_sum_assignment
 
+from .rider_data import RiderCalibration
 from .rerank import haversine_km
 
 
@@ -18,26 +19,38 @@ class RiderState:
     available_at: int
     reliability: float
     speed_kmh: float = 20.0
+    speed_kmph: float = 20.0
     service_radius_km: float = 6.0
     acceptance_rate: float = 0.9
+    service_minutes: float = 10.0
     income: float = 0.0
     assigned: int = 0
 
 
-def generate_riders(merchants: pd.DataFrame, n_riders: int = 80, seed: int = 42) -> pd.DataFrame:
+def generate_riders(
+    merchants: pd.DataFrame,
+    n_riders: int = 80,
+    seed: int = 42,
+    calibration: RiderCalibration | None = None,
+) -> pd.DataFrame:
     rng = np.random.default_rng(seed)
+    calibration = calibration or RiderCalibration()
     anchors = merchants.sample(n=n_riders, replace=True, random_state=seed).reset_index(drop=True)
+    initial_loads = rng.poisson(calibration.initial_load_lambda, n_riders).clip(0, 3)
+    speed_values = rng.normal(calibration.speed_kmph, max(calibration.speed_kmph * 0.12, 1.0), n_riders).clip(8.0, 45.0)
     riders = pd.DataFrame(
         {
             "rider_id": [f"r{i:04d}" for i in range(n_riders)],
             "lng": pd.to_numeric(anchors["lng"], errors="coerce").fillna(116.40).to_numpy() + rng.normal(0, 0.012, n_riders),
             "lat": pd.to_numeric(anchors["lat"], errors="coerce").fillna(39.92).to_numpy() + rng.normal(0, 0.010, n_riders),
-            "load": rng.integers(0, 2, n_riders),
+            "load": initial_loads.astype(int),
             "available_at": rng.integers(0, 10, n_riders),
-            "reliability": rng.normal(0.9, 0.06, n_riders).clip(0.72, 0.99),
-            "speed_kmh": rng.normal(21.0, 2.2, n_riders).clip(15.0, 28.0),
+            "reliability": rng.normal(calibration.reliability_mean, calibration.reliability_std, n_riders).clip(0.72, 0.99),
+            "speed_kmh": speed_values,
+            "speed_kmph": speed_values,
             "service_radius_km": rng.normal(6.0, 1.0, n_riders).clip(3.5, 9.0),
             "acceptance_rate": rng.normal(0.88, 0.08, n_riders).clip(0.55, 0.99),
+            "service_minutes": rng.normal(calibration.service_minutes, 2.0, n_riders).clip(5.0, 30.0),
             "income": np.zeros(n_riders),
             "assigned": np.zeros(n_riders, dtype=int),
         }
@@ -64,11 +77,12 @@ def estimate_order_eta(
         float(user_row.get("lng", 116.40)),
         float(user_row.get("lat", 39.92)),
     )
-    prep = 9.0 + (1.0 - float(merchant_row.get("food_comment_avg_score", 4.2)) / 5.0) * 9.0
+    service_minutes = float(rider_row.get("service_minutes", 9.0))
+    prep = service_minutes + (1.0 - float(merchant_row.get("food_comment_avg_score", 4.2)) / 5.0) * 5.0
     peak = 6.0 if period in {"lunch", "dinner"} else 2.0
     load_penalty = float(rider_row.get("load", 0)) * 5.0
     wait = max(float(rider_row.get("available_at", 0)) - current_time, 0.0)
-    pickup_speed = max(float(rider_row.get("speed_kmh", 20.0) or 20.0), 1.0)
+    pickup_speed = max(float(rider_row.get("speed_kmh", rider_row.get("speed_kmph", 20.0)) or 20.0), 1.0)
     delivery_speed = max(pickup_speed * 1.08, 1.0)
     return float(wait + prep + peak + rider_to_store / pickup_speed * 60.0 + store_to_user / delivery_speed * 60.0 + load_penalty)
 

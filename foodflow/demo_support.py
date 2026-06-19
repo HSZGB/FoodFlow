@@ -9,7 +9,14 @@ import pandas as pd
 
 from .data import PreparedData
 from .rerank import estimate_user_merchant_eta, fairness_scores, haversine_km, supply_score_for_merchant
-from .rider_sim import assign_order, estimate_order_eta, generate_riders, rider_score, update_rider_after_assignment
+from .rider_sim import (
+    acceptance_probability,
+    assign_order,
+    estimate_order_eta,
+    generate_riders,
+    rider_score,
+    update_rider_after_assignment,
+)
 
 
 def streamlit_image_width_kwargs(image_func: Callable) -> dict[str, object]:
@@ -273,7 +280,12 @@ def build_rider_candidate_frame(
     )
     candidates["eta_score"] = 1.0 - (pd.to_numeric(candidates["eta"], errors="coerce") / 80.0).clip(upper=1.0)
     candidates["load_score"] = 1.0 / (1.0 + candidates["load"].astype(float))
-    candidates["score"] = candidates.apply(lambda row: rider_score(float(row["eta"]), row), axis=1)
+    candidates["acceptance_prob"] = candidates.apply(
+        lambda row: acceptance_probability(user_row, merchant_row, row, float(row["eta"])), axis=1
+    )
+    candidates["score"] = candidates.apply(
+        lambda row: rider_score(float(row["eta"]), row, float(row["acceptance_prob"])), axis=1
+    )
     candidates["pickup_distance_km"] = candidates.apply(
         lambda row: haversine_km(
             float(row["lng"]),

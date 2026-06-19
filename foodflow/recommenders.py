@@ -684,6 +684,100 @@ class SeqXQuadTripartiteRecommender(SeqTripartiteRecommender):
         return recs, {m: scores.get(m, float(self.popular.get(m, 0))) for m in recs}
 
 
+class SessionSpuTripartiteRecommender(SeqXQuadTripartiteRecommender):
+    name = "Session-SPU-Tripartite"
+
+    def __init__(
+        self,
+        user_weight: float = 0.86,
+        fairness_weight: float = 0.025,
+        eta_weight: float = 0.03,
+        supply_weight: float = 0.015,
+        diversity_weight: float = 0.12,
+        tail_weight: float = 0.04,
+        session_weight: float = 0.055,
+        spu_weight: float = 0.015,
+    ):
+        super().__init__(user_weight, fairness_weight, eta_weight, supply_weight, diversity_weight, tail_weight)
+        self.session_weight = session_weight
+        self.spu_weight = spu_weight
+
+    def fit(self, data: PreparedData) -> "SessionSpuTripartiteRecommender":
+        super().fit(data)
+        if not data.session_interactions.empty:
+            sessions = data.session_interactions.copy()
+            sessions["rank"] = pd.to_numeric(sessions.get("rank", 1), errors="coerce").fillna(1)
+            sessions = sessions.sort_values(["user_id", "rank"])
+            self.session_by_user = {
+                str(user_id): group["wm_poi_id"].astype(str).tolist()
+                for user_id, group in sessions.groupby("user_id", sort=False)
+            }
+        else:
+            self.session_by_user = {}
+
+        self.user_spu_categories: dict[str, Counter[str]] = {}
+        self.merchant_spu_categories: dict[str, Counter[str]] = {}
+        if not data.order_spus_train.empty and "category" in data.spus.columns:
+            order_spus = data.order_spus_train.merge(
+                data.spus[["wm_food_spu_id", "category"]],
+                on="wm_food_spu_id",
+                how="left",
+            ).dropna(subset=["category"])
+            self.user_spu_categories = {
+                str(user_id): Counter(group["category"].astype(str))
+                for user_id, group in order_spus.groupby("user_id", sort=False)
+            }
+            self.merchant_spu_categories = {
+                str(merchant_id): Counter(group["category"].astype(str))
+                for merchant_id, group in order_spus.groupby("wm_poi_id", sort=False)
+            }
+        return self
+
+    def _spu_affinity(self, user_id: str, merchant_id: str) -> float:
+        user_counts = self.user_spu_categories.get(user_id, Counter())
+        merchant_counts = self.merchant_spu_categories.get(merchant_id, Counter())
+        if not user_counts or not merchant_counts:
+            return 0.0
+        overlap = set(user_counts) & set(merchant_counts)
+        if not overlap:
+            return 0.0
+        numerator = sum(min(user_counts[key], merchant_counts[key]) for key in overlap)
+        denominator = max(sum(user_counts.values()), 1)
+        return float(min(numerator / denominator, 1.0))
+
+    def _session_score(self, user_id: str, merchant_id: str) -> float:
+        clicked = self.session_by_user.get(user_id, [])
+        for rank, item in enumerate(clicked, start=1):
+            if item == merchant_id:
+                return float(np.exp(-(rank - 1) / 4.0))
+        return 0.0
+
+    def _sequential_candidates(self, user_id: str) -> list[str]:
+        session_candidates = [m for m in self.session_by_user.get(user_id, []) if m in self.active_set]
+        spu_categories = self.user_spu_categories.get(user_id, Counter())
+        spu_candidates: list[str] = []
+        if spu_categories:
+            favorite_categories = {cat for cat, _ in spu_categories.most_common(3)}
+            for merchant_id, categories in self.merchant_spu_categories.items():
+                if merchant_id in self.active_set and favorite_categories & set(categories):
+                    spu_candidates.append(merchant_id)
+        base = super()._sequential_candidates(user_id)
+        return [m for m in dict.fromkeys(session_candidates + spu_candidates[:120] + base) if m in self.merchants.index]
+
+    def component_scores(self, user_id: str, merchant_id: str, period: str = "lunch") -> dict[str, float]:
+        components = super().component_scores(user_id, merchant_id, period)
+        session_score = self._session_score(user_id, merchant_id)
+        spu_score = self._spu_affinity(user_id, merchant_id)
+        components["session_score"] = session_score
+        components["spu_score"] = spu_score
+        components["final_score"] = float(
+            components["final_score"]
+            + self.session_weight * session_score
+            + self.spu_weight * spu_score
+        )
+        return components
+
+
 class TripartiteRerankRecommender(UserOnlyRecommender):
     name = "Tripartite-Rerank"
 
@@ -782,4 +876,5 @@ def build_recommenders(seed: int = 42) -> list[BaseRecommender]:
         learned_seq_recommender,
         SeqTunedRecommender(),
         SeqXQuadTripartiteRecommender(),
+        SessionSpuTripartiteRecommender(),
     ]

@@ -8,8 +8,8 @@
 - [x] 真实 TRD 必需 txt 文件已下载并通过 md5 校验；正式指标和报告已由完整 TRD `orders_train.txt` 生成。
 - [x] `make smoke` 已改为隔离目录，不会覆盖真实 TRD raw/processed/outputs。
 - [x] 新增 conda 环境、数据审计、三方可视化看板和历史消融记录。
-- [x] 当前默认主线已收敛为 5 个离线策略：Popular、BPR-MF、UserOnly、Seq-Tuned、Seq-xQuAD-Tripartite。
-- [x] 当前默认仿真已收敛为 4 条链路：Popular + Nearest、UserOnly + MinETA、Seq-Tuned + MinETA、Seq-xQuAD-Tripartite。
+- [x] 当前默认主线已收敛为 6 个离线策略：Popular、BPR-MF、UserOnly、Seq-Tuned、Seq-xQuAD-Tripartite、Session-SPU-Tripartite。
+- [x] 当前默认仿真已收敛为 5 条链路：Popular + Nearest、UserOnly + MinETA、Seq-Tuned + MinETA、Seq-xQuAD-Tripartite、Session-SPU-Tripartite。
 - [x] 保留 `scripts/search_seq_weights.py` 和消融文档作为过程记录，但 PPT 与 demo 不再展开全部历史候选。
 - [x] `simulate` CLI 增加策略级进度日志和耗时统计，长任务不再无反馈。
 - [ ] PPT 最终图片页和 `.pptx` 等待 `codex-ppt` 审批门禁。

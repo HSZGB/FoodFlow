@@ -6,9 +6,9 @@
 
 ## 项目亮点
 
-- 用户侧推荐：默认实验聚焦 Popular、BPR-MF、UserOnly、Seq-Tuned、Seq-xQuAD-Tripartite 五类代表性策略。
+- 用户侧推荐：默认实验聚焦 Popular、BPR-MF、UserOnly、Seq-Tuned、Seq-xQuAD-Tripartite，并提供 Session-SPU-Tripartite 作为点击会话与菜品信号增强策略。
 - 商家侧公平：在重排中引入商家曝光公平、长尾曝光与 Exposure Gini 等指标。
-- 骑手侧履约：模拟订单-骑手匹配，比较最近骑手、最小 ETA、负载感知三类策略。
+- 骑手侧履约：模拟订单-骑手匹配，比较最近骑手、最小 ETA、负载感知与外部任务校准后的骑手参数。
 - 动态仿真：模拟午餐高峰多时间步请求，持续更新骑手状态和订单履约结果。
 - 多指标评估：同时输出 Recall、NDCG、MRR、HitRate、Coverage、Exposure Gini、Avg ETA、Timeout Rate、Rider Load Std、Platform Utility。
 - 工程闭环：提供 Makefile、CLI、测试、图表、实验报告、Streamlit demo 和 NotebookLM PPT 素材包。
@@ -23,7 +23,7 @@
 - 时间：2021-03-01 至 2021-03-28
 - 使用文件：用户、商家、菜品、训练订单、测试订单和测试标签
 
-项目默认下载 TRD 的 txt 文件，不下载约 1.8GB 的 `graph.bin`，因为核心实现不依赖 DGL 图文件。TRD 不包含完整骑手状态和真实派单记录，因此骑手位置、在线状态、负载、可靠性和收入为固定 seed 合成 proxy，仅用于履约仿真，不声称为真实骑手数据。
+项目默认下载 TRD 的 txt 文件，不下载约 1.8GB 的 `graph.bin`，因为核心实现不依赖 DGL 图文件。TRD 不包含完整骑手状态和真实派单记录，因此骑手位置、在线状态、负载、可靠性和收入为固定 seed 合成 proxy，仅用于履约仿真，不声称为真实骑手数据。若有外部末端配送任务 CSV，可通过 `--rider-tasks` 校准骑手速度、服务时长和负载分布。
 
 ## 方法概览
 
@@ -40,7 +40,7 @@ TRD 数据下载与清洗
   -> 指标、图表、报告与 demo
 ```
 
-`Seq-Tuned` 借鉴 FPMC/下一篮子推荐和会话推荐思想，把外卖复购、最近订单时间衰减和商家转移概率加入排序，是当前离线准确率最强策略。`Seq-xQuAD-Tripartite` 则把列表级覆盖、商家公平、ETA 和供给约束接到同一个重排器中，是当前仿真平台效用最强策略。
+`Seq-Tuned` 借鉴 FPMC/下一篮子推荐和会话推荐思想，把外卖复购、最近订单时间衰减和商家转移概率加入排序，是当前离线准确率最强策略。`Seq-xQuAD-Tripartite` 则把列表级覆盖、商家公平、ETA 和供给约束接到同一个重排器中，是当前已提交全量 TRD 仿真结果里的平台效用最强策略。`Session-SPU-Tripartite` 进一步使用 TRD optional 的下单前点击商家序列和菜品 SPU 画像，扩展候选集和排序解释；重新运行 `make eval simulate` 后会进入新的默认评估与仿真结果。
 
 三方重排分数采用可解释加权：
 
@@ -130,6 +130,12 @@ make download preprocess eval simulate audit figures report
 
 ```bash
 python -m foodflow.cli simulate --quiet
+```
+
+如果有外部配送任务数据，可校准骑手仿真参数：
+
+```bash
+make simulate-calibrated RIDER_TASKS=/path/to/delivery_tasks.csv
 ```
 
 如果要使用完整 TRD 训练集：

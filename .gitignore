@@ -1,6 +1,7 @@
 .venv/
 __pycache__/
 *.py[cod]
+.DS_Store
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
@@ -8,6 +9,7 @@ __pycache__/
 data/raw/
 data/processed/
 data/sample/
+data/trd_raw/_duplicates/
 outputs/*
 !outputs/.gitkeep
 !outputs/results/

@@ -3,6 +3,8 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
+import pandas as pd
+
 from .audit import audit_data
 from .config import DEFAULT_PROCESSED_DIR, DEFAULT_RAW_DIR
 from .data import PreparedData
@@ -12,6 +14,7 @@ from .figures import generate_figures
 from .mock_data import make_mock_trd
 from .preprocess import preprocess
 from .report import build_report
+from .rider_data import estimate_rider_calibration
 from .simulator import run_simulation
 
 
@@ -46,6 +49,12 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--output", type=Path, default=Path("outputs/results/simulation_metrics.csv"))
     p.add_argument("--seed", type=int, default=42)
     p.add_argument("--quiet", action="store_true", help="Disable per-policy progress logs.")
+    p.add_argument(
+        "--rider-tasks",
+        type=Path,
+        default=None,
+        help="Optional real delivery task CSV used to calibrate synthetic rider speed, service time, and load.",
+    )
 
     p = sub.add_parser("figures")
     p.add_argument("--results-dir", type=Path, default=Path("outputs/results"))
@@ -90,7 +99,10 @@ def main(argv: list[str] | None = None) -> None:
         print(df.to_string(index=False))
     elif args.command == "simulate":
         data = PreparedData.load(args.processed_dir)
-        df = run_simulation(data, seed=args.seed, verbose=not args.quiet)
+        rider_calibration = None
+        if args.rider_tasks:
+            rider_calibration = estimate_rider_calibration(pd.read_csv(args.rider_tasks))
+        df = run_simulation(data, seed=args.seed, verbose=not args.quiet, rider_calibration=rider_calibration)
         args.output.parent.mkdir(parents=True, exist_ok=True)
         df.to_csv(args.output, index=False)
         print(df.to_string(index=False))
