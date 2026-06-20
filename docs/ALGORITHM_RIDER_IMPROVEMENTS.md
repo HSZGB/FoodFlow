@@ -11,20 +11,28 @@
 
 ## 2. 新增骑手校准路径
 
-TRD 不包含真实骑手状态或派单记录，因此 FoodFlow 仍然把骑手侧定义为仿真。新增的骑手校准接口允许使用外部末端配送任务 CSV 来估计仿真参数，包括：
+TRD 不包含真实骑手状态或派单记录，因此 FoodFlow 仍然把骑手侧定义为仿真。新增的骑手校准接口允许使用 LaDe 等公开末端配送任务 CSV 来估计仿真参数，包括：
 
 - 骑手平均速度 `speed_kmph`
 - 单任务服务时长 `service_minutes`
-- 初始负载强度 `initial_load_lambda`
+- 初始负载强度 `initial_load_lambda`，由同一配送员 task-accept 到 task-finish 区间的重叠任务数估计
 - 可靠性均值和波动
 
-外部 CSV 至少需要这些列：
+外部 CSV 可使用项目通用字段：
 
 ```text
 courier_id,accept_time,finish_time,pickup_lng,pickup_lat,delivery_lng,delivery_lat
 ```
 
 `accept_time` 和 `finish_time` 可以是数值分钟，也可以是可由 pandas 解析的时间字符串。
+
+也可以直接使用 LaDe delivery 文件字段：
+
+```text
+courier_id,accept_time,accept_gps_lng,accept_gps_lat,delivery_time,delivery_gps_lng,delivery_gps_lat
+```
+
+其中 `accept_gps_*` 作为任务开始位置，`delivery_gps_*` 作为任务完成位置，`delivery_time` 映射为 `finish_time`。
 
 ## 3. 使用方式
 
@@ -37,7 +45,7 @@ make simulate
 使用外部配送任务数据校准骑手仿真：
 
 ```bash
-make simulate-calibrated RIDER_TASKS=/path/to/delivery_tasks.csv
+make simulate-calibrated RIDER_TASKS=/path/to/lade_delivery.csv
 ```
 
 等价 CLI：
@@ -46,7 +54,7 @@ make simulate-calibrated RIDER_TASKS=/path/to/delivery_tasks.csv
 python -m foodflow.cli simulate \
   --processed-dir data/processed \
   --output outputs/results/simulation_metrics_calibrated.csv \
-  --rider-tasks /path/to/delivery_tasks.csv
+  --rider-tasks /path/to/lade_delivery.csv
 ```
 
 输出表会额外包含 `rider_speed_kmph` 与 `rider_service_minutes`，便于在报告中说明仿真参数来自固定默认值还是外部数据校准。
@@ -55,4 +63,4 @@ python -m foodflow.cli simulate \
 
 这项增强不能把 TRD 变成真实派单数据。更准确的表述是：
 
-> 推荐侧使用真实 TRD 订单与点击/菜品信号；骑手侧仍是仿真，但可用公开末端配送任务数据校准速度、服务时长和负载分布。
+> 推荐侧使用真实 TRD 订单与点击/菜品信号；骑手侧仍是仿真，但可用 LaDe 等公开末端配送任务数据校准速度、服务时长和负载分布。LaDe 不是外卖平台数据，因此不能声称获得了真实外卖骑手派单记录。

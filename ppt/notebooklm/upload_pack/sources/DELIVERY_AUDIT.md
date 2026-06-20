@@ -1,6 +1,6 @@
 # FoodFlow 交付验收审计
 
-审计日期：2026-06-19
+审计日期：2026-06-20
 
 ## 课程硬性要求映射
 
@@ -26,7 +26,7 @@
 ./.venv/bin/python -m pytest -q
 ```
 
-结果：`24 passed`。
+结果：`27 passed`。
 
 ```bash
 test -s report/实验报告.md \

@@ -53,7 +53,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--rider-tasks",
         type=Path,
         default=None,
-        help="Optional real delivery task CSV used to calibrate synthetic rider speed, service time, and load.",
+        help="Optional delivery task CSV, including LaDe delivery files, used to calibrate synthetic rider speed, service time, and load.",
     )
 
     p = sub.add_parser("figures")

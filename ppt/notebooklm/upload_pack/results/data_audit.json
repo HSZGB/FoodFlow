@@ -88,5 +88,5 @@
   "processed_train_orders": 1068495,
   "train_sample_fraction": 1.0,
   "train_mode": "full",
-  "rider_data": "synthetic proxy; TRD has no full rider state or dispatch records"
+  "rider_data": "default synthetic proxy; LaDe delivery CSV can calibrate rider parameters, but TRD has no full rider state or dispatch records"
 }

@@ -58,7 +58,7 @@ def _data_audit_summary(path: Path) -> str:
         ("原始训练订单数", audit.get("raw_train_orders")),
         ("处理后训练订单数", audit.get("processed_train_orders")),
         ("训练订单使用比例", f"{float(audit.get('train_sample_fraction', 0.0)):.4f}"),
-        ("骑手数据边界", "合成 proxy，非真实派单记录"),
+        ("骑手数据边界", "默认合成 proxy；可用 LaDe delivery CSV 校准，非真实外卖派单记录"),
     ]
     return pd.DataFrame(rows, columns=["项目", "值"]).to_markdown(index=False)
 
@@ -97,7 +97,7 @@ FoodFlow 面向外卖平台推荐场景，先用真实外卖订单数据评估�
 
 主数据集为 Takeout Recommendation Dataset (TRD)，Zenodo DOI：`10.5281/zenodo.8025855`。数据来自美团外卖北京 11 个商圈，时间范围为 2021-03-01 至 2021-03-28，包含用户、餐厅、菜品、训练订单、测试订单和测试标签。
 
-项目默认下载 TRD 的 txt 文件，不下载约 1.8GB 的 `graph.bin`，因为核心实现不依赖 DGL 图。骑手位置、在线状态、负载和收入为合成仿真数据，生成规则固定 seed，并在实验中仅作为履约约束 proxy，不声称为真实骑手数据。
+项目默认下载 TRD 的 txt 文件，不下载约 1.8GB 的 `graph.bin`，因为核心实现不依赖 DGL 图。TRD 不包含真实骑手状态和派单记录，因此默认骑手位置、在线状态、负载和收入为固定 seed 合成 proxy。若提供 LaDe delivery CSV，系统可从 task-accept/task-finish 时空事件估计骑手速度、服务时长和任务重叠负载，但 LaDe 不是外卖平台数据，不能声称为真实外卖派单记录。
 
 {data_mode}
 
@@ -107,9 +107,9 @@ FoodFlow 面向外卖平台推荐场景，先用真实外卖订单数据评估�
 
 ## 3. 方法设计
 
-默认实验保留 7 个代表策略：Popular、BPR-MF、UserOnly、Seq-Tuned、{learned_ltr}、Seq-xQuAD-Tripartite 和 Session-SPU-Tripartite。前六项覆盖热度、矩阵分解、用户画像、序列规则、学习排序和三方重排；Session-SPU-Tripartite 只使用训练期点击会话与菜品信号，避免把测试期行为泄漏到离线排序。
+默认实验保留 7 个代表策略：Popular、BPR-MF、UserOnly、Seq-Tuned、{learned_ltr}、Seq-xQuAD-Tripartite 和 Session-SPU-Tripartite。LightGBM 不可用时显式使用 Logistic-LTR；Session-SPU-Tripartite 只使用训练期点击会话与菜品信号，避免把测试期行为泄漏到离线排序。
 
-Popular 是全局热度对照；BPR-MF 是传统隐式反馈矩阵分解；UserOnly 使用品类、复购、价格、时段和商家质量构造可解释画像分；LightGBM-LTR 复用 Seq-Tuned 的 recency、repeat、transition、category、popularity、quality 等特征，但用 LightGBM LambdaRank 学习排序函数，替代手动硬编码的 `SEQ_TUNED_WEIGHTS`；Seq-xQuAD-Tripartite 把列表级覆盖、商家公平、ETA 和供给约束接到同一个重排器，用来评估三方推荐是否改善履约。
+Popular 是全局热度对照；BPR-MF 是传统隐式反馈矩阵分解；UserOnly 使用品类、复购、价格、时段和商家质量构造可解释画像分；LightGBM-LTR 复用 Seq-Tuned 的 recency、repeat、transition、category、popularity、quality 等特征，但用 LightGBM LambdaRank 学习排序函数，替代手动硬编码的 `SEQ_TUNED_WEIGHTS`；Seq-xQuAD-Tripartite 把列表级覆盖、商家公平、ETA 和供给约束接到同一个重排器；Session-SPU-Tripartite 进一步加入 TRD session 点击候选和菜品 SPU 类目偏好，用来评估更丰富的真实行为信号是否改善履约链路。
 
 `Seq-Tuned` 保留为可解释规则基线；LightGBM 不可用时，系统使用 Logistic-LTR，而不是把规则模型伪装成学习排序。仿真共 7 条链路，并对 Seq-xQuAD-Tripartite 同时运行逐单贪心和容量槽位批量最大权匹配。各策略共享请求流和初始骑手池，同一推荐器还共享 MNL 选择噪声，减少随机场景差异。
 
@@ -137,9 +137,9 @@ Popular 是全局热度对照；BPR-MF 是传统隐式反馈矩阵分解；UserO
 
 ## 7. 结论与局限
 
-FoodFlow 的答辩故事可以概括为三步：第一，公开外卖订单数据上的推荐实验证明模型不是随机的，并用 Seq-Tuned 与 {learned_ltr} 把离线排序指标继续推高；第二，显式加入商家曝光、长尾曝光、品类校准和 Gini 指标，让推荐不再只围绕用户命中率讨论；第三，Seq-xQuAD-Tripartite、MNL 选择模型和骑手匹配对照把 ETA、超时风险、订单吞吐和平台效用放进同一张评价表，从而体现多主体平台的系统级优化。
+FoodFlow 的答辩故事可以概括为三步：第一，公开外卖订单数据上的推荐实验说明模型不是随机的，并进一步利用 TRD session 点击和 SPU 菜品信号；第二，引入 LightGBM-LTR 或其可解释 fallback，让序列特征权重不只依赖单一热度；第三，将推荐结果接入骑手履约仿真，并用批量二分图匹配、Session-SPU 行为增强和 LaDe 可校准骑手参数说明准确性、公平性、ETA、超时率和平台效用之间的权衡。
 
-局限是骑手数据来自合成仿真，不能替代工业级派单数据；LightGBM-LTR 当前仍使用项目构造的候选集和特征，训练标签来自历史下单集合，后续可以进一步加入更丰富的上下文、真实曝光/点击标签和跨城市验证。
+局限是骑手数据默认来自合成仿真；LaDe 可用于校准末端配送速度、任务时长和负载分布，但仍不能替代工业级外卖派单数据。LightGBM-LTR 当前仍使用项目构造的候选集和特征，训练标签来自历史下单集合，后续可以进一步加入更丰富的上下文、真实曝光/点击标签和跨城市验证。
 """
     output.write_text(text, encoding="utf-8")
     return output

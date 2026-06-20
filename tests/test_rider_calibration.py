@@ -49,6 +49,74 @@ def test_estimate_rider_calibration_from_delivery_tasks():
     assert 0.72 <= calibration.reliability_mean <= 0.99
 
 
+def test_estimate_rider_calibration_accepts_lade_delivery_schema():
+    tasks = pd.DataFrame(
+        [
+            {
+                "order_id": 1,
+                "city": "cq",
+                "courier_id": 101,
+                "accept_time": "2021-03-18 12:00:00",
+                "accept_gps_lng": 116.400,
+                "accept_gps_lat": 39.900,
+                "delivery_time": "2021-03-18 12:24:00",
+                "delivery_gps_lng": 116.430,
+                "delivery_gps_lat": 39.920,
+            },
+            {
+                "order_id": 2,
+                "city": "cq",
+                "courier_id": 101,
+                "accept_time": "2021-03-18 12:10:00",
+                "accept_gps_lng": 116.410,
+                "accept_gps_lat": 39.905,
+                "delivery_time": "2021-03-18 12:45:00",
+                "delivery_gps_lng": 116.440,
+                "delivery_gps_lat": 39.925,
+            },
+            {
+                "order_id": 3,
+                "city": "cq",
+                "courier_id": 102,
+                "accept_time": "2021-03-18 13:00:00",
+                "accept_gps_lng": 116.390,
+                "accept_gps_lat": 39.910,
+                "delivery_time": "2021-03-18 13:20:00",
+                "delivery_gps_lng": 116.420,
+                "delivery_gps_lat": 39.930,
+            },
+        ]
+    )
+
+    calibration = estimate_rider_calibration(tasks)
+
+    assert calibration.speed_kmph > 0
+    assert calibration.service_minutes > 0
+    assert calibration.initial_load_lambda > 0
+    assert 0.72 <= calibration.reliability_mean <= 0.99
+
+
+def test_initial_load_uses_task_overlap_not_total_history_volume():
+    tasks = pd.DataFrame(
+        [
+            {
+                "courier_id": "r1",
+                "accept_time": i * 60,
+                "finish_time": i * 60 + 20,
+                "pickup_lng": 116.400,
+                "pickup_lat": 39.900,
+                "delivery_lng": 116.410,
+                "delivery_lat": 39.910,
+            }
+            for i in range(30)
+        ]
+    )
+
+    calibration = estimate_rider_calibration(tasks)
+
+    assert calibration.initial_load_lambda < 1.0
+
+
 def test_generate_riders_accepts_calibration_parameters():
     merchants = pd.DataFrame(
         [

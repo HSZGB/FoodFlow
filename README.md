@@ -24,7 +24,7 @@
 - 时间：2021-03-01 至 2021-03-28
 - 使用文件：用户、商家、菜品、训练订单、测试订单和测试标签
 
-项目默认下载 TRD 的 txt 文件，不下载约 1.8GB 的 `graph.bin`，因为核心实现不依赖 DGL 图文件。TRD 不包含完整骑手状态和真实派单记录，因此骑手位置、在线状态、负载、可靠性和收入为固定 seed 合成 proxy，仅用于履约仿真，不声称为真实骑手数据。若有外部末端配送任务 CSV，可通过 `--rider-tasks` 校准骑手速度、服务时长和负载分布。
+项目默认下载 TRD 的 txt 文件，不下载约 1.8GB 的 `graph.bin`，因为核心实现不依赖 DGL 图文件。TRD 不包含完整骑手状态和真实派单记录，因此骑手位置、在线状态、负载、可靠性和收入为固定 seed 合成 proxy，仅用于履约仿真，不声称为真实骑手数据。若有 LaDe 等公开末端配送任务 CSV，可通过 `--rider-tasks` 校准骑手速度、服务时长和负载分布。
 
 ## 方法概览
 
@@ -134,11 +134,13 @@ make download preprocess eval simulate audit figures report
 python -m foodflow.cli simulate --quiet
 ```
 
-如果有外部配送任务数据，可校准骑手仿真参数：
+如果有 LaDe 末端配送任务数据，可校准骑手仿真参数：
 
 ```bash
-make simulate-calibrated RIDER_TASKS=/path/to/delivery_tasks.csv
+make simulate-calibrated RIDER_TASKS=/path/to/lade_delivery.csv
 ```
+
+`--rider-tasks` 同时支持项目通用字段 `courier_id,accept_time,finish_time,pickup_lng,pickup_lat,delivery_lng,delivery_lat`，以及 LaDe delivery 文件中的 `courier_id,accept_time,accept_gps_lng,accept_gps_lat,delivery_time,delivery_gps_lng,delivery_gps_lat`。LaDe 不是外卖平台数据，因此只用于骑手速度、任务时长、任务重叠负载和可靠性 proxy 的估计，不参与用户-商家推荐训练。
 
 如果要使用完整 TRD 训练集：
 
@@ -263,7 +265,7 @@ make notebooklm-pack
 
 ## 局限与说明
 
-- 骑手数据为合成 proxy，不能替代真实派单数据。
+- 骑手数据默认为合成 proxy；如提供 LaDe delivery CSV，可校准速度、服务时长和负载分布，但 LaDe 仍不能替代真实外卖派单数据。
 - BPR-MF 是轻量实现，未追求大规模深度模型最优性能。
 - 项目实现的是轻量 KG 路径解释，没有实现 LightGCN、KGAT 或完整知识图谱训练模型，这些作为调研背景和后续增强方向。
 - 平台效用权重是课程项目中的解释性设置，后续可做权重敏感性分析。
