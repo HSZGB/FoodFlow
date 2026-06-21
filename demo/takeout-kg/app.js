@@ -1108,7 +1108,330 @@ const extraMerchants = [
   },
 ];
 
-merchants.push(...extraMerchants);
+const generatedMerchantBlueprints = [
+  {
+    category: "川湘辣味",
+    cuisine: "川菜",
+    names: ["椒火水煮肉片", "蜀巷麻婆豆腐", "红油钵钵鸡", "山城辣子鸡", "藤椒牛肉饭", "川府回锅肉"],
+    foods: [["水煮肉片", "红油抄手"], ["麻婆豆腐饭", "宫保鸡丁"], ["钵钵鸡", "甜皮鸭"], ["辣子鸡", "酸辣粉"], ["藤椒牛肉饭", "冒菜"], ["回锅肉饭", "鱼香肉丝"]],
+    tastes: ["麻辣", "香辣", "重口味", "热食"],
+    scenes: ["午餐", "晚餐", "加班"],
+    ingredients: ["牛肉", "鸡肉", "豆腐", "辣椒"],
+    cooking: ["现炒", "红油", "炖煮"],
+    nutrition: ["高蛋白"],
+    crowd: ["重口味人群", "工作餐人群"],
+    image: "./assets/sichuan.svg",
+    accent: "#f56a4d",
+  },
+  {
+    category: "盖饭便当",
+    cuisine: "粤式",
+    names: ["港记叉烧饭", "广府白切鸡饭", "烧鹅便当屋", "黑椒鸡扒饭", "豉油鸡饭堂", "蜜汁排骨饭"],
+    foods: [["叉烧饭", "例汤"], ["白切鸡饭", "冬瓜汤"], ["烧鹅饭", "青菜"], ["黑椒鸡扒饭", "煎蛋"], ["豉油鸡饭", "卤蛋"], ["蜜汁排骨饭", "时蔬"]],
+    tastes: ["咸鲜", "肉食", "下饭", "热食"],
+    scenes: ["午餐", "工作餐", "晚餐"],
+    ingredients: ["鸡肉", "猪肉", "米饭", "青菜"],
+    cooking: ["烧腊", "盖饭", "煎烤"],
+    nutrition: ["高蛋白"],
+    crowd: ["工作餐人群", "肉食偏好"],
+    image: "./assets/rice.svg",
+    accent: "#f4b63f",
+  },
+  {
+    category: "轻食沙拉",
+    cuisine: "健康餐",
+    names: ["绿野藜麦碗", "蛋白质沙拉站", "牛油果轻食铺", "低脂鸡胸厨房", "彩虹蔬菜碗", "地中海轻食杯"],
+    foods: [["藜麦鸡胸碗", "羽衣甘蓝沙拉"], ["虾仁蛋白沙拉", "酸奶杯"], ["牛油果鸡蛋沙拉", "全麦卷"], ["香煎鸡胸饭", "蔬菜汤"], ["彩虹蔬菜碗", "鹰嘴豆泥"], ["地中海牛肉碗", "番茄汤"]],
+    tastes: ["清淡", "低脂", "蔬菜", "清爽"],
+    scenes: ["午餐", "健身", "工作餐"],
+    ingredients: ["鸡胸肉", "生菜", "藜麦", "牛油果"],
+    cooking: ["少油", "冷食", "煎烤"],
+    nutrition: ["低脂", "高蛋白", "控糖"],
+    crowd: ["健身人群", "轻食人群"],
+    image: "./assets/salad.svg",
+    accent: "#3fb984",
+  },
+  {
+    category: "粉面汤粥",
+    cuisine: "重庆",
+    names: ["山城豌杂面", "红汤肥肠面", "番茄肥牛米线", "砂锅酸辣粉", "牛肉汤粉铺", "云吞竹升面"],
+    foods: [["豌杂小面", "红油抄手"], ["肥肠面", "凉拌黄瓜"], ["番茄肥牛米线", "菌菇米线"], ["砂锅酸辣粉", "炸蛋"], ["牛肉汤粉", "卤蛋"], ["鲜虾云吞面", "净云吞"]],
+    tastes: ["麻辣", "酸辣", "汤面", "热食"],
+    scenes: ["早餐", "午餐", "晚餐", "雨天"],
+    ingredients: ["面条", "米粉", "牛肉", "青菜"],
+    cooking: ["现煮", "汤粉", "手工面"],
+    nutrition: ["暖胃", "高蛋白"],
+    crowd: ["粉面偏好", "面食偏好"],
+    image: "./assets/noodles.svg",
+    accent: "#519be8",
+  },
+  {
+    category: "烧烤夜宵",
+    cuisine: "东北烧烤",
+    names: ["炉边羊肉串", "夜市烤翅局", "炭火牛油小串", "锡纸花甲粉", "烤鱼夜宵档", "东北烤冷面"],
+    foods: [["羊肉串", "烤韭菜"], ["辣烤鸡翅", "烤土豆"], ["牛油小串", "烤豆皮"], ["锡纸花甲粉", "烤金针菇"], ["香辣烤鱼", "烤馒头"], ["烤冷面", "炸串"]],
+    tastes: ["孜然", "香辣", "肉食", "高热量"],
+    scenes: ["夜宵", "周末", "多人餐"],
+    ingredients: ["羊肉", "鸡翅", "花甲", "豆皮"],
+    cooking: ["炭烤", "现烤", "锡纸"],
+    nutrition: ["高蛋白", "高热量"],
+    crowd: ["夜宵人群", "合餐人群"],
+    image: "./assets/chicken.svg",
+    accent: "#c667a6",
+  },
+  {
+    category: "早餐粥点",
+    cuisine: "粥点",
+    names: ["晨光皮蛋瘦肉粥", "暖胃砂锅粥", "小笼蒸点铺", "鲜虾云吞粥", "南瓜小米粥", "豆浆油条档"],
+    foods: [["皮蛋瘦肉粥", "虾饺"], ["鲜虾砂锅粥", "干贝粥"], ["小笼包", "烧麦"], ["云吞粥", "蒸饺"], ["南瓜小米粥", "鸡蛋饼"], ["豆浆", "油条"]],
+    tastes: ["清淡", "暖胃", "热食", "咸鲜"],
+    scenes: ["早餐", "病中餐", "夜宵"],
+    ingredients: ["大米", "虾仁", "瘦肉", "面粉"],
+    cooking: ["慢煮", "蒸点", "现煮"],
+    nutrition: ["暖胃", "高蛋白"],
+    crowd: ["清淡人群", "家庭餐人群"],
+    image: "./assets/porridge.svg",
+    accent: "#3fb984",
+  },
+  {
+    category: "甜品饮品",
+    cuisine: "新茶饮",
+    names: ["多肉葡萄茶", "芋泥鲜奶铺", "桂花酒酿圆子", "椰椰水果杯", "芝士莓莓茶", "手作双皮奶"],
+    foods: [["多肉葡萄", "芝士奶盖"], ["芋泥鲜奶", "芋圆"], ["酒酿圆子", "银耳羹"], ["椰椰水果杯", "芒果西米露"], ["芝士莓莓", "杨枝甘露"], ["双皮奶", "姜撞奶"]],
+    tastes: ["甜口", "奶香", "清爽", "冰饮"],
+    scenes: ["下午茶", "夜宵", "周末"],
+    ingredients: ["水果", "牛奶", "茶", "芋泥"],
+    cooking: ["现制饮品", "冷饮", "甜品"],
+    nutrition: ["高糖", "冰饮"],
+    crowd: ["甜品偏好", "饮品偏好"],
+    image: "./assets/dessert.svg",
+    accent: "#c667a6",
+  },
+  {
+    category: "地方小吃",
+    cuisine: "西北",
+    names: ["秦味油泼面", "潼关肉夹馍", "凉皮擀面皮", "新疆抓饭铺", "沙茶拌面档", "锅盔酸辣粉"],
+    foods: [["油泼面", "冰峰"], ["肉夹馍", "凉皮"], ["擀面皮", "肉夹馍"], ["羊肉抓饭", "烤包子"], ["沙茶拌面", "花生汤"], ["锅盔", "酸辣粉"]],
+    tastes: ["酸辣", "面食", "小吃", "下饭"],
+    scenes: ["午餐", "快餐", "夜宵"],
+    ingredients: ["面粉", "牛肉", "猪肉", "辣椒"],
+    cooking: ["拌面", "凉拌", "烘烤"],
+    nutrition: ["暖胃"],
+    crowd: ["面食偏好", "快餐人群"],
+    image: "./assets/snack.svg",
+    accent: "#f4b63f",
+  },
+  {
+    category: "日韩料理",
+    cuisine: "韩式",
+    names: ["泡菜石锅饭", "芝士年糕铺", "日式鳗鱼饭", "寿司便当局", "韩式炸鸡屋", "味噌拉面馆"],
+    foods: [["石锅拌饭", "泡菜汤"], ["芝士年糕", "炸酱面"], ["鳗鱼饭", "味噌汤"], ["三文鱼寿司", "玉子烧"], ["韩式炸鸡", "年糕"], ["味噌拉面", "叉烧饭"]],
+    tastes: ["微辣", "甜辣", "清爽", "芝士"],
+    scenes: ["午餐", "下午茶", "夜宵"],
+    ingredients: ["米饭", "泡菜", "芝士", "三文鱼"],
+    cooking: ["拌饭", "炸制", "冷食"],
+    nutrition: ["高蛋白"],
+    crowd: ["异国料理偏好", "小吃偏好"],
+    image: "./assets/rice.svg",
+    accent: "#519be8",
+  },
+  {
+    category: "东南亚料理",
+    cuisine: "泰式",
+    names: ["泰香咖喱鸡饭", "越南河粉小馆", "椰香冬阴功", "新加坡叻沙铺", "柠檬鸡丝檬粉", "香茅烤肉饭"],
+    foods: [["黄咖喱鸡饭", "冬阴功汤"], ["牛肉河粉", "春卷"], ["冬阴功粉", "椰奶冻"], ["叻沙米粉", "沙爹鸡肉"], ["鸡丝檬粉", "柠檬茶"], ["香茅烤肉饭", "青木瓜沙拉"]],
+    tastes: ["咖喱", "酸甜", "清爽", "微辣"],
+    scenes: ["午餐", "晚餐", "工作餐"],
+    ingredients: ["鸡腿肉", "牛肉", "椰浆", "柠檬"],
+    cooking: ["炖煮", "汤粉", "烤制"],
+    nutrition: ["高蛋白", "清爽"],
+    crowd: ["异国料理偏好", "清淡人群"],
+    image: "./assets/noodles.svg",
+    accent: "#3fb984",
+  },
+  {
+    category: "咖啡轻食",
+    cuisine: "咖啡简餐",
+    names: ["拿铁三明治站", "法棍咖啡角", "全麦贝果铺", "冷萃轻食仓", "火鸡帕尼尼", "燕麦拿铁小店"],
+    foods: [["拿铁", "火鸡三明治"], ["法棍三明治", "美式咖啡"], ["全麦贝果", "酸奶杯"], ["冷萃咖啡", "鸡胸卷"], ["火鸡帕尼尼", "蔬菜汤"], ["燕麦拿铁", "香蕉蛋糕"]],
+    tastes: ["咖啡", "清爽", "低脂", "轻食"],
+    scenes: ["早餐", "下午茶", "加班"],
+    ingredients: ["咖啡豆", "牛奶", "全麦面包", "鸡胸肉"],
+    cooking: ["现制饮品", "烘烤", "冷食"],
+    nutrition: ["低脂", "轻食"],
+    crowd: ["咖啡偏好", "轻食人群"],
+    image: "./assets/fruit.svg",
+    accent: "#519be8",
+  },
+  {
+    category: "披萨意面",
+    cuisine: "意式",
+    names: ["番茄肉酱意面", "芝士披萨工坊", "奶油蘑菇面", "家庭披萨拼盘", "香蒜培根意面", "海鲜焗饭屋"],
+    foods: [["肉酱意面", "蘑菇汤"], ["玛格丽特披萨", "鸡翅"], ["奶油蘑菇面", "凯撒沙拉"], ["至尊披萨", "薯角"], ["培根意面", "蒜香面包"], ["海鲜焗饭", "番茄汤"]],
+    tastes: ["芝士", "番茄", "肉食", "高热量"],
+    scenes: ["晚餐", "周末", "多人餐"],
+    ingredients: ["芝士", "番茄", "面粉", "培根"],
+    cooking: ["烤制", "烘烤", "焗饭"],
+    nutrition: ["高热量"],
+    crowd: ["家庭餐人群", "合餐人群"],
+    image: "./assets/pizza.svg",
+    accent: "#f56a4d",
+  },
+  {
+    category: "特色正餐",
+    cuisine: "江湖菜",
+    names: ["香辣烤鱼饭", "酸汤鱼小馆", "黄焖鸡米饭", "铁锅炖排骨", "番茄牛腩锅", "菌菇鸡汤饭"],
+    foods: [["香辣烤鱼", "米饭"], ["酸汤鱼", "折耳根"], ["黄焖鸡米饭", "青菜"], ["铁锅炖排骨", "土豆"], ["番茄牛腩", "米饭"], ["菌菇鸡汤饭", "时蔬"]],
+    tastes: ["鱼鲜", "热食", "下饭", "鲜香"],
+    scenes: ["晚餐", "多人餐", "雨天"],
+    ingredients: ["鱼肉", "鸡肉", "牛肉", "菌菇"],
+    cooking: ["炖煮", "烤制", "砂锅"],
+    nutrition: ["高蛋白", "暖胃"],
+    crowd: ["合餐人群", "鱼鲜偏好"],
+    image: "./assets/fish.svg",
+    accent: "#519be8",
+  },
+];
+
+const areas = ["中关村", "五道口", "望京", "西二旗", "国贸", "三里屯", "上地", "回龙观", "亦庄", "朝阳门"];
+const benefitOptions = ["满减", "新客券", "折扣套餐", "免配送费", "会员券", "套餐优惠", "第二杯半价"];
+const deliveryOptions = ["出餐快", "近距离", "保温包装", "汤面分装", "夜间配送", "冷链包装"];
+const serviceOptions = ["包装严实", "辣度可选", "少糖可选", "酱料分装", "餐具齐全", "米饭可加", "配料分装"];
+const portionOptions = ["单人套餐", "双人餐", "多人分享", "小份尝鲜", "家庭份", "加量饭"];
+const timeSlotOptions = ["早餐", "午高峰", "下午", "晚高峰", "夜间"];
+const namePrefixes = ["云上", "巷口", "小满", "拾味", "南城", "北里", "青禾", "满堂", "有间", "烟火", "食光", "邻家", "一味", "米仓", "鲜作", "慢火", "热浪", "晓市"];
+const styleWords = ["手作", "鲜煮", "现炒", "匠心", "家常", "风味", "慢炖", "鲜切", "炭火", "砂锅", "热卤", "轻盈"];
+const storeSuffixes = ["小馆", "饭堂", "厨房", "食社", "铺", "档", "专门店", "研究所", "便当局", "食堂", "小站", "工坊"];
+const suffixByCategory = {
+  川湘辣味: ["小馆", "饭堂", "厨房", "食社"],
+  盖饭便当: ["饭堂", "便当局", "食堂", "厨房"],
+  轻食沙拉: ["轻食站", "沙拉铺", "厨房", "研究所"],
+  粉面汤粥: ["面馆", "粉铺", "汤铺", "小馆"],
+  烧烤夜宵: ["烤串铺", "夜宵档", "食社", "小馆"],
+  早餐粥点: ["粥铺", "点心局", "早餐铺", "小站"],
+  甜品饮品: ["甜品铺", "茶饮站", "糖水铺", "小站"],
+  地方小吃: ["小吃铺", "面档", "食社", "小馆"],
+  日韩料理: ["食堂", "料理屋", "便当局", "小馆"],
+  东南亚料理: ["小馆", "食堂", "粉铺", "厨房"],
+  咖啡轻食: ["咖啡站", "轻食铺", "小站", "工坊"],
+  披萨意面: ["工坊", "披萨铺", "意面屋", "厨房"],
+  特色正餐: ["小馆", "饭堂", "厨房", "食社"],
+};
+const focusByCategory = {
+  川湘辣味: ["川味", "辣味", "冒菜", "小炒"],
+  盖饭便当: ["热饭", "烧腊", "便当", "盖饭"],
+  轻食沙拉: ["轻食", "沙拉", "能量碗", "低脂餐"],
+  粉面汤粥: ["汤粉", "鲜汤", "手工面", "砂锅粉"],
+  烧烤夜宵: ["烤串", "炉火", "夜宵", "小串"],
+  早餐粥点: ["早粥", "蒸点", "早点", "暖粥"],
+  甜品饮品: ["甜品", "茶饮", "糖水", "果茶"],
+  地方小吃: ["小吃", "面点", "风味", "街巷"],
+  日韩料理: ["拌饭", "寿司", "便当", "年糕"],
+  东南亚料理: ["咖喱", "河粉", "香茅", "叻沙"],
+  咖啡轻食: ["咖啡", "轻食", "贝果", "三明治"],
+  披萨意面: ["披萨", "意面", "焗饭", "芝士"],
+  特色正餐: ["正餐", "砂锅", "鱼饭", "炖菜"],
+};
+const styleByCategory = {
+  川湘辣味: ["红油", "现炒", "香辣", "家常", "热辣", "小炒"],
+  盖饭便当: ["家常", "现烧", "酱香", "热饭", "匠心", "快手"],
+  轻食沙拉: ["轻盈", "鲜切", "低脂", "元气", "清爽", "手作"],
+  粉面汤粥: ["鲜煮", "砂锅", "暖汤", "手工", "红汤", "清汤"],
+  烧烤夜宵: ["炭火", "夜市", "现烤", "孜然", "热辣", "炉边"],
+  早餐粥点: ["慢炖", "暖胃", "晨光", "手作", "鲜蒸", "清粥"],
+  甜品饮品: ["鲜制", "轻甜", "手作", "冰爽", "桂香", "奶香"],
+  地方小吃: ["街巷", "手作", "现拌", "家常", "风味", "热乎"],
+  日韩料理: ["炙烧", "手作", "清爽", "酱香", "芝士", "便当"],
+  东南亚料理: ["椰香", "香茅", "酸甜", "清爽", "咖喱", "鲜煮"],
+  咖啡轻食: ["烘焙", "轻盈", "鲜作", "低脂", "手作", "冷萃"],
+  披萨意面: ["烘烤", "芝士", "番茄", "手作", "焗香", "炉火"],
+  特色正餐: ["慢炖", "鲜煮", "家常", "砂锅", "现烧", "浓汤"],
+};
+
+function pickFrom(list, index, count = 1) {
+  return Array.from({ length: count }, (_, offset) => list[(index + offset * 3) % list.length]);
+}
+
+function generatedMerchantName(blueprint, index, localIndex, variant) {
+  const base = blueprint.names[variant];
+  if (localIndex === 0) return base;
+  const prefix = namePrefixes[(index + variant * 2 + localIndex) % namePrefixes.length];
+  const styles = styleByCategory[blueprint.category] || styleWords;
+  const style = styles[(index * 3 + localIndex + variant) % styles.length];
+  const suffixes = suffixByCategory[blueprint.category] || storeSuffixes;
+  const suffix = suffixes[(index + localIndex * 5 + variant) % suffixes.length];
+  const focusWords = focusByCategory[blueprint.category] || [blueprint.category];
+  const focus = focusWords[(index + variant + localIndex) % focusWords.length];
+  const food = blueprint.foods[(variant + localIndex) % blueprint.foods.length][0].replace(/饭$|面$|粉$|粥$|汤$|茶$|杯$|局$|铺$|档$|馆$|屋$/u, "");
+  const cleanBase = base.replace(/铺|屋|馆|档|局|站|角|仓|工坊|小店|小馆|厨房|饭堂|便当屋|夜宵档|专门店/u, "");
+  const patterns = [
+    `${prefix}${food}${suffix}`,
+    `${cleanBase}${style}${suffix}`,
+    `${prefix}${style}${focus}${suffix}`,
+    `${food}${style}${suffix}`,
+  ];
+  return patterns[localIndex % patterns.length];
+}
+
+function uniquifyGeneratedNames(items) {
+  const used = new Map(merchants.map((merchant) => [merchant.name, 1]));
+  for (const item of items) {
+    const count = used.get(item.name) || 0;
+    if (count > 0) {
+      const area = item.area || areas[count % areas.length];
+      const cuisine = item.cuisine.replace(/菜|餐|料理|简餐/u, "");
+      item.name = `${item.name}·${area}${cuisine}`;
+    }
+    used.set(item.name, (used.get(item.name) || 0) + 1);
+  }
+  return items;
+}
+
+function generatedMerchant(index) {
+  const blueprint = generatedMerchantBlueprints[index % generatedMerchantBlueprints.length];
+  const localIndex = Math.floor(index / generatedMerchantBlueprints.length);
+  const variant = (index + localIndex) % blueprint.names.length;
+  const idNumber = merchants.length + extraMerchants.length + index + 1;
+  const basePrice = 22 + ((index * 7 + blueprint.category.length * 3) % 43);
+  const monthly = 520 + ((index * 137 + variant * 211) % 3420);
+  const rating = Number((4.35 + ((index * 17 + variant * 9) % 55) / 100).toFixed(1));
+  const distance = Number((0.4 + ((index * 11 + variant * 5) % 31) / 10).toFixed(1));
+  const delivery = Number((1 + ((index * 5 + variant * 3) % 11) / 2).toFixed(1));
+  return {
+    id: `m${idNumber}`,
+    name: generatedMerchantName(blueprint, index, localIndex, variant),
+    category: blueprint.category,
+    cuisine: blueprint.cuisine,
+    tastes: unique([...pickFrom(blueprint.tastes, index, 3), blueprint.tastes[variant % blueprint.tastes.length]]),
+    scenes: unique([...pickFrom(blueprint.scenes, index, 3), index % 5 === 0 ? "周末" : "工作餐"]),
+    area: areas[(index * 2 + variant) % areas.length],
+    price: basePrice,
+    delivery,
+    distance,
+    rating,
+    monthly,
+    foods: blueprint.foods[variant % blueprint.foods.length],
+    ingredients: unique([...pickFrom(blueprint.ingredients, index, 3), ...blueprint.ingredients.slice(0, 2)]),
+    cooking: unique(pickFrom(blueprint.cooking, index, 2)),
+    nutrition: unique([...blueprint.nutrition, index % 4 === 0 ? "可加蔬菜" : "", index % 6 === 0 ? "高纤维" : ""]),
+    timeSlots: unique(pickFrom(timeSlotOptions, index + variant, 2)),
+    crowd: unique([...blueprint.crowd, index % 3 === 0 ? "工作餐人群" : "", index % 7 === 0 ? "选择困难" : ""]),
+    portions: unique(pickFrom(portionOptions, index + variant, 2)),
+    benefits: unique(pickFrom(benefitOptions, index + variant, 2)),
+    deliveryTags: unique(pickFrom(deliveryOptions, index + variant, 2)),
+    serviceTags: unique(pickFrom(serviceOptions, index + variant, 2)),
+    image: blueprint.image,
+    accent: blueprint.accent,
+  };
+}
+
+const targetMerchantCount = 150;
+const generatedMerchants = Array.from({ length: targetMerchantCount - merchants.length - extraMerchants.length }, (_, index) =>
+  generatedMerchant(index),
+);
+uniquifyGeneratedNames(generatedMerchants);
+
+merchants.push(...extraMerchants, ...generatedMerchants);
 
 const historyOrders = [
   { merchantId: "m2", daysAgo: 3, weight: 0.88 },
@@ -1773,7 +2096,7 @@ function renderMetrics() {
   nodes.state.textContent =
     state.round === 0
       ? "初始随机推荐，等待首次点击"
-      : `已点击 ${state.clicks.length} 次，48 家商家按动态图谱兴趣整体重排`;
+      : `已点击 ${state.clicks.length} 次，${merchants.length} 家商家按动态图谱兴趣整体重排`;
   nodes.temp.textContent = clickStrength.toFixed(2);
   nodes.coverage.textContent = `${new Set(current.map((item) => relationLabels[item.type])).size} 类`;
   nodes.taste.textContent = top ? top.value : "等待点击";
