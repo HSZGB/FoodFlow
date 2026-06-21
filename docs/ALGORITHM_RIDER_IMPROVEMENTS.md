@@ -34,6 +34,14 @@ courier_id,accept_time,accept_gps_lng,accept_gps_lat,delivery_time,delivery_gps_
 
 其中 `accept_gps_*` 作为任务开始位置，`delivery_gps_*` 作为任务完成位置，`delivery_time` 映射为 `finish_time`。
 
+Hugging Face 上的合并版 `delivery_five_cities.csv` 使用另一组字段：
+
+```text
+delivery_user_id,receipt_time,receipt_lng,receipt_lat,sign_time,poi_lng,poi_lat
+```
+
+其中 `delivery_user_id` 映射为 `courier_id`，`receipt_time` 映射为 `accept_time`，`sign_time` 映射为 `finish_time`，`receipt_lng/lat -> poi_lng/lat` 用投影坐标欧氏距离估计任务距离。
+
 ## 3. 使用方式
 
 默认仿真不变：

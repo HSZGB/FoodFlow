@@ -96,6 +96,45 @@ def test_estimate_rider_calibration_accepts_lade_delivery_schema():
     assert 0.72 <= calibration.reliability_mean <= 0.99
 
 
+def test_estimate_rider_calibration_accepts_lade_five_cities_schema():
+    tasks = pd.DataFrame(
+        [
+            {
+                "delivery_user_id": "c1",
+                "from_city_name": "上海市",
+                "poi_lng": 10563512.0,
+                "poi_lat": -7458320.0,
+                "receipt_time": "03-18 13:35:00",
+                "receipt_lng": 10561603.0,
+                "receipt_lat": -7457997.0,
+                "sign_time": "03-18 14:51:00",
+                "sign_lng": None,
+                "sign_lat": None,
+                "ds": "0318",
+            },
+            {
+                "delivery_user_id": "c1",
+                "from_city_name": "上海市",
+                "poi_lng": 10563600.0,
+                "poi_lat": -7458400.0,
+                "receipt_time": "03-18 14:00:00",
+                "receipt_lng": 10562000.0,
+                "receipt_lat": -7458100.0,
+                "sign_time": "03-18 14:30:00",
+                "sign_lng": None,
+                "sign_lat": None,
+                "ds": "0318",
+            },
+        ]
+    )
+
+    calibration = estimate_rider_calibration(tasks)
+
+    assert calibration.speed_kmph > 0
+    assert calibration.service_minutes > 0
+    assert calibration.initial_load_lambda > 0
+
+
 def test_initial_load_uses_task_overlap_not_total_history_volume():
     tasks = pd.DataFrame(
         [

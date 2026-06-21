@@ -19,17 +19,18 @@ class RiderCalibration:
 
 CANONICAL_TASK_COLUMNS = {"accept_time", "finish_time", "pickup_lng", "pickup_lat", "delivery_lng", "delivery_lat"}
 LADE_COLUMN_ALIASES = {
-    "finish_time": ("delivery_time", "delivery_gps_time"),
-    "pickup_lng": ("accept_gps_lng",),
-    "pickup_lat": ("accept_gps_lat",),
-    "delivery_lng": ("delivery_gps_lng", "lng"),
-    "delivery_lat": ("delivery_gps_lat", "lat"),
+    "accept_time": ("receipt_time",),
+    "finish_time": ("delivery_time", "delivery_gps_time", "sign_time"),
+    "pickup_lng": ("accept_gps_lng", "receipt_lng"),
+    "pickup_lat": ("accept_gps_lat", "receipt_lat"),
+    "delivery_lng": ("delivery_gps_lng", "sign_lng", "poi_lng", "lng"),
+    "delivery_lat": ("delivery_gps_lat", "sign_lat", "poi_lat", "lat"),
 }
 
 
 def _first_existing_column(frame: pd.DataFrame, names: tuple[str, ...]) -> str | None:
     for name in names:
-        if name in frame.columns:
+        if name in frame.columns and not frame[name].replace("", np.nan).isna().all():
             return name
     return None
 
@@ -45,16 +46,23 @@ def normalize_delivery_tasks(tasks: pd.DataFrame) -> pd.DataFrame:
         return tasks.copy()
 
     out = pd.DataFrame(index=tasks.index)
-    if "courier_id" in tasks.columns:
-        out["courier_id"] = tasks["courier_id"]
-    elif "postman_id" in tasks.columns:
-        out["courier_id"] = tasks["postman_id"]
+    courier_source = _first_existing_column(tasks, ("courier_id", "postman_id", "delivery_user_id"))
+    if courier_source is not None:
+        out["courier_id"] = tasks[courier_source]
 
     for target in CANONICAL_TASK_COLUMNS:
         source = target if target in tasks.columns else _first_existing_column(tasks, LADE_COLUMN_ALIASES.get(target, ()))
         if source is not None:
             out[target] = tasks[source]
     return out
+
+
+def _parse_datetimes(values: pd.Series) -> pd.Series:
+    parsed = pd.to_datetime(values, format="%m-%d %H:%M:%S", errors="coerce")
+    missing = parsed.isna()
+    if missing.any():
+        parsed.loc[missing] = pd.to_datetime(values[missing], errors="coerce")
+    return parsed
 
 
 def _minutes_between(start: pd.Series, finish: pd.Series) -> pd.Series:
@@ -64,8 +72,8 @@ def _minutes_between(start: pd.Series, finish: pd.Series) -> pd.Series:
     if numeric_delta.notna().any():
         return numeric_delta.astype(float)
 
-    start_dt = pd.to_datetime(start, errors="coerce")
-    finish_dt = pd.to_datetime(finish, errors="coerce")
+    start_dt = _parse_datetimes(start)
+    finish_dt = _parse_datetimes(finish)
     return (finish_dt - start_dt).dt.total_seconds() / 60.0
 
 
@@ -73,7 +81,7 @@ def _relative_minutes(values: pd.Series) -> pd.Series:
     numeric = pd.to_numeric(values, errors="coerce")
     if numeric.notna().any():
         return numeric.astype(float)
-    dt = pd.to_datetime(values, errors="coerce")
+    dt = _parse_datetimes(values)
     if not dt.notna().any():
         return numeric.astype(float)
     return (dt - dt.min()).dt.total_seconds() / 60.0
@@ -97,6 +105,25 @@ def _active_loads_at_accept(frame: pd.DataFrame) -> list[float]:
     return loads
 
 
+def _task_distances_km(frame: pd.DataFrame) -> pd.Series:
+    pickup_lng = pd.to_numeric(frame["pickup_lng"], errors="coerce")
+    pickup_lat = pd.to_numeric(frame["pickup_lat"], errors="coerce")
+    delivery_lng = pd.to_numeric(frame["delivery_lng"], errors="coerce")
+    delivery_lat = pd.to_numeric(frame["delivery_lat"], errors="coerce")
+    coords = pd.concat([pickup_lng, pickup_lat, delivery_lng, delivery_lat], axis=1)
+    if coords.abs().max().max() > 360:
+        return ((delivery_lng - pickup_lng) ** 2 + (delivery_lat - pickup_lat) ** 2).pow(0.5) / 1000.0
+    return frame.apply(
+        lambda row: haversine_km(
+            float(row["pickup_lng"]),
+            float(row["pickup_lat"]),
+            float(row["delivery_lng"]),
+            float(row["delivery_lat"]),
+        ),
+        axis=1,
+    )
+
+
 def estimate_rider_calibration(tasks: pd.DataFrame) -> RiderCalibration:
     if tasks.empty:
         return RiderCalibration()
@@ -106,15 +133,7 @@ def estimate_rider_calibration(tasks: pd.DataFrame) -> RiderCalibration:
         raise ValueError(f"Delivery task data missing required columns: {sorted(missing)}")
 
     durations = _minutes_between(frame["accept_time"], frame["finish_time"])
-    distances = frame.apply(
-        lambda row: haversine_km(
-            float(row["pickup_lng"]),
-            float(row["pickup_lat"]),
-            float(row["delivery_lng"]),
-            float(row["delivery_lat"]),
-        ),
-        axis=1,
-    )
+    distances = _task_distances_km(frame)
     valid = pd.DataFrame({"duration": durations, "distance": distances}).replace([np.inf, -np.inf], np.nan).dropna()
     valid = valid[(valid["duration"] > 0) & (valid["distance"] > 0)]
     if valid.empty:

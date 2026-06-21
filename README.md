@@ -138,7 +138,7 @@ python -m foodflow.cli simulate --quiet
 make simulate-calibrated RIDER_TASKS=/path/to/lade_delivery.csv
 ```
 
-`--rider-tasks` 同时支持项目通用字段 `courier_id,accept_time,finish_time,pickup_lng,pickup_lat,delivery_lng,delivery_lat`，以及 LaDe delivery 文件中的 `courier_id,accept_time,accept_gps_lng,accept_gps_lat,delivery_time,delivery_gps_lng,delivery_gps_lat`。LaDe 不是外卖平台数据，因此只用于骑手速度、任务时长、任务重叠负载和可靠性 proxy 的估计，不参与用户-商家推荐训练。
+`--rider-tasks` 同时支持项目通用字段 `courier_id,accept_time,finish_time,pickup_lng,pickup_lat,delivery_lng,delivery_lat`，LaDe 分城市 delivery 字段 `courier_id,accept_time,accept_gps_lng,accept_gps_lat,delivery_time,delivery_gps_lng,delivery_gps_lat`，以及 Hugging Face 合并版 `delivery_five_cities.csv` 中的 `delivery_user_id,receipt_time,receipt_lng,receipt_lat,sign_time,poi_lng,poi_lat`。合并版坐标为投影坐标，项目会使用欧氏距离估计任务距离。LaDe 不是外卖平台数据，因此只用于骑手速度、任务时长、任务重叠负载和可靠性 proxy 的估计，不参与用户-商家推荐训练。
 
 如果要使用完整 TRD 训练集：
 

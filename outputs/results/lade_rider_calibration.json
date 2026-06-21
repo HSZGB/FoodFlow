@@ -1,0 +1,35 @@
+{
+  "source": "/private/tmp/lade/delivery_five_cities.csv",
+  "rows": 472419,
+  "valid_rows": 469327,
+  "cities": {
+    "杭州市": 185589,
+    "上海市": 165583,
+    "重庆市": 121247
+  },
+  "couriers": 1870,
+  "duration_minutes": {
+    "median": 94.0,
+    "p25": 53.0,
+    "p75": 166.0,
+    "p95": 488.0
+  },
+  "distance_km": {
+    "median": 2.0743158229717875,
+    "p25": 1.2317219421689467,
+    "p75": 3.3222321051758215,
+    "p95": 6.841249171675596
+  },
+  "active_load_at_accept": {
+    "mean": 7.320538645955194,
+    "median": 5.0,
+    "p95": 20.0
+  },
+  "calibration": {
+    "speed_kmph": 8.0,
+    "service_minutes": 90.0,
+    "initial_load_lambda": 2.5,
+    "reliability_mean": 0.9002207842293326,
+    "reliability_std": 0.1
+  }
+}
