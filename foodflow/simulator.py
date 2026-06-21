@@ -49,6 +49,13 @@ DEFAULT_POLICIES = [
         assignment_mode="batch",
         fairness=True,
     ),
+    SimulationPolicy(
+        "Session-SPU-Tripartite + Batch",
+        "session_spu_tripartite",
+        "load_aware",
+        assignment_mode="batch",
+        fairness=True,
+    ),
     SimulationPolicy("Session-SPU-Tripartite + Greedy", "session_spu_tripartite", "load_aware", fairness=True),
 ]
 
