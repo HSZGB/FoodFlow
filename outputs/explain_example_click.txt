@@ -1,0 +1,31 @@
+user=54489 positive_poi=2267
+
+#1 poi=1328 score=0.9345 label=0
+  - 近期点击临时兴趣 -> cat1:0 -> 候选商家
+  - 近期点击临时兴趣 -> brand:8.0 -> 候选商家
+  - 近期点击临时兴趣 -> delivery_score:high -> 候选商家
+  - 近期点击临时兴趣 -> cat2:1 -> 候选商家
+
+#2 poi=1733 score=0.9309 label=0
+  - 近期点击临时兴趣 -> delivery_score:excellent -> 候选商家
+  - 近期点击临时兴趣 -> cat1:0 -> 候选商家
+  - 近期点击临时兴趣 -> cat2:1 -> 候选商家
+  - 近期点击临时兴趣 -> food_category:13 -> 候选商家
+
+#3 poi=2683 score=0.9300 label=0
+  - 近期点击临时兴趣 -> delivery_score:excellent -> 候选商家
+  - 近期点击临时兴趣 -> poi_score:high -> 候选商家
+  - 近期点击临时兴趣 -> cat1:0 -> 候选商家
+  - 近期点击临时兴趣 -> cat2:0 -> 候选商家
+
+#4 poi=1628 score=0.9293 label=0
+  - 近期点击临时兴趣 -> delivery_score:excellent -> 候选商家
+  - 近期点击临时兴趣 -> cat1:0 -> 候选商家
+  - 近期点击临时兴趣 -> brand:8.0 -> 候选商家
+  - 近期点击临时兴趣 -> poi_score:medium -> 候选商家
+
+#5 poi=3047 score=0.9289 label=0
+  - 近期点击临时兴趣 -> delivery_score:excellent -> 候选商家
+  - 近期点击临时兴趣 -> cat1:2 -> 候选商家
+  - 近期点击临时兴趣 -> brand:8.0 -> 候选商家
+  - 近期点击临时兴趣 -> price:<29 -> 候选商家

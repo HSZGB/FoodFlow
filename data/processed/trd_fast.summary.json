@@ -1,0 +1,10 @@
+{
+  "users": 8701,
+  "pois": 29071,
+  "entities": 3796,
+  "relations": 16,
+  "train_instances": 16000,
+  "test_queries": 1000,
+  "kg_triples": 207414,
+  "basic_dim": 16
+}
