@@ -282,103 +282,6 @@ def viewport_range(values: list[float], padding_ratio: float = 0.18) -> list[flo
     return [low - padding, high + padding]
 
 
-def render_relative_position_map(row: pd.Series, title: str, height: int = 280) -> None:
-    required = [
-        "sample_user_lng",
-        "sample_user_lat",
-        "sample_merchant_lng",
-        "sample_merchant_lat",
-        "sample_rider_lng",
-        "sample_rider_lat",
-    ]
-    if any(key not in row or pd.isna(row[key]) for key in required):
-        st.caption("该时间步没有可展示的已派订单。")
-        return
-    user_lng = float(row["sample_user_lng"])
-    user_lat = float(row["sample_user_lat"])
-    merchant_lng = float(row["sample_merchant_lng"])
-    merchant_lat = float(row["sample_merchant_lat"])
-    rider_lng = float(row["sample_rider_lng"])
-    rider_lat = float(row["sample_rider_lat"])
-    eta = float(row.get("sample_eta", 0.0) or 0.0)
-    fig = go.Figure()
-    fig.add_trace(
-        go.Scatter(
-            x=[rider_lng, merchant_lng],
-            y=[rider_lat, merchant_lat],
-            mode="lines",
-            name="取餐段",
-            line=dict(color="#7c3aed", width=3, dash="dot"),
-            hoverinfo="skip",
-        )
-    )
-    fig.add_trace(
-        go.Scatter(
-            x=[merchant_lng, user_lng],
-            y=[merchant_lat, user_lat],
-            mode="lines",
-            name="配送段",
-            line=dict(color="#dc6803", width=3),
-            hoverinfo="skip",
-        )
-    )
-    fig.add_trace(
-        go.Scatter(
-            x=[user_lng],
-            y=[user_lat],
-            mode="markers+text",
-            name="用户",
-            text=[f"用户 {row.get('sample_user_id', '')}"],
-            textposition="top center",
-            marker=dict(size=15, color="#2563eb", symbol="circle", line=dict(color="#ffffff", width=1.4)),
-        )
-    )
-    fig.add_trace(
-        go.Scatter(
-            x=[merchant_lng],
-            y=[merchant_lat],
-            mode="markers+text",
-            name="商家",
-            text=[str(row.get("sample_merchant_name", "商家"))],
-            textposition="bottom center",
-            marker=dict(size=17, color="#0f766e", symbol="diamond", line=dict(color="#ffffff", width=1.4)),
-        )
-    )
-    fig.add_trace(
-        go.Scatter(
-            x=[rider_lng],
-            y=[rider_lat],
-            mode="markers+text",
-            name="骑手",
-            text=[str(row.get("sample_rider_id", "骑手"))],
-            textposition="top center",
-            marker=dict(size=16, color="#7c3aed", symbol="square", line=dict(color="#ffffff", width=1.4)),
-        )
-    )
-    focus_lng = [user_lng, merchant_lng, rider_lng]
-    focus_lat = [user_lat, merchant_lat, rider_lat]
-    fig.update_layout(
-        title=dict(text=f"{title} · ETA {eta:.1f} min", font=dict(color="#111827", size=14)),
-        font=dict(color="#111827"),
-        height=height,
-        margin=dict(l=6, r=6, t=46, b=6),
-        plot_bgcolor="#f6f8fb",
-        paper_bgcolor="#ffffff",
-        legend=dict(orientation="h", yanchor="bottom", y=1.03, xanchor="left", x=0, font=dict(size=10, color="#111827")),
-        dragmode="pan",
-    )
-    fig.update_xaxes(visible=False, showgrid=False, zeroline=False, range=viewport_range(focus_lng, 0.30))
-    fig.update_yaxes(
-        visible=False,
-        showgrid=False,
-        zeroline=False,
-        range=viewport_range(focus_lat, 0.30),
-        scaleanchor="x",
-        scaleratio=1,
-    )
-    st.plotly_chart(fig, use_container_width=True)
-
-
 def parse_step_matches(row: pd.Series) -> list[dict[str, object]]:
     raw = row.get("step_matches_json", row.get("batch_matches_json", ""))
     if raw is None or pd.isna(raw) or not str(raw).strip():
@@ -390,7 +293,7 @@ def parse_step_matches(row: pd.Series) -> list[dict[str, object]]:
     return matches if isinstance(matches, list) else []
 
 
-def render_step_matching_view(row: pd.Series) -> None:
+def render_step_matching_view(row: pd.Series, height: int = 430, show_table: bool = True) -> None:
     matches = parse_step_matches(row)
     if not matches:
         st.caption("该时间步没有可展示的匹配。")
@@ -513,7 +416,7 @@ def render_step_matching_view(row: pd.Series) -> None:
             font=dict(color="#111827", size=15),
         ),
         font=dict(color="#111827"),
-        height=430,
+        height=height,
         margin=dict(l=6, r=6, t=54, b=6),
         plot_bgcolor="#f6f8fb",
         paper_bgcolor="#ffffff",
@@ -529,6 +432,9 @@ def render_step_matching_view(row: pd.Series) -> None:
         scaleanchor="x",
         scaleratio=1,
     )
+    if not show_table:
+        st.plotly_chart(fig, use_container_width=True)
+        return
     st.caption(
         "蓝色 O 是用户订单，紫色 S 是骑手或骑手容量槽位，橙/绿实线表示该策略的匹配结果；"
         "紫色虚线表示骑手到商家的取餐段，绿色菱形是订单对应商家。Greedy 是逐单局部选择，Batch 是整批二分图匹配。"
@@ -1359,55 +1265,41 @@ with tab_peak:
                 )
                 st.plotly_chart(load_fig, use_container_width=True)
 
-            map_columns = [
-                "sample_user_lng",
-                "sample_user_lat",
-                "sample_merchant_lng",
-                "sample_merchant_lat",
-                "sample_rider_lng",
-                "sample_rider_lat",
-            ]
-            if all(column in trace_df.columns for column in map_columns):
-                st.subheader("仿真策略相对位置")
-                map_rows = trace_df.dropna(subset=map_columns).sort_values("step").groupby("policy", as_index=False).tail(1)
-                map_order = {policy: index for index, policy in enumerate(ops_board["policy"].astype(str).tolist())}
-                map_rows = map_rows.assign(_order=map_rows["policy"].astype(str).map(map_order).fillna(999)).sort_values("_order")
-                for start in range(0, len(map_rows), 3):
-                    cols = st.columns(min(3, len(map_rows) - start))
-                    for col, (_, map_row) in zip(cols, map_rows.iloc[start : start + 3].iterrows()):
-                        with col:
-                            render_relative_position_map(
-                                map_row,
-                                f"{map_row['policy']} · 第 {int(map_row['step'])} 步",
-                                height=260,
-                            )
-
             if "assignment_mode" in trace_df.columns and "step_matches_json" in trace_df.columns:
                 match_rows = trace_df[
                     trace_df["step_matches_json"].fillna("").astype(str).str.len().gt(2)
                 ].copy()
                 if not match_rows.empty:
-                    st.subheader("单步匹配地图")
-                    b1, b2 = st.columns([1.2, 0.8])
-                    preferred_modes = match_rows[
-                        match_rows["rider_policy"].astype(str).eq("load_aware")
+                    st.subheader("仿真策略相对位置")
+                    match_steps = sorted(match_rows["step"].dropna().astype(int).unique().tolist())
+                    selected_match_step = st.selectbox(
+                        "时间步",
+                        match_steps,
+                        index=max(len(match_steps) - 1, 0),
+                        key="peak_match_step_grid",
+                    )
+                    st.caption(
+                        "每张小地图展示同一时间步内的批量订单匹配：蓝色 O 为用户订单，紫色 S 为骑手或骑手槽位，"
+                        "绿色菱形为商家，实线为最终匹配，紫色虚线为骑手到商家的取餐段。"
+                    )
+                    step_map_rows = match_rows[
+                        match_rows["step"].astype(int) == int(selected_match_step)
                     ].copy()
-                    if preferred_modes.empty:
-                        preferred_modes = match_rows
-                    match_policies = preferred_modes["policy"].astype(str).drop_duplicates().tolist()
-                    with b1:
-                        selected_match_policy = st.selectbox("匹配策略", match_policies, key="peak_match_policy")
-                    policy_match_rows = match_rows[match_rows["policy"].astype(str) == selected_match_policy].sort_values("step")
-                    match_steps = policy_match_rows["step"].astype(int).tolist()
-                    with b2:
-                        selected_match_step = st.selectbox(
-                            "时间步",
-                            match_steps,
-                            index=max(len(match_steps) - 1, 0),
-                            key="peak_match_step",
+                    if step_map_rows.empty:
+                        step_map_rows = match_rows.sort_values("step").groupby("policy", as_index=False).tail(1)
+                    else:
+                        step_map_rows = (
+                            step_map_rows.sort_values("step").groupby("policy", as_index=False).tail(1)
                         )
-                    match_row = policy_match_rows[policy_match_rows["step"].astype(int) == int(selected_match_step)].iloc[-1]
-                    render_step_matching_view(match_row)
+                    map_order = {policy: index for index, policy in enumerate(ops_board["policy"].astype(str).tolist())}
+                    step_map_rows = step_map_rows.assign(
+                        _order=step_map_rows["policy"].astype(str).map(map_order).fillna(999)
+                    ).sort_values("_order")
+                    for start in range(0, len(step_map_rows), 3):
+                        cols = st.columns(min(3, len(step_map_rows) - start))
+                        for col, (_, map_row) in zip(cols, step_map_rows.iloc[start : start + 3].iterrows()):
+                            with col:
+                                render_step_matching_view(map_row, height=300, show_table=False)
 
             trace_display = trace_df.drop(columns=["batch_matches_json", "step_matches_json"], errors="ignore")
             st.dataframe(trace_display, use_container_width=True, hide_index=True)
