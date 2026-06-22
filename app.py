@@ -1295,6 +1295,8 @@ with tab_peak:
                     showlegend=False,
                     plot_bgcolor="#f8fafc",
                     paper_bgcolor="#ffffff",
+                    yaxis=dict(tickfont=dict(color="#111827")),
+                    xaxis=dict(tickfont=dict(color="#111827")),
                 )
                 order_fig.update_xaxes(tickangle=20, showgrid=False)
                 order_fig.update_yaxes(gridcolor="#e2e8f0")
@@ -1333,6 +1335,8 @@ with tab_peak:
                     showlegend=False,
                     plot_bgcolor="#f8fafc",
                     paper_bgcolor="#ffffff",
+                    yaxis=dict(tickfont=dict(color="#111827")),
+                    xaxis=dict(tickfont=dict(color="#111827")),
                 )
                 timeout_fig.update_xaxes(tickangle=20, showgrid=False)
                 timeout_fig.update_yaxes(gridcolor="#e2e8f0", tickformat=".0%")
