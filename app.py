@@ -379,8 +379,8 @@ def render_relative_position_map(row: pd.Series, title: str, height: int = 280) 
     st.plotly_chart(fig, use_container_width=True)
 
 
-def parse_batch_matches(row: pd.Series) -> list[dict[str, object]]:
-    raw = row.get("batch_matches_json", "")
+def parse_step_matches(row: pd.Series) -> list[dict[str, object]]:
+    raw = row.get("step_matches_json", row.get("batch_matches_json", ""))
     if raw is None or pd.isna(raw) or not str(raw).strip():
         return []
     try:
@@ -390,10 +390,10 @@ def parse_batch_matches(row: pd.Series) -> list[dict[str, object]]:
     return matches if isinstance(matches, list) else []
 
 
-def render_batch_matching_view(row: pd.Series) -> None:
-    matches = parse_batch_matches(row)
+def render_step_matching_view(row: pd.Series) -> None:
+    matches = parse_step_matches(row)
     if not matches:
-        st.caption("该时间步没有可展示的 batch 匹配。")
+        st.caption("该时间步没有可展示的匹配。")
         return
 
     display_matches = matches[:16]
@@ -507,8 +507,8 @@ def render_batch_matching_view(row: pd.Series) -> None:
     fig.update_layout(
         title=dict(
             text=(
-                f"{row['policy']} · 第 {int(row['step'])} 步 batch 地图匹配 "
-                f"({int(row.get('batch_matched_count', len(matches)))} / {int(row.get('batch_order_count', len(matches)))})"
+                f"{row['policy']} · 第 {int(row['step'])} 步 {row.get('assignment_mode', 'greedy')} 地图匹配 "
+                f"({int(row.get('step_matched_count', len(matches)))} / {int(row.get('step_order_count', len(matches)))})"
             ),
             font=dict(color="#111827", size=15),
         ),
@@ -530,8 +530,8 @@ def render_batch_matching_view(row: pd.Series) -> None:
         scaleratio=1,
     )
     st.caption(
-        "蓝色 O 是用户订单，紫色 S 是骑手容量槽位，橙/绿实线表示 batch 匹配结果；"
-        "紫色虚线表示骑手到商家的取餐段，绿色菱形是订单对应商家。"
+        "蓝色 O 是用户订单，紫色 S 是骑手或骑手容量槽位，橙/绿实线表示该策略的匹配结果；"
+        "紫色虚线表示骑手到商家的取餐段，绿色菱形是订单对应商家。Greedy 是逐单局部选择，Batch 是整批二分图匹配。"
     )
     st.plotly_chart(fig, use_container_width=True)
 
@@ -1382,30 +1382,34 @@ with tab_peak:
                                 height=260,
                             )
 
-            if "assignment_mode" in trace_df.columns and "batch_matches_json" in trace_df.columns:
-                batch_rows = trace_df[
-                    trace_df["assignment_mode"].astype(str).eq("batch")
-                    & trace_df["batch_matches_json"].fillna("").astype(str).str.len().gt(2)
+            if "assignment_mode" in trace_df.columns and "step_matches_json" in trace_df.columns:
+                match_rows = trace_df[
+                    trace_df["step_matches_json"].fillna("").astype(str).str.len().gt(2)
                 ].copy()
-                if not batch_rows.empty:
-                    st.subheader("Batch 地图匹配")
+                if not match_rows.empty:
+                    st.subheader("单步匹配地图")
                     b1, b2 = st.columns([1.2, 0.8])
-                    batch_policies = batch_rows["policy"].astype(str).drop_duplicates().tolist()
+                    preferred_modes = match_rows[
+                        match_rows["rider_policy"].astype(str).eq("load_aware")
+                    ].copy()
+                    if preferred_modes.empty:
+                        preferred_modes = match_rows
+                    match_policies = preferred_modes["policy"].astype(str).drop_duplicates().tolist()
                     with b1:
-                        selected_batch_policy = st.selectbox("Batch 策略", batch_policies, key="peak_batch_policy")
-                    policy_batch_rows = batch_rows[batch_rows["policy"].astype(str) == selected_batch_policy].sort_values("step")
-                    batch_steps = policy_batch_rows["step"].astype(int).tolist()
+                        selected_match_policy = st.selectbox("匹配策略", match_policies, key="peak_match_policy")
+                    policy_match_rows = match_rows[match_rows["policy"].astype(str) == selected_match_policy].sort_values("step")
+                    match_steps = policy_match_rows["step"].astype(int).tolist()
                     with b2:
-                        selected_batch_step = st.selectbox(
+                        selected_match_step = st.selectbox(
                             "时间步",
-                            batch_steps,
-                            index=max(len(batch_steps) - 1, 0),
-                            key="peak_batch_step",
+                            match_steps,
+                            index=max(len(match_steps) - 1, 0),
+                            key="peak_match_step",
                         )
-                    batch_row = policy_batch_rows[policy_batch_rows["step"].astype(int) == int(selected_batch_step)].iloc[-1]
-                    render_batch_matching_view(batch_row)
+                    match_row = policy_match_rows[policy_match_rows["step"].astype(int) == int(selected_match_step)].iloc[-1]
+                    render_step_matching_view(match_row)
 
-            trace_display = trace_df.drop(columns=["batch_matches_json"], errors="ignore")
+            trace_display = trace_df.drop(columns=["batch_matches_json", "step_matches_json"], errors="ignore")
             st.dataframe(trace_display, use_container_width=True, hide_index=True)
     else:
         st.caption("开启后会连续运行多轮推荐与派单仿真，首次计算需要等待。")

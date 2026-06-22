@@ -26,9 +26,9 @@
 
 | file                  | exists   |    bytes |    rows |
 |:----------------------|:---------|---------:|--------:|
-| users.csv             | True     | 16543513 |  200000 |
-| merchants.csv         | True     |  4697590 |   29072 |
-| spus.csv              | True     | 16908698 |  179778 |
-| orders_train.csv      | True     | 73900028 | 1068495 |
-| orders_test.csv       | True     | 12841724 |  230550 |
-| test_interactions.csv | True     |  4404411 |  230550 |
+| users.csv             | True     | 16743514 |  200000 |
+| merchants.csv         | True     |  4726663 |   29072 |
+| spus.csv              | True     | 17088477 |  179778 |
+| orders_train.csv      | True     | 74968524 | 1068495 |
+| orders_test.csv       | True     | 13072275 |  230550 |
+| test_interactions.csv | True     |  4634962 |  230550 |

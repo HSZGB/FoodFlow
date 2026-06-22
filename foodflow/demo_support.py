@@ -380,6 +380,61 @@ def choose_peak_replay_merchant(
     return candidates[int(rng.choice(np.arange(len(candidates)), p=probs))]
 
 
+def peak_assignment_score(
+    user_row: pd.Series,
+    merchant_row: pd.Series,
+    rider_row: pd.Series,
+    rider_policy: str,
+    eta: float,
+) -> float:
+    if rider_policy == "load_aware":
+        acceptance = acceptance_probability(user_row, merchant_row, rider_row, eta)
+        return rider_score(eta, rider_row, acceptance)
+    if rider_policy == "min_eta":
+        return -float(eta)
+    if rider_policy == "nearest":
+        return -haversine_km(
+            float(rider_row.get("lng", 116.40)),
+            float(rider_row.get("lat", 39.92)),
+            float(merchant_row.get("lng", 116.40)),
+            float(merchant_row.get("lat", 39.92)),
+        )
+    return 0.0
+
+
+def peak_match_record(
+    order_index: int,
+    order_id: str,
+    user_id: str,
+    merchant_id: str,
+    user_row: pd.Series,
+    merchant_row: pd.Series,
+    rider_id: str,
+    rider_row: pd.Series,
+    eta: float,
+    score: float,
+    slot_number: int = 0,
+) -> dict[str, object]:
+    return {
+        "order_index": int(order_index),
+        "order_id": str(order_id),
+        "user_id": str(user_id),
+        "merchant_id": str(merchant_id),
+        "merchant_name": merchant_display_name(merchant_row),
+        "rider_id": str(rider_id),
+        "slot_number": int(slot_number),
+        "eta": float(eta),
+        "score": float(score),
+        "rider_load": int(float(rider_row.get("load", 0) or 0)),
+        "user_lng": float(user_row.get("lng", 116.40)),
+        "user_lat": float(user_row.get("lat", 39.92)),
+        "merchant_lng": float(merchant_row.get("lng", 116.40)),
+        "merchant_lat": float(merchant_row.get("lat", 39.92)),
+        "rider_lng": float(rider_row.get("lng", 116.40)),
+        "rider_lat": float(rider_row.get("lat", 39.92)),
+    }
+
+
 def build_peak_trace(
     data: PreparedData,
     policies: dict[str, tuple[object, str] | tuple[object, str, str]],
@@ -428,8 +483,9 @@ def build_peak_trace(
             step_timeout = 0
             step_example: dict[str, object] = {}
             pending_orders: list[dict[str, object]] = []
+            step_matches: list[dict[str, object]] = []
 
-            for user_id in request_users:
+            for request_index, user_id in enumerate(request_users):
                 recs = rec_result.recommendations.get(user_id, [])
                 chosen = choose_peak_replay_merchant(recs, rec_result.scores.get(user_id, {}), choice_rng)
                 if chosen is None or chosen not in merchants_df.index or user_id not in users_df.index:
@@ -463,8 +519,23 @@ def build_peak_trace(
                 if rider_id is None:
                     continue
                 rider_match = available[available["rider_id"].astype(str) == str(rider_id)]
+                rider_row = rider_match.iloc[0] if not rider_match.empty else pd.Series(dtype=object)
+                order_id = f"{policy_name}-{step}-{request_index}-{user_id}"
+                step_matches.append(
+                    peak_match_record(
+                        request_index,
+                        order_id,
+                        str(user_id),
+                        str(chosen),
+                        user_row,
+                        merchant_row,
+                        rider_id,
+                        rider_row,
+                        float(eta),
+                        peak_assignment_score(user_row, merchant_row, rider_row, rider_policy, float(eta)),
+                    )
+                )
                 if not step_example and not rider_match.empty:
-                    rider_row = rider_match.iloc[0]
                     step_example = {
                         "sample_user_id": str(user_id),
                         "sample_merchant_id": str(chosen),
@@ -506,24 +577,19 @@ def build_peak_trace(
                     user_row = order["user_row"]
                     merchant_row = order["merchant_row"]
                     batch_matches.append(
-                        {
-                            "order_index": int(assignment.get("order_index", len(batch_matches))),
-                            "order_id": str(assignment["order_id"]),
-                            "user_id": str(order["user_id"]),
-                            "merchant_id": str(order["merchant_id"]),
-                            "merchant_name": merchant_display_name(merchant_row),
-                            "rider_id": rider_id,
-                            "slot_number": int(assignment.get("slot_number", 0)),
-                            "eta": eta,
-                            "score": float(assignment.get("score", 0.0)),
-                            "rider_load": int(float(rider_row.get("load", 0) or 0)),
-                            "user_lng": float(user_row.get("lng", 116.40)),
-                            "user_lat": float(user_row.get("lat", 39.92)),
-                            "merchant_lng": float(merchant_row.get("lng", 116.40)),
-                            "merchant_lat": float(merchant_row.get("lat", 39.92)),
-                            "rider_lng": float(rider_row.get("lng", 116.40)),
-                            "rider_lat": float(rider_row.get("lat", 39.92)),
-                        }
+                        peak_match_record(
+                            int(assignment.get("order_index", len(batch_matches))),
+                            str(assignment["order_id"]),
+                            str(order["user_id"]),
+                            str(order["merchant_id"]),
+                            user_row,
+                            merchant_row,
+                            rider_id,
+                            rider_row,
+                            eta,
+                            float(assignment.get("score", 0.0)),
+                            int(assignment.get("slot_number", 0)),
+                        )
                     )
                     if not step_example and not rider_match.empty:
                         step_example = {
@@ -549,9 +615,14 @@ def build_peak_trace(
                     timeout += is_timeout
                     step_timeout += is_timeout
                 if batch_matches:
+                    step_matches = batch_matches
                     step_example["batch_order_count"] = len(pending_orders)
                     step_example["batch_matched_count"] = len(batch_matches)
                     step_example["batch_matches_json"] = json.dumps(batch_matches, ensure_ascii=False)
+            if step_matches:
+                step_example["step_order_count"] = len(pending_orders) if assignment_mode == "batch" else len(request_users)
+                step_example["step_matched_count"] = len(step_matches)
+                step_example["step_matches_json"] = json.dumps(step_matches, ensure_ascii=False)
 
             assigned = riders[pd.to_numeric(riders["assigned"], errors="coerce").fillna(0) > 0]
             rows.append(

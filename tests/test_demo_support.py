@@ -99,11 +99,21 @@ def test_demo_recommendation_and_rider_frames(tmp_path: Path):
     assert set(trace["policy"]) == {"UserOnly + MinETA", "Seq-xQuAD-Tripartite", "Seq-xQuAD-Tripartite + Batch"}
     assert trace["step"].max() == 3
     assert trace["completed_orders"].max() > 0
-    assert {"step_completed_orders", "step_avg_eta", "step_timeout_rate", "assignment_mode"}.issubset(trace.columns)
+    assert {
+        "step_completed_orders",
+        "step_avg_eta",
+        "step_timeout_rate",
+        "assignment_mode",
+        "step_matches_json",
+    }.issubset(trace.columns)
     assert trace["step_completed_orders"].ge(0).all()
     assert "batch" in set(trace["assignment_mode"])
     assert {"sample_user_lng", "sample_merchant_lng", "sample_rider_lng"}.issubset(trace.columns)
+    greedy_trace = trace[trace["assignment_mode"].astype(str).eq("greedy")]
+    greedy_matches = json.loads(greedy_trace["step_matches_json"].dropna().astype(str).iloc[0])
+    assert greedy_matches
     batch_trace = trace[trace["assignment_mode"].astype(str).eq("batch")]
+    step_batch_matches = json.loads(batch_trace["step_matches_json"].dropna().astype(str).iloc[0])
     batch_matches = json.loads(batch_trace["batch_matches_json"].dropna().astype(str).iloc[0])
-    assert batch_matches
+    assert step_batch_matches == batch_matches
     assert {"order_id", "rider_id", "slot_number", "eta", "score"}.issubset(batch_matches[0])

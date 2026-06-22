@@ -112,6 +112,13 @@ def test_tripartite_frontier_marks_dominated_rows():
                 "ExposureGini": 0.75,
                 "Coverage@20": 0.22,
             },
+            {
+                "model": "Session-SPU-Tripartite",
+                "Recall@20": 0.34,
+                "NDCG@20": 0.27,
+                "ExposureGini": 0.69,
+                "Coverage@20": 0.24,
+            },
         ]
     )
     simulation = pd.DataFrame(
@@ -148,12 +155,21 @@ def test_tripartite_frontier_marks_dominated_rows():
                 "user_satisfaction": 0.82,
                 "platform_utility": 0.49,
             },
+            {
+                "policy": "Session-SPU-Tripartite + Batch",
+                "avg_eta": 46.0,
+                "timeout_rate": 0.40,
+                "on_time_rate": 0.60,
+                "user_satisfaction": 0.78,
+                "platform_utility": 0.56,
+            },
         ]
     )
     frontier = build_tripartite_frontier(offline, simulation)
     assert {"policy", "model", "is_frontier"}.issubset(frontier.columns)
     assert "LightGBM-LTR + MinETA" in set(frontier["policy"])
     assert "Seq-xQuAD-Tripartite + Batch" in set(frontier["policy"])
+    assert "Session-SPU-Tripartite + Batch" in set(frontier["policy"])
     assert frontier["is_frontier"].any()
 
 
