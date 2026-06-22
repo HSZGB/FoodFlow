@@ -236,6 +236,19 @@ candidate_limit   = 160
 
 Seq-xQuAD-Tripartite 是三方重排模型。它把用户偏好、商家曝光公平、ETA 和供给可行性放入同一个排序器，并在列表层面加入多样性和长尾曝光。
 
+XQuad：
+
+经典 xQuAD：
+
+$$
+Score(d)=(1-\lambda)Rel(d)+\lambda Div(d)
+$$
+
+其中：
+
+* Rel(d)：相关性
+* Div(d)：多样性收益
+
 商家公平分：
 
 ```math
