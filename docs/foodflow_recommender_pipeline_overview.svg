@@ -1,68 +1,208 @@
-<svg width="100%" viewBox="0 0 680 580" role="img" style="" xmlns="http://www.w3.org/2000/svg">
-<title style="fill:rgb(0, 0, 0);stroke:none;color:rgb(0, 0, 0);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto">FoodFlow 推荐模型整体管道</title>
-<desc style="fill:rgb(0, 0, 0);stroke:none;color:rgb(0, 0, 0);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto">原始数据流入基础打分模型，再到序列与学习排序模型，再到三方重排模型，最终输出Top-K推荐列表</desc>
-<defs><marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></marker></defs>
+<svg width="100%" viewBox="0 0 1120 760" role="img" xmlns="http://www.w3.org/2000/svg">
+  <title>FoodFlow 推荐与履约仿真整体框架</title>
+  <desc>展示 FoodFlow 从 TRD 数据输入、特征提取、候选召回、学习排序、三方重排、Session-SPU 增强，到骑手派单仿真和离线评估输出的端到端流程。</desc>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M1 1L9 5L1 9" fill="none" stroke="context-stroke" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+    </marker>
+    <style>
+      text { font-family: "Microsoft YaHei", "PingFang SC", "Segoe UI", Arial, sans-serif; fill: #111827; }
+      .title { font-size: 24px; font-weight: 700; }
+      .subtitle { font-size: 13px; fill: #4b5563; }
+      .lane-title { font-size: 16px; font-weight: 700; }
+      .card-title { font-size: 14px; font-weight: 700; }
+      .body { font-size: 12px; fill: #374151; }
+      .small { font-size: 11px; fill: #4b5563; }
+      .formula { font-size: 11px; fill: #1f2937; }
+      .input { fill: #eef2ff; stroke: #6366f1; }
+      .feature { fill: #ecfdf5; stroke: #059669; }
+      .model { fill: #fff7ed; stroke: #ea580c; }
+      .dispatch { fill: #fdf2f8; stroke: #db2777; }
+      .output { fill: #f8fafc; stroke: #64748b; }
+      .note { fill: #fffbeb; stroke: #d97706; }
+      .lane { fill: #ffffff; stroke: #d1d5db; }
+      .arrow { stroke: #6b7280; stroke-width: 1.8; fill: none; marker-end: url(#arrow); }
+      .dash { stroke: #9ca3af; stroke-width: 1.4; fill: none; stroke-dasharray: 6 5; marker-end: url(#arrow); }
+    </style>
+  </defs>
 
-<g style="fill:rgb(0, 0, 0);stroke:none;color:rgb(0, 0, 0);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto">
-<rect x="170" y="40" width="340" height="56" rx="8" stroke-width="0.5" style="fill:rgb(241, 239, 232);stroke:rgb(95, 94, 90);color:rgb(0, 0, 0);stroke-width:0.5px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
-<text x="340" y="58" text-anchor="middle" dominant-baseline="central" style="fill:rgb(68, 68, 65);stroke:none;color:rgb(0, 0, 0);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:14px;font-weight:500;text-anchor:middle;dominant-baseline:central">原始数据</text>
-<text x="340" y="76" text-anchor="middle" dominant-baseline="central" style="fill:rgb(95, 94, 90);stroke:none;color:rgb(0, 0, 0);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:12px;font-weight:400;text-anchor:middle;dominant-baseline:central">订单/用户/商家/会话/SPU</text>
-</g>
-<line x1="340" y1="96" x2="340" y2="118" marker-end="url(#arrow)" style="fill:none;stroke:rgb(115, 114, 108);color:rgb(0, 0, 0);stroke-width:1.5px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
+  <rect x="0" y="0" width="1120" height="760" fill="#ffffff"/>
+  <text x="40" y="42" class="title">FoodFlow 推荐与履约仿真整体框架</text>
+  <text x="40" y="66" class="subtitle">依据 RECOMMENDER_FORMULAS.md：从公开 TRD 数据提取用户、商家、序列、会话、SPU 和履约特征，输出 Top-K 推荐、可解释理由、派单结果与离线/仿真指标。</text>
 
-<rect x="40" y="118" width="600" height="104" rx="12" stroke-width="0.5" style="fill:rgb(245, 244, 237);stroke:rgba(31, 30, 29, 0.3);color:rgb(0, 0, 0);stroke-width:0.5px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
-<text x="60" y="140" style="fill:rgb(20, 20, 19);stroke:none;color:rgb(0, 0, 0);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:14px;font-weight:500;text-anchor:start;dominant-baseline:auto">候选召回与基础打分</text>
-<g style="fill:rgb(0, 0, 0);stroke:none;color:rgb(0, 0, 0);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto">
-<rect x="65" y="150" width="170" height="56" rx="8" stroke-width="0.5" style="fill:rgb(225, 245, 238);stroke:rgb(15, 110, 86);color:rgb(0, 0, 0);stroke-width:0.5px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
-<text x="150" y="168" text-anchor="middle" dominant-baseline="central" style="fill:rgb(8, 80, 65);stroke:none;color:rgb(0, 0, 0);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:14px;font-weight:500;text-anchor:middle;dominant-baseline:central">Popular</text>
-<text x="150" y="186" text-anchor="middle" dominant-baseline="central" style="fill:rgb(15, 110, 86);stroke:none;color:rgb(0, 0, 0);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:12px;font-weight:400;text-anchor:middle;dominant-baseline:central">全局热门基线</text>
-</g>
-<g style="fill:rgb(0, 0, 0);stroke:none;color:rgb(0, 0, 0);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto">
-<rect x="255" y="150" width="170" height="56" rx="8" stroke-width="0.5" style="fill:rgb(225, 245, 238);stroke:rgb(15, 110, 86);color:rgb(0, 0, 0);stroke-width:0.5px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
-<text x="340" y="168" text-anchor="middle" dominant-baseline="central" style="fill:rgb(8, 80, 65);stroke:none;color:rgb(0, 0, 0);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:14px;font-weight:500;text-anchor:middle;dominant-baseline:central">BPR-MF</text>
-<text x="340" y="186" text-anchor="middle" dominant-baseline="central" style="fill:rgb(15, 110, 86);stroke:none;color:rgb(0, 0, 0);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:12px;font-weight:400;text-anchor:middle;dominant-baseline:central">隐式矩阵分解</text>
-</g>
-<g style="fill:rgb(0, 0, 0);stroke:none;color:rgb(0, 0, 0);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto">
-<rect x="445" y="150" width="170" height="56" rx="8" stroke-width="0.5" style="fill:rgb(225, 245, 238);stroke:rgb(15, 110, 86);color:rgb(0, 0, 0);stroke-width:0.5px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
-<text x="530" y="168" text-anchor="middle" dominant-baseline="central" style="fill:rgb(8, 80, 65);stroke:none;color:rgb(0, 0, 0);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:14px;font-weight:500;text-anchor:middle;dominant-baseline:central">UserOnly</text>
-<text x="530" y="186" text-anchor="middle" dominant-baseline="central" style="fill:rgb(15, 110, 86);stroke:none;color:rgb(0, 0, 0);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:12px;font-weight:400;text-anchor:middle;dominant-baseline:central">用户画像6特征加权</text>
-</g>
+  <rect x="30" y="90" width="210" height="620" rx="14" class="lane"/>
+  <rect x="260" y="90" width="250" height="620" rx="14" class="lane"/>
+  <rect x="530" y="90" width="260" height="620" rx="14" class="lane"/>
+  <rect x="810" y="90" width="280" height="620" rx="14" class="lane"/>
 
-<line x1="340" y1="222" x2="340" y2="244" marker-end="url(#arrow)" style="fill:none;stroke:rgb(115, 114, 108);color:rgb(0, 0, 0);stroke-width:1.5px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
+  <text x="50" y="120" class="lane-title">1. 数据输入</text>
+  <text x="280" y="120" class="lane-title">2. 特征提取与候选构造</text>
+  <text x="550" y="120" class="lane-title">3. 推荐排序与三方重排</text>
+  <text x="830" y="120" class="lane-title">4. 输出、派单与评估</text>
 
-<rect x="40" y="244" width="600" height="104" rx="12" stroke-width="0.5" style="fill:rgb(245, 244, 237);stroke:rgba(31, 30, 29, 0.3);color:rgb(0, 0, 0);stroke-width:0.5px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
-<text x="60" y="266" style="fill:rgb(20, 20, 19);stroke:none;color:rgb(0, 0, 0);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:14px;font-weight:500;text-anchor:start;dominant-baseline:auto">序列与学习排序</text>
-<g style="fill:rgb(0, 0, 0);stroke:none;color:rgb(0, 0, 0);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto">
-<rect x="70" y="276" width="250" height="56" rx="8" stroke-width="0.5" style="fill:rgb(238, 237, 254);stroke:rgb(83, 74, 183);color:rgb(0, 0, 0);stroke-width:0.5px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
-<text x="195" y="294" text-anchor="middle" dominant-baseline="central" style="fill:rgb(60, 52, 137);stroke:none;color:rgb(0, 0, 0);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:14px;font-weight:500;text-anchor:middle;dominant-baseline:central">Seq-Tuned</text>
-<text x="195" y="312" text-anchor="middle" dominant-baseline="central" style="fill:rgb(83, 74, 183);stroke:none;color:rgb(0, 0, 0);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:12px;font-weight:400;text-anchor:middle;dominant-baseline:central">7特征固定权重规则</text>
-</g>
-<g style="fill:rgb(0, 0, 0);stroke:none;color:rgb(0, 0, 0);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto">
-<rect x="360" y="276" width="250" height="56" rx="8" stroke-width="0.5" style="fill:rgb(238, 237, 254);stroke:rgb(83, 74, 183);color:rgb(0, 0, 0);stroke-width:0.5px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
-<text x="485" y="294" text-anchor="middle" dominant-baseline="central" style="fill:rgb(60, 52, 137);stroke:none;color:rgb(0, 0, 0);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:14px;font-weight:500;text-anchor:middle;dominant-baseline:central">LightGBM-LTR</text>
-<text x="485" y="312" text-anchor="middle" dominant-baseline="central" style="fill:rgb(83, 74, 183);stroke:none;color:rgb(0, 0, 0);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:12px;font-weight:400;text-anchor:middle;dominant-baseline:central">缺省退化为Logistic-LTR</text>
-</g>
+  <g>
+    <rect x="50" y="145" width="170" height="88" rx="10" class="input"/>
+    <text x="65" y="168" class="card-title">TRD 主表</text>
+    <text x="65" y="190" class="body">orders_train / orders_test</text>
+    <text x="65" y="208" class="body">users / merchants</text>
+    <text x="65" y="226" class="small">用户、商家、订单、区域、品类、价格</text>
+  </g>
 
-<line x1="340" y1="348" x2="340" y2="370" marker-end="url(#arrow)" style="fill:none;stroke:rgb(115, 114, 108);color:rgb(0, 0, 0);stroke-width:1.5px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
+  <g>
+    <rect x="50" y="255" width="170" height="96" rx="10" class="input"/>
+    <text x="65" y="278" class="card-title">TRD optional 信号</text>
+    <text x="65" y="300" class="body">orders_poi_session</text>
+    <text x="65" y="318" class="body">orders_spu_train / test</text>
+    <text x="65" y="336" class="body">spus.txt</text>
+  </g>
 
-<rect x="40" y="370" width="600" height="110" rx="12" stroke-width="0.5" style="fill:rgb(245, 244, 237);stroke:rgba(31, 30, 29, 0.3);color:rgb(0, 0, 0);stroke-width:0.5px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
-<text x="60" y="392" style="fill:rgb(20, 20, 19);stroke:none;color:rgb(0, 0, 0);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:14px;font-weight:500;text-anchor:start;dominant-baseline:auto">三方重排与多样性选择</text>
-<g style="fill:rgb(0, 0, 0);stroke:none;color:rgb(0, 0, 0);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto">
-<rect x="70" y="402" width="260" height="56" rx="8" stroke-width="0.5" style="fill:rgb(250, 236, 231);stroke:rgb(153, 60, 29);color:rgb(0, 0, 0);stroke-width:0.5px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
-<text x="200" y="420" text-anchor="middle" dominant-baseline="central" style="fill:rgb(113, 43, 19);stroke:none;color:rgb(0, 0, 0);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:14px;font-weight:500;text-anchor:middle;dominant-baseline:central">Seq-xQuAD-Tri</text>
-<text x="200" y="438" text-anchor="middle" dominant-baseline="central" style="fill:rgb(153, 60, 29);stroke:none;color:rgb(0, 0, 0);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:12px;font-weight:400;text-anchor:middle;dominant-baseline:central">四分量归一化加权融合</text>
-</g>
-<g style="fill:rgb(0, 0, 0);stroke:none;color:rgb(0, 0, 0);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto">
-<rect x="350" y="402" width="260" height="56" rx="8" stroke-width="0.5" style="fill:rgb(250, 236, 231);stroke:rgb(153, 60, 29);color:rgb(0, 0, 0);stroke-width:0.5px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
-<text x="480" y="420" text-anchor="middle" dominant-baseline="central" style="fill:rgb(113, 43, 19);stroke:none;color:rgb(0, 0, 0);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:14px;font-weight:500;text-anchor:middle;dominant-baseline:central">Session-SPU-Tri</text>
-<text x="480" y="438" text-anchor="middle" dominant-baseline="central" style="fill:rgb(153, 60, 29);stroke:none;color:rgb(0, 0, 0);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:12px;font-weight:400;text-anchor:middle;dominant-baseline:central">+会话点击+SPU候选扩展</text>
-</g>
+  <g>
+    <rect x="50" y="373" width="170" height="96" rx="10" class="input"/>
+    <text x="65" y="396" class="card-title">地理与履约 proxy</text>
+    <text x="65" y="418" class="body">区域字段合成经纬度</text>
+    <text x="65" y="436" class="body">商家配送评分 / 订单量</text>
+    <text x="65" y="454" class="small">用于 ETA、供给、距离特征</text>
+  </g>
 
-<line x1="340" y1="480" x2="340" y2="502" marker-end="url(#arrow)" style="fill:none;stroke:rgb(115, 114, 108);color:rgb(0, 0, 0);stroke-width:1.5px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
+  <g>
+    <rect x="50" y="491" width="170" height="104" rx="10" class="note"/>
+    <text x="65" y="514" class="card-title">骑手数据边界</text>
+    <text x="65" y="536" class="body">默认固定 seed 合成骑手</text>
+    <text x="65" y="554" class="body">位置 / 负载 / 可用时间</text>
+    <text x="65" y="572" class="body">速度 / 可靠性 / 接单率</text>
+    <text x="65" y="590" class="small">LaDe 仅可选校准参数</text>
+  </g>
 
-<g style="fill:rgb(0, 0, 0);stroke:none;color:rgb(0, 0, 0);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto">
-<rect x="190" y="502" width="300" height="56" rx="8" stroke-width="0.5" style="fill:rgb(241, 239, 232);stroke:rgb(95, 94, 90);color:rgb(0, 0, 0);stroke-width:0.5px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
-<text x="340" y="520" text-anchor="middle" dominant-baseline="central" style="fill:rgb(68, 68, 65);stroke:none;color:rgb(0, 0, 0);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:14px;font-weight:500;text-anchor:middle;dominant-baseline:central">Top-K 推荐列表</text>
-<text x="340" y="538" text-anchor="middle" dominant-baseline="central" style="fill:rgb(95, 94, 90);stroke:none;color:rgb(0, 0, 0);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:12px;font-weight:400;text-anchor:middle;dominant-baseline:central">+轻量KG路径解释</text>
-</g>
+  <g>
+    <rect x="280" y="145" width="210" height="118" rx="10" class="feature"/>
+    <text x="295" y="168" class="card-title">用户与商家画像特征</text>
+    <text x="295" y="190" class="body">用户：常点品类、价格段、时段</text>
+    <text x="295" y="208" class="body">商家：品类、热度、评分、供给</text>
+    <text x="295" y="226" class="body">距离：user-merchant haversine</text>
+    <text x="295" y="248" class="formula">UserOnly: category + repeat + price + period + quality</text>
+  </g>
+
+  <g>
+    <rect x="280" y="285" width="210" height="116" rx="10" class="feature"/>
+    <text x="295" y="308" class="card-title">序列候选与 7 维特征</text>
+    <text x="295" y="330" class="body">候选：最近历史商家</text>
+    <text x="295" y="348" class="body">+ 转移邻居 + popular_list</text>
+    <text x="295" y="366" class="formula">x=[r_fast,r_slow,repeat,transition,</text>
+    <text x="295" y="384" class="formula">category,popularity,quality]</text>
+  </g>
+
+  <g>
+    <rect x="280" y="423" width="210" height="118" rx="10" class="feature"/>
+    <text x="295" y="446" class="card-title">三方分量特征</text>
+    <text x="295" y="468" class="body">user_score：用户偏好/序列分</text>
+    <text x="295" y="486" class="body">fair：曝光补偿 + 商家质量</text>
+    <text x="295" y="504" class="body">eta_score：推荐阶段 ETA</text>
+    <text x="295" y="522" class="body">supply：配送评分 + 长尾供给</text>
+  </g>
+
+  <g>
+    <rect x="280" y="563" width="210" height="112" rx="10" class="feature"/>
+    <text x="295" y="586" class="card-title">Session / SPU / KG 证据</text>
+    <text x="295" y="608" class="body">session(u,m)：训练期点击衰减</text>
+    <text x="295" y="626" class="body">spu(u,m)：菜品类目重合</text>
+    <text x="295" y="644" class="body">KG 路径：复购/品类/区域/价格</text>
+    <text x="295" y="662" class="small">用于候选扩展和解释明细</text>
+  </g>
+
+  <g>
+    <rect x="550" y="145" width="220" height="92" rx="10" class="model"/>
+    <text x="565" y="168" class="card-title">基础推荐器</text>
+    <text x="565" y="190" class="body">Popular：全局热门补位</text>
+    <text x="565" y="208" class="body">UserOnly：用户画像加权</text>
+    <text x="565" y="226" class="body">BPR-MF：隐式反馈矩阵分解基线</text>
+  </g>
+
+  <g>
+    <rect x="550" y="259" width="220" height="112" rx="10" class="model"/>
+    <text x="565" y="282" class="card-title">序列规则与学习排序</text>
+    <text x="565" y="304" class="body">Seq-Tuned：7 特征固定权重</text>
+    <text x="565" y="322" class="body">LightGBM-LTR：LambdaRank 学习 f(x)</text>
+    <text x="565" y="340" class="body">fallback：Logistic-LTR</text>
+    <text x="565" y="358" class="small">标签来自训练期真实下单商家集合</text>
+  </g>
+
+  <g>
+    <rect x="550" y="393" width="220" height="130" rx="10" class="model"/>
+    <text x="565" y="416" class="card-title">Seq-xQuAD-Tripartite</text>
+    <text x="565" y="438" class="body">候选内 min-max 归一化</text>
+    <text x="565" y="456" class="formula">0.93 user + 0.025 fair</text>
+    <text x="565" y="474" class="formula">+ 0.03 eta + 0.015 supply</text>
+    <text x="565" y="492" class="body">xQuAD：相关性 + 品类覆盖</text>
+    <text x="565" y="510" class="body">+ 长尾曝光 tail(m)</text>
+  </g>
+
+  <g>
+    <rect x="550" y="545" width="220" height="130" rx="10" class="model"/>
+    <text x="565" y="568" class="card-title">Session-SPU-Tripartite</text>
+    <text x="565" y="590" class="body">候选扩展：session 点击商家</text>
+    <text x="565" y="608" class="body">+ Top120 SPU 类目相近商家</text>
+    <text x="565" y="626" class="formula">raw += 0.055 session + 0.015 spu</text>
+    <text x="565" y="644" class="body">保留会话/SPU 解释证据</text>
+    <text x="565" y="662" class="small">重排仍沿用三方 + xQuAD 选择</text>
+  </g>
+
+  <g>
+    <rect x="830" y="145" width="240" height="104" rx="10" class="output"/>
+    <text x="845" y="168" class="card-title">推荐输出与解释</text>
+    <text x="845" y="190" class="body">Top-K 商家列表 + final_score</text>
+    <text x="845" y="208" class="body">解释：复购、品类、价格、ETA</text>
+    <text x="845" y="226" class="body">曝光补偿、供给、Session、SPU、KG</text>
+    <text x="845" y="244" class="small">demo 卡片展示分项进度条和理由筛选</text>
+  </g>
+
+  <g>
+    <rect x="830" y="271" width="240" height="132" rx="10" class="dispatch"/>
+    <text x="845" y="294" class="card-title">用户选择与骑手派单</text>
+    <text x="845" y="316" class="body">MNL/softmax：推荐分 + 位置 + 命中</text>
+    <text x="845" y="334" class="body">Nearest / MinETA / Load-aware</text>
+    <text x="845" y="352" class="formula">rider_score=ETA + reliability + load + accept</text>
+    <text x="845" y="370" class="body">Greedy：逐单局部选择</text>
+    <text x="845" y="388" class="body">Batch：订单-骑手槽位二分图最大权匹配</text>
+  </g>
+
+  <g>
+    <rect x="830" y="425" width="240" height="118" rx="10" class="output"/>
+    <text x="845" y="448" class="card-title">离线推荐评估</text>
+    <text x="845" y="470" class="body">Recall@20 / NDCG@20 / MRR / HitRate</text>
+    <text x="845" y="488" class="body">Coverage@20 / ExposureGini</text>
+    <text x="845" y="506" class="body">LongTailExposure@20 / CategoryJSD</text>
+    <text x="845" y="524" class="small">衡量准确性、覆盖、曝光集中和品类贴合</text>
+  </g>
+
+  <g>
+    <rect x="830" y="565" width="240" height="110" rx="10" class="output"/>
+    <text x="845" y="588" class="card-title">履约仿真与平台效用</text>
+    <text x="845" y="610" class="body">avg_eta / p95_eta / timeout_rate</text>
+    <text x="845" y="628" class="body">rider_load_cv / income_gini / active_rate</text>
+    <text x="845" y="646" class="body">merchant_exposure_gini / satisfaction</text>
+    <text x="845" y="664" class="formula">utility=0.25满意+0.25准时+0.20完成...</text>
+  </g>
+
+  <path d="M220 189 C250 189 250 204 280 204" class="arrow"/>
+  <path d="M220 303 C250 303 250 621 280 621" class="arrow"/>
+  <path d="M220 421 C250 421 250 482 280 482" class="arrow"/>
+  <path d="M220 543 C250 543 250 337 280 337" class="dash"/>
+
+  <path d="M490 204 C520 204 520 191 550 191" class="arrow"/>
+  <path d="M490 337 C520 337 520 315 550 315" class="arrow"/>
+  <path d="M490 482 C520 482 520 458 550 458" class="arrow"/>
+  <path d="M490 621 C520 621 520 610 550 610" class="arrow"/>
+
+  <path d="M770 191 C800 191 800 197 830 197" class="arrow"/>
+  <path d="M770 315 C800 315 800 197 830 197" class="arrow"/>
+  <path d="M770 458 C800 458 800 197 830 197" class="arrow"/>
+  <path d="M770 610 C800 610 800 197 830 197" class="arrow"/>
+  <path d="M950 249 L950 271" class="arrow"/>
+  <path d="M950 403 L950 425" class="arrow"/>
+  <path d="M950 543 L950 565" class="arrow"/>
+
+  <g>
+    <rect x="280" y="700" width="510" height="34" rx="8" fill="#f3f4f6" stroke="#d1d5db"/>
+    <text x="295" y="722" class="small">核心可解释链路：候选来源 → 特征分量 → 归一化权重 → xQuAD 逐步选择 → 推荐理由/地图匹配/离线与仿真指标。</text>
+  </g>
 </svg>
