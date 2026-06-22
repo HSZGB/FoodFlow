@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import inspect
+import json
 from collections import Counter
 from typing import Callable
 
@@ -13,6 +14,7 @@ from .rerank import estimate_user_merchant_eta, fairness_scores, haversine_km, s
 from .rider_sim import (
     acceptance_probability,
     assign_order,
+    assign_orders_batch,
     estimate_order_eta,
     generate_riders,
     rider_score,
@@ -380,7 +382,7 @@ def choose_peak_replay_merchant(
 
 def build_peak_trace(
     data: PreparedData,
-    policies: dict[str, tuple[object, str]],
+    policies: dict[str, tuple[object, str] | tuple[object, str, str]],
     seed: int = 42,
     steps: int = 6,
     requests_per_step: int = 8,
@@ -405,7 +407,10 @@ def build_peak_trace(
     base_riders = generate_riders(data.merchants, n_riders=160, seed=seed)
     rows = []
 
-    for policy_name, (model, rider_policy) in policies.items():
+    for policy_name, policy_config in policies.items():
+        model = policy_config[0]
+        rider_policy = str(policy_config[1])
+        assignment_mode = str(policy_config[2]) if len(policy_config) >= 3 else "greedy"
         riders = base_riders.copy(deep=True)
         choice_rng = np.random.default_rng(seed + 17)
         etas: list[float] = []
@@ -422,6 +427,7 @@ def build_peak_trace(
             step_completed = 0
             step_timeout = 0
             step_example: dict[str, object] = {}
+            pending_orders: list[dict[str, object]] = []
 
             for user_id in request_users:
                 recs = rec_result.recommendations.get(user_id, [])
@@ -431,6 +437,18 @@ def build_peak_trace(
 
                 user_row = users_df.loc[user_id]
                 merchant_row = merchants_df.loc[chosen]
+                if assignment_mode == "batch":
+                    pending_orders.append(
+                        {
+                            "order_id": f"{policy_name}-{step}-{len(pending_orders)}-{user_id}",
+                            "user_id": str(user_id),
+                            "merchant_id": str(chosen),
+                            "user_row": user_row,
+                            "merchant_row": merchant_row,
+                        }
+                    )
+                    continue
+
                 available = riders[riders["available_at"] <= current_time].copy()
                 if available.empty:
                     available = riders.copy()
@@ -470,6 +488,71 @@ def build_peak_trace(
                 timeout += is_timeout
                 step_timeout += is_timeout
 
+            if assignment_mode == "batch" and pending_orders:
+                available = riders[riders["available_at"] <= current_time].copy()
+                if available.empty:
+                    available = riders.copy()
+                assignments = assign_orders_batch(pending_orders, available, rider_policy, "lunch", current_time)
+                orders_by_id = {str(order["order_id"]): order for order in pending_orders}
+                batch_matches: list[dict[str, object]] = []
+                for _, assignment in assignments.iterrows():
+                    order = orders_by_id.get(str(assignment["order_id"]))
+                    if order is None:
+                        continue
+                    rider_id = str(assignment["rider_id"])
+                    eta = float(assignment["eta"])
+                    rider_match = available[available["rider_id"].astype(str) == rider_id]
+                    rider_row = rider_match.iloc[0] if not rider_match.empty else pd.Series(dtype=object)
+                    user_row = order["user_row"]
+                    merchant_row = order["merchant_row"]
+                    batch_matches.append(
+                        {
+                            "order_index": int(assignment.get("order_index", len(batch_matches))),
+                            "order_id": str(assignment["order_id"]),
+                            "user_id": str(order["user_id"]),
+                            "merchant_id": str(order["merchant_id"]),
+                            "merchant_name": merchant_display_name(merchant_row),
+                            "rider_id": rider_id,
+                            "slot_number": int(assignment.get("slot_number", 0)),
+                            "eta": eta,
+                            "score": float(assignment.get("score", 0.0)),
+                            "rider_load": int(float(rider_row.get("load", 0) or 0)),
+                            "user_lng": float(user_row.get("lng", 116.40)),
+                            "user_lat": float(user_row.get("lat", 39.92)),
+                            "merchant_lng": float(merchant_row.get("lng", 116.40)),
+                            "merchant_lat": float(merchant_row.get("lat", 39.92)),
+                            "rider_lng": float(rider_row.get("lng", 116.40)),
+                            "rider_lat": float(rider_row.get("lat", 39.92)),
+                        }
+                    )
+                    if not step_example and not rider_match.empty:
+                        step_example = {
+                            "sample_user_id": str(order["user_id"]),
+                            "sample_merchant_id": str(order["merchant_id"]),
+                            "sample_merchant_name": merchant_display_name(merchant_row),
+                            "sample_rider_id": rider_id,
+                            "sample_eta": eta,
+                            "sample_user_lng": float(user_row.get("lng", 116.40)),
+                            "sample_user_lat": float(user_row.get("lat", 39.92)),
+                            "sample_merchant_lng": float(merchant_row.get("lng", 116.40)),
+                            "sample_merchant_lat": float(merchant_row.get("lat", 39.92)),
+                            "sample_rider_lng": float(rider_row.get("lng", 116.40)),
+                            "sample_rider_lat": float(rider_row.get("lat", 39.92)),
+                            "sample_rider_load": int(float(rider_row.get("load", 0) or 0)),
+                        }
+                    update_rider_after_delivery(riders, rider_id, order["user_row"], eta, current_time)
+                    completed += 1
+                    step_completed += 1
+                    etas.append(eta)
+                    step_etas.append(eta)
+                    is_timeout = int(eta > 45.0)
+                    timeout += is_timeout
+                    step_timeout += is_timeout
+                if batch_matches:
+                    step_example["batch_order_count"] = len(pending_orders)
+                    step_example["batch_matched_count"] = len(batch_matches)
+                    step_example["batch_matches_json"] = json.dumps(batch_matches, ensure_ascii=False)
+
             assigned = riders[pd.to_numeric(riders["assigned"], errors="coerce").fillna(0) > 0]
             rows.append(
                 {
@@ -485,6 +568,7 @@ def build_peak_trace(
                     "active_riders": int(len(assigned)),
                     "rider_load_std": float(assigned["assigned"].std(ddof=0)) if len(assigned) else 0.0,
                     "rider_policy": rider_policy,
+                    "assignment_mode": assignment_mode,
                     **step_example,
                 }
             )

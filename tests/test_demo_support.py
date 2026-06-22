@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 
 from foodflow.data import PreparedData
@@ -88,14 +89,21 @@ def test_demo_recommendation_and_rider_frames(tmp_path: Path):
         {
             "UserOnly + MinETA": (user_model, "min_eta"),
             "Seq-xQuAD-Tripartite": (bridge_model, "load_aware"),
+            "Seq-xQuAD-Tripartite + Batch": (bridge_model, "load_aware", "batch"),
         },
         seed=456,
         steps=3,
         requests_per_step=4,
         top_k=5,
     )
-    assert set(trace["policy"]) == {"UserOnly + MinETA", "Seq-xQuAD-Tripartite"}
+    assert set(trace["policy"]) == {"UserOnly + MinETA", "Seq-xQuAD-Tripartite", "Seq-xQuAD-Tripartite + Batch"}
     assert trace["step"].max() == 3
     assert trace["completed_orders"].max() > 0
-    assert {"step_completed_orders", "step_avg_eta", "step_timeout_rate"}.issubset(trace.columns)
+    assert {"step_completed_orders", "step_avg_eta", "step_timeout_rate", "assignment_mode"}.issubset(trace.columns)
     assert trace["step_completed_orders"].ge(0).all()
+    assert "batch" in set(trace["assignment_mode"])
+    assert {"sample_user_lng", "sample_merchant_lng", "sample_rider_lng"}.issubset(trace.columns)
+    batch_trace = trace[trace["assignment_mode"].astype(str).eq("batch")]
+    batch_matches = json.loads(batch_trace["batch_matches_json"].dropna().astype(str).iloc[0])
+    assert batch_matches
+    assert {"order_id", "rider_id", "slot_number", "eta", "score"}.issubset(batch_matches[0])

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import math
 import os
+import json
 from pathlib import Path
 
 import pandas as pd
@@ -48,6 +49,7 @@ PEAK_POLICIES = [
     LEARNED_LTR_POLICY,
     "Seq-xQuAD-Tripartite + Greedy",
     "Session-SPU-Tripartite + Greedy",
+    "Session-SPU-Tripartite + Batch",
 ]
 
 processed_dir = Path("data/processed")
@@ -136,9 +138,10 @@ def load_peak_trace(
             load_model("Session-SPU-Tripartite", data_key, _data),
             "load_aware",
         ),
-        "Session-SPU-Tripartite + Greedy": (
+        "Session-SPU-Tripartite + Batch": (
             load_model("Session-SPU-Tripartite", data_key, _data),
             "load_aware",
+            "batch",
         ),
     }
     policies = {name: all_policies[name] for name in PEAK_POLICIES}
@@ -355,12 +358,13 @@ def render_relative_position_map(row: pd.Series, title: str, height: int = 280) 
     focus_lng = [user_lng, merchant_lng, rider_lng]
     focus_lat = [user_lat, merchant_lat, rider_lat]
     fig.update_layout(
-        title=f"{title} · ETA {eta:.1f} min",
+        title=dict(text=f"{title} · ETA {eta:.1f} min", font=dict(color="#111827", size=14)),
+        font=dict(color="#111827"),
         height=height,
         margin=dict(l=6, r=6, t=46, b=6),
         plot_bgcolor="#f6f8fb",
         paper_bgcolor="#ffffff",
-        legend=dict(orientation="h", yanchor="bottom", y=1.03, xanchor="left", x=0, font=dict(size=10)),
+        legend=dict(orientation="h", yanchor="bottom", y=1.03, xanchor="left", x=0, font=dict(size=10, color="#111827")),
         dragmode="pan",
     )
     fig.update_xaxes(visible=False, showgrid=False, zeroline=False, range=viewport_range(focus_lng, 0.30))
@@ -373,6 +377,190 @@ def render_relative_position_map(row: pd.Series, title: str, height: int = 280) 
         scaleratio=1,
     )
     st.plotly_chart(fig, use_container_width=True)
+
+
+def parse_batch_matches(row: pd.Series) -> list[dict[str, object]]:
+    raw = row.get("batch_matches_json", "")
+    if raw is None or pd.isna(raw) or not str(raw).strip():
+        return []
+    try:
+        matches = json.loads(str(raw))
+    except json.JSONDecodeError:
+        return []
+    return matches if isinstance(matches, list) else []
+
+
+def render_batch_matching_view(row: pd.Series) -> None:
+    matches = parse_batch_matches(row)
+    if not matches:
+        st.caption("该时间步没有可展示的 batch 匹配。")
+        return
+
+    display_matches = matches[:16]
+    plot_df = pd.DataFrame(display_matches).copy()
+    plot_df["order_no"] = range(1, len(plot_df) + 1)
+    for column in [
+        "user_lng",
+        "user_lat",
+        "merchant_lng",
+        "merchant_lat",
+        "rider_lng",
+        "rider_lat",
+        "slot_number",
+        "eta",
+        "score",
+        "rider_load",
+    ]:
+        plot_df[column] = pd.to_numeric(plot_df[column], errors="coerce").fillna(0.0)
+    slot_offsets = []
+    for _, match in plot_df.iterrows():
+        angle = (float(match["slot_number"]) + 1.0) * 2.2
+        slot_offsets.append((math.cos(angle) * 0.00045, math.sin(angle) * 0.00045))
+    plot_df["slot_lng"] = plot_df["rider_lng"] + [offset[0] for offset in slot_offsets]
+    plot_df["slot_lat"] = plot_df["rider_lat"] + [offset[1] for offset in slot_offsets]
+    plot_df["slot_label"] = plot_df.apply(
+        lambda item: f"{item['rider_id']} 槽位 {int(item['slot_number']) + 1}",
+        axis=1,
+    )
+
+    fig = go.Figure()
+    for _, match in plot_df.iterrows():
+        eta = float(match["eta"])
+        fig.add_trace(
+            go.Scatter(
+                x=[float(match["slot_lng"]), float(match["merchant_lng"])],
+                y=[float(match["slot_lat"]), float(match["merchant_lat"])],
+                mode="lines",
+                name="骑手到商家",
+                line=dict(color="#7c3aed", width=1.8, dash="dot"),
+                opacity=0.42,
+                hovertemplate=(
+                    f"{match['slot_label']} -> {match.get('merchant_name', '商家')}"
+                    f" | O{int(match['order_no'])}"
+                ),
+                showlegend=False,
+            )
+        )
+        fig.add_trace(
+            go.Scatter(
+                x=[float(match["slot_lng"]), float(match["user_lng"])],
+                y=[float(match["slot_lat"]), float(match["user_lat"])],
+                mode="lines",
+                name="匹配连线",
+                line=dict(color="#dc6803" if eta > 45.0 else "#0f766e", width=2.6),
+                opacity=0.58,
+                hovertemplate=(
+                    f"O{int(match['order_no'])} -> {match['slot_label']}"
+                    f" | ETA {eta:.1f} min | 边权 {float(match['score']):.3f}"
+                ),
+                showlegend=False,
+            )
+        )
+    fig.add_trace(
+        go.Scatter(
+            x=plot_df["merchant_lng"],
+            y=plot_df["merchant_lat"],
+            mode="markers",
+            name="下单商家",
+            text=plot_df["merchant_name"].astype(str),
+            customdata=plot_df[["order_no", "merchant_id"]].to_numpy(),
+            marker=dict(size=8, color="#0f766e", opacity=0.55, symbol="diamond", line=dict(color="#ffffff", width=0.8)),
+            hovertemplate="O%{customdata[0]} 商家 %{text} | ID %{customdata[1]}",
+        )
+    )
+    fig.add_trace(
+        go.Scatter(
+            x=plot_df["user_lng"],
+            y=plot_df["user_lat"],
+            mode="markers+text",
+            name="用户订单",
+            text=plot_df["order_no"].map(lambda value: f"O{int(value)}"),
+            customdata=plot_df[["user_id", "merchant_name", "eta"]].to_numpy(),
+            textposition="top center",
+            marker=dict(size=13, color="#2563eb", symbol="circle", line=dict(color="#ffffff", width=1.2)),
+            hovertemplate="用户 %{customdata[0]} | %{customdata[1]} | ETA %{customdata[2]:.1f} min",
+        )
+    )
+    fig.add_trace(
+        go.Scatter(
+            x=plot_df["slot_lng"],
+            y=plot_df["slot_lat"],
+            mode="markers+text",
+            name="骑手容量槽位",
+            text=plot_df["order_no"].map(lambda value: f"S{int(value)}"),
+            customdata=plot_df[["slot_label", "rider_load", "score"]].to_numpy(),
+            textposition="bottom center",
+            marker=dict(size=14, color="#7c3aed", symbol="square", line=dict(color="#ffffff", width=1.2)),
+            hovertemplate="%{customdata[0]} | 原负载 %{customdata[1]} | 边权 %{customdata[2]:.3f}",
+        )
+    )
+    focus_lng = (
+        plot_df["user_lng"].dropna().astype(float).tolist()
+        + plot_df["merchant_lng"].dropna().astype(float).tolist()
+        + plot_df["slot_lng"].dropna().astype(float).tolist()
+    )
+    focus_lat = (
+        plot_df["user_lat"].dropna().astype(float).tolist()
+        + plot_df["merchant_lat"].dropna().astype(float).tolist()
+        + plot_df["slot_lat"].dropna().astype(float).tolist()
+    )
+    fig.update_layout(
+        title=dict(
+            text=(
+                f"{row['policy']} · 第 {int(row['step'])} 步 batch 地图匹配 "
+                f"({int(row.get('batch_matched_count', len(matches)))} / {int(row.get('batch_order_count', len(matches)))})"
+            ),
+            font=dict(color="#111827", size=15),
+        ),
+        font=dict(color="#111827"),
+        height=430,
+        margin=dict(l=6, r=6, t=54, b=6),
+        plot_bgcolor="#f6f8fb",
+        paper_bgcolor="#ffffff",
+        legend=dict(orientation="h", yanchor="bottom", y=1.03, xanchor="left", x=0, font=dict(size=10, color="#111827")),
+        dragmode="pan",
+    )
+    fig.update_xaxes(visible=False, showgrid=False, zeroline=False, range=viewport_range(focus_lng, 0.28))
+    fig.update_yaxes(
+        visible=False,
+        showgrid=False,
+        zeroline=False,
+        range=viewport_range(focus_lat, 0.28),
+        scaleanchor="x",
+        scaleratio=1,
+    )
+    st.caption(
+        "蓝色 O 是用户订单，紫色 S 是骑手容量槽位，橙/绿实线表示 batch 匹配结果；"
+        "紫色虚线表示骑手到商家的取餐段，绿色菱形是订单对应商家。"
+    )
+    st.plotly_chart(fig, use_container_width=True)
+
+    match_df = pd.DataFrame(display_matches)
+    match_df = match_df[
+        ["order_index", "user_id", "merchant_name", "rider_id", "slot_number", "eta", "score", "rider_load"]
+    ].rename(
+        columns={
+            "order_index": "订单序号",
+            "user_id": "用户",
+            "merchant_name": "商家",
+            "rider_id": "骑手",
+            "slot_number": "槽位",
+            "eta": "ETA",
+            "score": "边权",
+            "rider_load": "原负载",
+        }
+    )
+    match_df["订单序号"] = pd.to_numeric(match_df["订单序号"], errors="coerce").fillna(0).astype(int) + 1
+    match_df["槽位"] = pd.to_numeric(match_df["槽位"], errors="coerce").fillna(0).astype(int) + 1
+    st.dataframe(
+        match_df,
+        use_container_width=True,
+        hide_index=True,
+        column_config={
+            "ETA": st.column_config.NumberColumn(format="%.1f"),
+            "边权": st.column_config.NumberColumn(format="%.3f"),
+        },
+    )
 
 
 def bounded_env_int(name: str, default: int, min_value: int, max_value: int) -> int:
@@ -754,7 +942,7 @@ with tab_case:
                 yaxis_title="",
                 plot_bgcolor="#f8fafc",
                 paper_bgcolor="#ffffff",
-                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0),
+                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0, font=dict(size=10, color="#111827")),
             )
             score_fig.update_xaxes(gridcolor="#e2e8f0", range=[0, max(float(candidate_plot["score"].max()) * 1.08, 0.1)])
             score_fig.update_yaxes(showgrid=False)
@@ -995,7 +1183,7 @@ with tab_case:
             margin=dict(l=8, r=8, t=52, b=8),
             plot_bgcolor="#f6f8fb",
             paper_bgcolor="#ffffff",
-            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0, font=dict(size=10)),
+            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0, font=dict(size=10, color="#111827")),
             dragmode="pan",
         )
         map_fig.update_xaxes(
@@ -1051,6 +1239,10 @@ with tab_case:
 
 with tab_peak:
     st.subheader("午餐高峰回放")
+    st.caption(
+        "按时间步模拟午餐高峰请求流：每步抽一批用户，先推荐商家，再模拟用户选店和骑手派单。"
+        "Batch 策略会把同一时间步的订单与骑手容量槽位做二分图最大权匹配。"
+    )
     replay_c1, replay_c2 = st.columns(2)
     with replay_c1:
         replay_steps = st.slider("回放时间步", min_value=8, max_value=32, value=16, step=2)
@@ -1186,7 +1378,31 @@ with tab_peak:
                                 height=260,
                             )
 
-            st.dataframe(trace_df, use_container_width=True, hide_index=True)
+            if "assignment_mode" in trace_df.columns and "batch_matches_json" in trace_df.columns:
+                batch_rows = trace_df[
+                    trace_df["assignment_mode"].astype(str).eq("batch")
+                    & trace_df["batch_matches_json"].fillna("").astype(str).str.len().gt(2)
+                ].copy()
+                if not batch_rows.empty:
+                    st.subheader("Batch 地图匹配")
+                    b1, b2 = st.columns([1.2, 0.8])
+                    batch_policies = batch_rows["policy"].astype(str).drop_duplicates().tolist()
+                    with b1:
+                        selected_batch_policy = st.selectbox("Batch 策略", batch_policies, key="peak_batch_policy")
+                    policy_batch_rows = batch_rows[batch_rows["policy"].astype(str) == selected_batch_policy].sort_values("step")
+                    batch_steps = policy_batch_rows["step"].astype(int).tolist()
+                    with b2:
+                        selected_batch_step = st.selectbox(
+                            "时间步",
+                            batch_steps,
+                            index=max(len(batch_steps) - 1, 0),
+                            key="peak_batch_step",
+                        )
+                    batch_row = policy_batch_rows[policy_batch_rows["step"].astype(int) == int(selected_batch_step)].iloc[-1]
+                    render_batch_matching_view(batch_row)
+
+            trace_display = trace_df.drop(columns=["batch_matches_json"], errors="ignore")
+            st.dataframe(trace_display, use_container_width=True, hide_index=True)
     else:
         st.caption("开启后会连续运行多轮推荐与派单仿真，首次计算需要等待。")
 
