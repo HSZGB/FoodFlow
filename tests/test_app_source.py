@@ -34,3 +34,10 @@ def test_demo_copy_is_presentation_facing():
     ]
     for phrase in forbidden_phrases:
         assert phrase not in source
+
+
+def test_recommendation_result_labels_use_plain_chinese():
+    source = Path("app.py").read_text(encoding="utf-8")
+    assert "TRUTH" not in source
+    assert "测试期真实复购" not in source
+    assert 'st.success("推荐命中")' in source

@@ -1,6 +1,8 @@
 import json
 from pathlib import Path
 
+import pandas as pd
+
 from foodflow.data import PreparedData
 from foodflow.demo_support import (
     build_recommendation_frame,
@@ -8,6 +10,7 @@ from foodflow.demo_support import (
     build_rider_candidate_frame,
     build_rider_policy_frame,
     demo_user_cases,
+    recommendation_card_batches,
     streamlit_image_width_kwargs,
 )
 from foodflow.mock_data import make_mock_trd
@@ -34,9 +37,10 @@ def test_demo_recommendation_and_rider_frames(tmp_path: Path):
     preprocess(raw, processed, sample_orders=240, seed=456)
 
     data = PreparedData.load(processed)
-    cases = demo_user_cases(data.users)
+    cases = demo_user_cases(data)
     assert cases
     assert set(cases.values()).issubset(set(data.user_ids))
+    assert all(f"用户 {user_id}" in label for label, user_id in cases.items())
 
     user_model = UserOnlyRecommender().fit(data)
     seq_model = SeqTunedRecommender().fit(data)
@@ -50,7 +54,17 @@ def test_demo_recommendation_and_rider_frames(tmp_path: Path):
     seq_frame = build_recommendation_frame(data, seq_model, user_id, seq_recs, "lunch")
 
     assert len(rec_frame) == 5
-    assert {"merchant_name", "final_score", "reason", "eta_minutes"}.issubset(rec_frame.columns)
+    assert {
+        "merchant_name",
+        "final_score",
+        "rank_score",
+        "reason",
+        "eta_minutes",
+        "is_truth",
+        "truth_label",
+    }.issubset(rec_frame.columns)
+    assert rec_frame["uses_xquad"].all()
+    assert rec_frame["rank_score"].notna().all()
     assert len(user_frame) == 5
     assert user_frame["fairness_contrib"].eq(0).all()
     assert user_frame["eta_contrib"].eq(0).all()
@@ -58,6 +72,17 @@ def test_demo_recommendation_and_rider_frames(tmp_path: Path):
     assert len(rec_frame) == 5
     assert rec_frame["fairness_contrib"].gt(0).any()
     assert rec_frame["eta_contrib"].gt(0).any()
+
+    batches = recommendation_card_batches(pd.concat([rec_frame] * 4, ignore_index=True), columns=3)
+    assert sum(len(batch) for batch in batches) == 20
+    assert [len(batch) for batch in batches] == [3, 3, 3, 3, 3, 3, 2]
+
+    truth = data.truth_by_user()
+    truth_user = next(user for user, merchants in truth.items() if merchants)
+    truth_merchant = next(iter(truth[truth_user]))
+    truth_frame = build_recommendation_frame(data, user_model, truth_user, [truth_merchant], "lunch")
+    assert bool(truth_frame.iloc[0]["is_truth"])
+    assert truth_frame.iloc[0]["truth_label"] == "推荐命中"
 
     users = data.users.set_index("user_id", drop=False)
     merchants = data.merchants.set_index("wm_poi_id", drop=False)

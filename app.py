@@ -18,6 +18,7 @@ from foodflow.demo_support import (
     build_rider_policy_frame,
     clamp01,
     demo_user_cases,
+    recommendation_card_batches,
     streamlit_image_width_kwargs,
     user_category_profile,
 )
@@ -507,9 +508,12 @@ def render_peak_policy_card(row: pd.Series, rank: int) -> None:
 def render_recommendation_card(row: pd.Series, selected: bool = False) -> None:
     uses_tripartite = bool(row.get("uses_tripartite", False))
     uses_session_spu = bool(row.get("uses_session_spu", False))
+    uses_xquad = bool(row.get("uses_xquad", False))
     model_name = str(row.get("model_name", ""))
     with st.container(border=True):
-        st.caption("当前下单商家" if selected else f"TOP {int(row['rank'])}")
+        if bool(row.get("is_truth", False)):
+            st.success("推荐命中")
+        st.caption("当前下单商家" if selected else f"第 {int(row['rank'])} 名")
         st.write(f"**{row['merchant_name']}**")
         st.caption(
             f"ID {row['merchant_id']} · 品类 {row['category']} · "
@@ -518,9 +522,14 @@ def render_recommendation_card(row: pd.Series, selected: bool = False) -> None:
         )
         st.write(str(row["reason"]).replace(" / ", "、"))
         m1, m2 = st.columns(2)
-        m1.metric("总分", f"{float(row['final_score']):.3f}")
+        if uses_xquad:
+            m1.metric("列表排序分", f"{float(row['rank_score']):.3f}")
+        else:
+            m1.metric("总分", f"{float(row['final_score']):.3f}")
         m2.metric("ETA", f"{float(row['eta_minutes']):.1f} min")
         if uses_tripartite:
+            if uses_xquad:
+                score_bar("候选相关性", float(row["final_score"]))
             score_bar("用户偏好", float(row["user_score"]))
             score_bar("商家公平", float(row["fairness"]))
             score_bar("履约速度", float(row["eta_score"]))
@@ -543,7 +552,7 @@ data = load_data()
 user_ids = data.user_ids
 user_set = set(user_ids)
 default_user = "8" if "8" in user_set else user_ids[0]
-case_options = demo_user_cases(data.users)
+case_options = demo_user_cases(data)
 demo_max_orders = bounded_env_int("FOODFLOW_DEMO_MAX_ORDERS", 12000, 0, 2_000_000)
 demo_rider_count = bounded_env_int("FOODFLOW_DEMO_RIDERS", 1200, 120, 2400)
 
@@ -558,7 +567,7 @@ with st.sidebar:
         user_id = default_user
     else:
         user_id = typed_user
-    period_label = st.selectbox("时段", ["午餐高峰", "晚餐高峰", "早餐", "夜宵"], index=0)
+    period_label = st.selectbox("下单时段（影响配送耗时）", ["午餐高峰", "晚餐高峰", "早餐", "夜宵"], index=0)
     period_map = {"午餐高峰": "lunch", "晚餐高峰": "dinner", "早餐": "breakfast", "夜宵": "night"}
     period = period_map[period_label]
     strategy_name = st.selectbox(
@@ -651,6 +660,12 @@ with tab_case:
             st.plotly_chart(fig, use_container_width=True)
 
     st.subheader(f"{strategy_name} 推荐商家卡片")
+    truth_total = len(data.truth_by_user().get(str(user_id), set()))
+    truth_hits = int(rec_df["is_truth"].sum()) if "is_truth" in rec_df.columns else 0
+    st.caption(
+        f"当前推荐 {len(rec_df)} 家，其中 {truth_hits} 家是用户后来实际下单的商家；"
+        f"该用户后来一共在 {truth_total} 家商家下过单。绿色提示只用于核对推荐结果，不参与排序。"
+    )
     reason_choices = sorted({item for text in rec_df["reason"].astype(str) for item in text.split(" / ") if item})
     selected_reasons = st.multiselect("推荐理由筛选", reason_choices, default=[])
     if selected_reasons:
@@ -663,10 +678,10 @@ with tab_case:
         st.info("当前筛选无匹配，已显示完整推荐列表。")
         card_df = rec_df.copy()
 
-    card_count = min(9, len(card_df))
-    for start in range(0, card_count, 3):
+    st.caption(f"卡片显示 {len(card_df)}/{len(rec_df)} 家商户。")
+    for batch in recommendation_card_batches(card_df, columns=3):
         cols = st.columns(3)
-        for col, (_, row) in zip(cols, card_df.iloc[start : start + 3].iterrows()):
+        for col, (_, row) in zip(cols, batch.iterrows()):
             with col:
                 render_recommendation_card(row)
 
@@ -727,7 +742,8 @@ with tab_case:
         st.caption("开启后会临时加载三条主线策略，首次计算需要等待。")
 
     option_labels = [
-        f"TOP {int(row.rank)} · {row.merchant_name} · ID {row.merchant_id}" for row in rec_df.itertuples(index=False)
+        f"{'[推荐命中] ' if row.is_truth else ''}第 {int(row.rank)} 名 · {row.merchant_name} · 商家编号 {row.merchant_id}"
+        for row in rec_df.itertuples(index=False)
     ]
     chosen_label = st.selectbox("模拟下单商家", option_labels)
     chosen_idx = option_labels.index(chosen_label)
@@ -1111,6 +1127,7 @@ with tab_case:
     st.subheader("推荐明细")
     table_cols = [
         "rank",
+        "truth_label",
         "merchant_name",
         "category",
         "final_score",
@@ -1121,16 +1138,21 @@ with tab_case:
         "distance_km",
         "reason",
     ]
+    if "rank_score" in rec_df.columns and rec_df.get("uses_xquad", pd.Series(dtype=bool)).any():
+        table_cols.insert(3, "rank_score")
     if "session_score" in rec_df.columns and rec_df["session_score"].gt(0).any():
         table_cols.insert(-2, "session_score")
     if "spu_score" in rec_df.columns and rec_df["spu_score"].gt(0).any():
         table_cols.insert(-2, "spu_score")
+    score_label = "候选相关性" if "rank_score" in table_cols else "总分"
     display_df = rec_df[table_cols].rename(
         columns={
             "rank": "排名",
+            "truth_label": "推荐结果",
             "merchant_name": "商家",
             "category": "品类",
-            "final_score": "总分",
+            "rank_score": "列表排序分",
+            "final_score": score_label,
             "user_score": "用户偏好",
             "fairness": "商家公平",
             "eta_minutes": "ETA",

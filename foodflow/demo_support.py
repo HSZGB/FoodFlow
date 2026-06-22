@@ -52,39 +52,82 @@ def merchant_category(merchant: pd.Series) -> str:
     return "unknown"
 
 
-def demo_user_cases(users: pd.DataFrame) -> dict[str, str]:
+VERIFIED_DEMO_USERS = [
+    ("老店命中多", "169480"),
+    ("命中新店", "167641"),
+    ("只点一类", "174231"),
+    ("客单价高", "72409"),
+    ("常点多类", "147726"),
+]
+
+
+def demo_user_cases(data: PreparedData) -> dict[str, str]:
+    """Return distinctive, data-verified users for the interactive demo.
+
+    The preferred TRD users were checked against the demo's default
+    Seq-xQuAD-Tripartite Top-20 results. Fallbacks keep mock/custom datasets
+    useful and derive their labels from the data instead of assuming TRD IDs.
+    """
+    users = data.users
     cases: dict[str, str] = {}
 
-    def add(label: str, user_id: object) -> None:
+    def add(case_type: str, user_id: object) -> None:
         user_id_str = str(user_id)
         if user_id_str and user_id_str.lower() != "nan" and user_id_str not in cases.values():
-            cases[label] = user_id_str
+            cases[f"{case_type} · 用户 {user_id_str}"] = user_id_str
 
     user_ids = set(users["user_id"].astype(str))
-    if "8" in user_ids:
-        add("默认案例：用户 8", "8")
-    elif len(users):
-        add("默认案例：首个用户", users.iloc[0]["user_id"])
+    for case_type, user_id in VERIFIED_DEMO_USERS:
+        if user_id in user_ids:
+            add(case_type, user_id)
 
-    if "history_orders" in users.columns and len(users):
-        history = pd.to_numeric(users["history_orders"], errors="coerce").fillna(0)
-        add("复购活跃型", users.loc[history.idxmax(), "user_id"])
+    if len(cases) < 5 and not data.orders_train.empty:
+        train = data.orders_train[["user_id", "wm_poi_id"]].copy()
+        train["user_id"] = train["user_id"].astype(str)
+        train["wm_poi_id"] = train["wm_poi_id"].astype(str)
+        stats = train.groupby("user_id").agg(
+            history_orders=("wm_poi_id", "size"),
+            unique_merchants=("wm_poi_id", "nunique"),
+        )
+        truth = data.truth_by_user()
+        history = data.history_by_user()
+        stats["repeat_truth"] = [
+            len(truth.get(user_id, set()).intersection(history.get(user_id, []))) for user_id in stats.index
+        ]
+        repeat_candidates = stats[stats["repeat_truth"] > 0]
+        if not repeat_candidates.empty:
+            add("常点老店", repeat_candidates["history_orders"].idxmax())
+
+        merchant_categories = data.merchants[["wm_poi_id", "primary_first_tag_id"]]
+        category_history = train.merge(merchant_categories, on="wm_poi_id", how="left")
+        category_stats = category_history.groupby("user_id").agg(
+            history_orders=("wm_poi_id", "size"),
+            unique_categories=("primary_first_tag_id", "nunique"),
+        )
+        active = category_stats[category_stats["history_orders"] >= 3]
+        if not active.empty:
+            add("常点多类", active.sort_values(["unique_categories", "history_orders"]).index[-1])
 
     price_col = "avg_order_price" if "avg_order_price" in users.columns else "avg_pay_amt"
-    if price_col in users.columns and len(users):
-        prices = pd.to_numeric(users[price_col], errors="coerce")
-        valid = users[prices.notna()].copy()
-        if len(valid):
-            valid_prices = pd.to_numeric(valid[price_col], errors="coerce")
-            add("高消费型", valid.loc[valid_prices.idxmax(), "user_id"])
-            add("价格敏感型", valid.loc[valid_prices.idxmin(), "user_id"])
+    if len(cases) < 5 and price_col in users.columns and len(users):
+        valid = users[pd.to_numeric(users[price_col], errors="coerce").notna()].copy()
+        if not valid.empty:
+            prices = pd.to_numeric(valid[price_col], errors="coerce")
+            add("客单价高", valid.loc[prices.idxmax(), "user_id"])
 
     for _, row in users.head(20).iterrows():
         if len(cases) >= 5:
             break
-        add(f"备选用户 {row['user_id']}", row["user_id"])
+        add("普通用户", row["user_id"])
 
     return cases
+
+
+def recommendation_card_batches(frame: pd.DataFrame, columns: int = 3) -> list[pd.DataFrame]:
+    """Split every recommendation row into display batches without truncation."""
+    if columns <= 0:
+        raise ValueError("columns must be positive")
+    return [frame.iloc[start : start + columns] for start in range(0, len(frame), columns)]
 
 
 def user_category_profile(data: PreparedData, user_id: str, top_n: int = 6) -> pd.DataFrame:
@@ -112,6 +155,55 @@ def user_category_profile(data: PreparedData, user_id: str, top_n: int = 6) -> p
     return counts
 
 
+def _xquad_rank_scores(model, recs: list[str], components_by_item: dict[str, dict[str, float]]) -> dict[str, float]:
+    if (
+        not recs
+        or not components_by_item
+        or not hasattr(model, "diversity_weight")
+        or not hasattr(model, "tail_weight")
+        or not hasattr(model, "merchants")
+    ):
+        return {}
+
+    scores = {
+        str(merchant_id): float(values.get("final_score", 0.0))
+        for merchant_id, values in components_by_item.items()
+    }
+    candidates = [
+        merchant_id
+        for merchant_id in sorted(scores, key=scores.get, reverse=True)[:80]
+        if merchant_id in model.merchants.index
+    ]
+    if not candidates:
+        return {}
+
+    min_score = min(scores[merchant_id] for merchant_id in candidates)
+    max_score = max(scores[merchant_id] for merchant_id in candidates)
+    scale = max(max_score - min_score, 1e-9)
+    relevance_weight = max(
+        1.0 - float(getattr(model, "diversity_weight", 0.0)) - float(getattr(model, "tail_weight", 0.0)),
+        0.0,
+    )
+    covered_categories: set[str] = set()
+    rank_scores: dict[str, float] = {}
+    for merchant_id in [str(item) for item in recs]:
+        if merchant_id not in scores or merchant_id not in model.merchants.index:
+            continue
+        merchant = model.merchants.loc[merchant_id]
+        category = str(merchant.get("primary_first_tag_id", "unknown"))
+        category_gain = 0.0 if category in covered_categories else 1.0
+        order_count = float(merchant.get("order_count", 0) or 0)
+        tail_gain = 1.0 / (1.0 + np.log1p(order_count))
+        relevance = (scores[merchant_id] - min_score) / scale
+        rank_scores[merchant_id] = float(
+            relevance_weight * relevance
+            + float(getattr(model, "diversity_weight", 0.0)) * category_gain
+            + float(getattr(model, "tail_weight", 0.0)) * tail_gain
+        )
+        covered_categories.add(category)
+    return rank_scores
+
+
 def build_recommendation_frame(
     data: PreparedData,
     model,
@@ -127,6 +219,7 @@ def build_recommendation_frame(
     fairness_lookup = getattr(model, "fair", fairness_scores(data.merchants))
     history = data.orders_train[data.orders_train["user_id"].astype(str) == str(user_id)]
     repeat_counts = Counter(history["wm_poi_id"].astype(str))
+    truth_merchants = data.truth_by_user().get(str(user_id), set())
     category_profile = user_category_profile(data, user_id, top_n=20)
     category_counts = dict(zip(category_profile["category"].astype(str), category_profile["orders"].astype(int)))
     ranking_scores = ranking_scores or {}
@@ -140,6 +233,7 @@ def build_recommendation_frame(
                 candidate_pool = list(recs)
         candidate_pool = list(dict.fromkeys([str(item) for item in candidate_pool] + [str(item) for item in recs]))
         normalized_components = model._component_scores_for_candidates(user_id, candidate_pool, period)
+    xquad_rank_scores = _xquad_rank_scores(model, recs, normalized_components)
     uses_tripartite = bool(
         hasattr(model, "component_scores")
         and (
@@ -150,9 +244,11 @@ def build_recommendation_frame(
         )
     )
     uses_session_spu = bool(hasattr(model, "session_weight") or hasattr(model, "spu_weight"))
+    uses_xquad = bool(xquad_rank_scores)
 
     rows = []
     for rank, merchant_id in enumerate(recs, start=1):
+        merchant_id = str(merchant_id)
         merchant = merchants.loc[merchant_id]
         if hasattr(model, "component_scores"):
             components = normalized_components.get(merchant_id, model.component_scores(user_id, merchant_id, period))
@@ -182,6 +278,8 @@ def build_recommendation_frame(
             spu_weight = 0.0
         category = merchant_category(merchant)
         repeat = int(repeat_counts.get(str(merchant_id), 0))
+        is_truth = merchant_id in truth_merchants
+        truth_label = "推荐命中" if is_truth else ""
         user_price = float(user_row.get("avg_order_price", user_row.get("avg_pay_amt", 35)) or 35)
         merchant_price = float(merchant.get("avg_order_price", 35) or 35)
         distance_km = haversine_km(
@@ -224,11 +322,14 @@ def build_recommendation_frame(
                 "merchant_name": merchant_display_name(merchant),
                 "category": category,
                 "repeat_orders": repeat,
+                "is_truth": is_truth,
+                "truth_label": truth_label,
                 "distance_km": float(distance_km),
                 "avg_price": merchant_price,
                 "poi_score": float(merchant.get("poi_score", 0) or 0),
                 "order_count": int(float(merchant.get("order_count", 0) or 0)),
                 "final_score": float(components["final_score"]),
+                "rank_score": float(xquad_rank_scores.get(merchant_id, components["final_score"])),
                 "user_score": float(components["user_score"]),
                 "fairness": float(components["merchant_fairness"]),
                 "eta_minutes": float(components["eta_minutes"]),
@@ -246,6 +347,7 @@ def build_recommendation_frame(
                 "spu_contrib": float(spu_weight * components.get("spu_score", 0.0)),
                 "uses_tripartite": uses_tripartite,
                 "uses_session_spu": uses_session_spu,
+                "uses_xquad": uses_xquad,
                 "model_name": model_name,
                 "reason": " / ".join(reasons),
                 "lng": float(merchant.get("lng", 116.40)),
