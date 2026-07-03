@@ -34,4 +34,4 @@ ppt/FoodFlow/speech.md
 ~$*.docx
 *.out
 *.toc
-*.aux
+*.auxdata/lade/

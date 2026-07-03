@@ -285,7 +285,7 @@ def test_food_delivery_profile_rescales_lade_like_calibration():
 
     adapted = adapt_calibration_for_food_delivery(raw)
 
-    assert adapted.speed_kmph == 20.0
+    assert adapted.speed_kmph == 25.0
     assert adapted.service_minutes == 10.0
     assert adapted.initial_load_lambda == raw.initial_load_lambda
     assert adapted.reliability_mean == raw.reliability_mean

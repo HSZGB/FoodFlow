@@ -21,7 +21,17 @@ from .recommenders import (
     learned_ltr_model_name,
 )
 from .rider_data import RiderCalibration
-from .rider_sim import assign_order, assign_orders_batch, generate_riders, update_rider_after_delivery
+from .rider_sim import (
+    advance_riders_along_routes,
+    apply_route_assignment,
+    assign_order,
+    assign_order_route,
+    assign_orders_batch,
+    assign_orders_route_batch,
+    ensure_route_column,
+    generate_riders,
+    update_rider_after_delivery,
+)
 
 
 @dataclass(frozen=True)
@@ -63,6 +73,20 @@ DEFAULT_POLICIES = [
         "kg_tripartite",
         "load_aware",
         assignment_mode="batch",
+        fairness=True,
+    ),
+    SimulationPolicy(
+        "KG-Tripartite + RouteMinETA",
+        "kg_tripartite",
+        "route_min_eta",
+        assignment_mode="route_batch",
+        fairness=True,
+    ),
+    SimulationPolicy(
+        "KG-Tripartite + RouteBatch",
+        "kg_tripartite",
+        "route_insertion",
+        assignment_mode="route_batch",
         fairness=True,
     ),
 ]
@@ -151,6 +175,7 @@ def run_simulation(
     top_k: int = 10,
     verbose: bool = False,
     rider_calibration: RiderCalibration | None = None,
+    n_riders: int = 120,
 ) -> pd.DataFrame:
     policies = policies or DEFAULT_POLICIES
     truth = data.truth_by_user()
@@ -181,21 +206,30 @@ def run_simulation(
                 f"running {steps} steps x {requests_per_step} requests...",
                 flush=True,
             )
-        riders = generate_riders(data.merchants, n_riders=120, seed=rider_seed, calibration=rider_calibration)
+        riders = generate_riders(data.merchants, n_riders=n_riders, seed=rider_seed, calibration=rider_calibration)
         exposure = Counter()
         completed = 0
         total_orders = 0
         timeouts = 0
         etas: list[float] = []
         satisfaction: list[float] = []
+        detours: list[float] = []
+        enroute_pickups = 0
         assignment_mode = policy.assignment_mode
+        route_mode = policy.rider_policy in {"route_insertion", "route_min_eta"}
+        route_objective = "min_eta" if policy.rider_policy == "route_min_eta" else "detour_eta"
+        if route_mode:
+            ensure_route_column(riders)
 
         for step in range(steps):
             current_time = step * 5
-            ready = riders["available_at"] <= current_time
-            riders.loc[ready, "load"] = (
-                pd.to_numeric(riders.loc[ready, "load"], errors="coerce").fillna(0).astype(int) - 1
-            ).clip(lower=0)
+            if route_mode:
+                advance_riders_along_routes(riders, elapsed_minutes=5.0)
+            else:
+                ready = riders["available_at"] <= current_time
+                riders.loc[ready, "load"] = (
+                    pd.to_numeric(riders.loc[ready, "load"], errors="coerce").fillna(0).astype(int) - 1
+                ).clip(lower=0)
             request_users = request_rng.choice(eval_users, size=min(requests_per_step, len(eval_users)), replace=False)
             periods = {u: "lunch" for u in request_users}
             rec_result = recommender.recommend(list(request_users), top_k, periods)
@@ -223,20 +257,55 @@ def run_simulation(
                     "merchant_row": merchant_row,
                     "satisfaction": 1.0 if chosen in truth.get(user_id, set()) else 0.45,
                 }
-                if assignment_mode == "batch":
+                if assignment_mode in {"batch", "route_batch"}:
                     pending_orders.append(order)
                     continue
-                available = riders[riders["load"] <= 2].copy()
-                rider_id, eta = assign_order(user_row, merchant_row, available, policy.rider_policy, "lunch", current_time)
-                if rider_id is None:
-                    continue
-                update_rider_after_delivery(riders, rider_id, user_row, eta, current_time)
+                if route_mode:
+                    choice = assign_order_route(user_row, merchant_row, riders, "lunch", current_time, objective=route_objective)
+                    if choice is None:
+                        continue
+                    apply_route_assignment(
+                        riders,
+                        str(choice["rider_id"]),
+                        merchant_row,
+                        user_row,
+                        str(order["order_id"]),
+                        int(choice["insert_pickup"]),
+                        int(choice["insert_dropoff"]),
+                        float(choice["eta"]),
+                        current_time,
+                    )
+                    eta = float(choice["eta"])
+                    detours.append(float(choice["detour"]))
+                    enroute_pickups += int(bool(choice["enroute"]))
+                else:
+                    available = riders[riders["load"] <= 2].copy()
+                    rider_id, eta = assign_order(user_row, merchant_row, available, policy.rider_policy, "lunch", current_time)
+                    if rider_id is None:
+                        continue
+                    update_rider_after_delivery(riders, rider_id, user_row, eta, current_time)
                 completed += 1
                 etas.append(eta)
                 timeouts += int(eta > 45.0)
                 satisfaction.append(float(order["satisfaction"]))
 
-            if assignment_mode == "batch" and pending_orders:
+            if assignment_mode == "route_batch" and pending_orders:
+                route_assignments = assign_orders_route_batch(
+                    pending_orders, riders, "lunch", current_time, objective=route_objective
+                )
+                orders_by_id = {str(order["order_id"]): order for order in pending_orders}
+                for assignment in route_assignments:
+                    order = orders_by_id.get(str(assignment["order_id"]))
+                    if order is None:
+                        continue
+                    eta = float(assignment["eta"])
+                    detours.append(float(assignment["detour"]))
+                    enroute_pickups += int(bool(assignment["enroute"]))
+                    completed += 1
+                    etas.append(eta)
+                    timeouts += int(eta > 45.0)
+                    satisfaction.append(float(order["satisfaction"]))
+            elif assignment_mode == "batch" and pending_orders:
                 available = riders[riders["load"] <= 2].copy()
                 assignments = assign_orders_batch(
                     pending_orders,
@@ -292,6 +361,8 @@ def run_simulation(
             "user_satisfaction": float(np.mean(satisfaction)) if satisfaction else 0.0,
             "rider_speed_kmph": float(pd.to_numeric(riders.get("speed_kmph", 0), errors="coerce").mean()),
             "rider_service_minutes": float(pd.to_numeric(riders.get("service_minutes", 0), errors="coerce").mean()),
+            "avg_detour_minutes": float(np.mean(detours)) if detours else 0.0,
+            "enroute_pickup_share": enroute_pickups / max(completed, 1) if route_mode else 0.0,
         }
         row["platform_utility"] = platform_utility(row)
         results.append(row)
@@ -318,6 +389,7 @@ def run_simulation_multi_seed(
     top_k: int = 10,
     verbose: bool = False,
     rider_calibration: RiderCalibration | None = None,
+    n_riders: int = 120,
 ) -> pd.DataFrame:
     """Run the simulation once per seed and aggregate per-policy mean/std/95% CI.
 
@@ -340,6 +412,7 @@ def run_simulation_multi_seed(
             top_k=top_k,
             verbose=verbose,
             rider_calibration=rider_calibration,
+            n_riders=n_riders,
         )
         runs.append(frame.assign(seed=seed))
     stacked = pd.concat(runs, ignore_index=True)

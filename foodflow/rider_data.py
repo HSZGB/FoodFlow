@@ -14,7 +14,7 @@ FOOD_DELIVERY_SLA_MINUTES = 45.0
 
 @dataclass(frozen=True)
 class RiderCalibration:
-    speed_kmph: float = 20.0
+    speed_kmph: float = 25.0
     service_minutes: float = 10.0
     initial_load_lambda: float = 0.6
     reliability_mean: float = 0.9
@@ -42,7 +42,7 @@ def adapt_calibration_for_food_delivery(calibration: RiderCalibration) -> RiderC
     food-delivery simulation scale.
     """
     return RiderCalibration(
-        speed_kmph=20.0,
+        speed_kmph=25.0,
         service_minutes=10.0,
         initial_load_lambda=calibration.initial_load_lambda,
         reliability_mean=calibration.reliability_mean,

@@ -5,6 +5,13 @@ import math
 import numpy as np
 import pandas as pd
 
+# 道路弯曲系数：城市直线距离换算道路距离的经验倍率（路网研究常用 1.2-1.4）。
+ROAD_CIRCUITY_FACTOR = 1.3
+
+
+def road_km(straight_km: float) -> float:
+    return straight_km * ROAD_CIRCUITY_FACTOR
+
 
 def haversine_km(lng1: float, lat1: float, lng2: float, lat2: float) -> float:
     radius = 6371.0
@@ -32,7 +39,7 @@ def estimate_user_merchant_eta(user_row: pd.Series, merchant_row: pd.Series, per
     )
     prep = 10.0 + (1.0 - float(merchant_row.get("delivery_comment_avg_score", 4.2)) / 5.0) * 8.0 # 商户准备时间，基于配送评分调整
     peak = 6.0 if period in {"lunch", "dinner"} else 2.0
-    return float(prep + distance / 18.0 * 60.0 + peak)
+    return float(prep + road_km(distance) / 22.0 * 60.0 + peak)
 
 
 def fairness_scores(merchants: pd.DataFrame) -> dict[str, float]:

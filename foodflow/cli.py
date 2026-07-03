@@ -69,12 +69,24 @@ def build_parser() -> argparse.ArgumentParser:
         help="Where to write calibration diagnostics JSON (defaults to <output stem>_calibration.json when --rider-tasks is set).",
     )
     p.add_argument(
+        "--n-riders",
+        type=int,
+        default=120,
+        help="Number of simulated riders (use a small value, e.g. 30, for peak capacity-stress scenarios).",
+    )
+    p.add_argument(
         "--simulation-seeds",
         type=int,
         nargs="+",
         default=None,
         help="Run the simulation once per seed and aggregate mean/std/95%% CI per policy (overrides --seed).",
     )
+
+    p = sub.add_parser("geocode", help="Embed users/merchants into real-city geography from LaDe delivery GPS points.")
+    p.add_argument("--processed-dir", type=Path, default=DEFAULT_PROCESSED_DIR)
+    p.add_argument("--tasks", type=Path, required=True, help="LaDe delivery parquet/csv with real lng/lat points.")
+    p.add_argument("--seed", type=int, default=42)
+    p.add_argument("--n-clusters", type=int, default=24)
 
     p = sub.add_parser("figures")
     p.add_argument("--results-dir", type=Path, default=Path("outputs/results"))
@@ -121,7 +133,11 @@ def main(argv: list[str] | None = None) -> None:
         data = PreparedData.load(args.processed_dir)
         rider_calibration = None
         if args.rider_tasks:
-            tasks = pd.read_csv(args.rider_tasks)
+            tasks = (
+                pd.read_parquet(args.rider_tasks)
+                if args.rider_tasks.suffix == ".parquet"
+                else pd.read_csv(args.rider_tasks)
+            )
             raw_calibration = estimate_rider_calibration(tasks)
             rider_calibration = raw_calibration
             if args.rider_calibration_profile == "food-scaled":
@@ -144,12 +160,24 @@ def main(argv: list[str] | None = None) -> None:
                 seeds=args.simulation_seeds,
                 verbose=not args.quiet,
                 rider_calibration=rider_calibration,
+                n_riders=args.n_riders,
             )
         else:
-            df = run_simulation(data, seed=args.seed, verbose=not args.quiet, rider_calibration=rider_calibration)
+            df = run_simulation(
+                data, seed=args.seed, verbose=not args.quiet, rider_calibration=rider_calibration, n_riders=args.n_riders
+            )
         args.output.parent.mkdir(parents=True, exist_ok=True)
         df.to_csv(args.output, index=False)
         print(df.to_string(index=False))
+    elif args.command == "geocode":
+        from .geo import geocode_processed
+
+        meta = geocode_processed(args.processed_dir, args.tasks, seed=args.seed, n_clusters=args.n_clusters)
+        print(
+            f"Real geography assigned from {meta['n_points']} LaDe points "
+            f"({meta['merchant_groups']} merchant districts, {meta['user_groups']} user areas); "
+            f"note written to {args.processed_dir}/geo_note.json"
+        )
     elif args.command == "figures":
         paths = generate_figures(args.results_dir, args.figures_dir)
         print(f"Generated {len(paths)} figures under {args.figures_dir}")

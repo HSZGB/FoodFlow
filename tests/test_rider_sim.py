@@ -134,3 +134,105 @@ def test_run_simulation_multi_seed_aggregates_mean_and_ci(tmp_path):
     assert "avg_eta_std" in result.columns
     assert "platform_utility_ci95" in result.columns
     assert result["avg_eta_ci95"].ge(0).all()
+
+
+def _route_test_riders():
+    import pandas as pd
+
+    return pd.DataFrame(
+        [
+            {
+                "rider_id": "r_near",
+                "lng": 121.30,
+                "lat": 37.50,
+                "load": 0,
+                "available_at": 0,
+                "reliability": 0.9,
+                "speed_kmph": 20.0,
+                "service_radius_km": 6.0,
+                "acceptance_rate": 0.9,
+                "service_minutes": 8.0,
+                "income": 0.0,
+                "assigned": 0,
+            },
+            {
+                "rider_id": "r_far",
+                "lng": 121.45,
+                "lat": 37.62,
+                "load": 0,
+                "available_at": 0,
+                "reliability": 0.9,
+                "speed_kmph": 20.0,
+                "service_radius_km": 6.0,
+                "acceptance_rate": 0.9,
+                "service_minutes": 8.0,
+                "income": 0.0,
+                "assigned": 0,
+            },
+        ]
+    )
+
+
+def test_route_insertion_prefers_enroute_rider():
+    import pandas as pd
+
+    from foodflow.rider_sim import (
+        apply_route_assignment,
+        assign_order_route,
+        ensure_route_column,
+        route_pending_orders,
+    )
+
+    riders = _route_test_riders()
+    ensure_route_column(riders)
+    merchant_a = pd.Series({"lng": 121.31, "lat": 37.505, "food_comment_avg_score": 4.5})
+    user_a = pd.Series({"lng": 121.33, "lat": 37.52})
+    first = assign_order_route(user_a, merchant_a, riders)
+    assert first is not None and first["rider_id"] == "r_near"
+    apply_route_assignment(
+        riders, "r_near", merchant_a, user_a, "o1",
+        int(first["insert_pickup"]), int(first["insert_dropoff"]), float(first["eta"]), 0,
+    )
+    assert route_pending_orders(riders.iloc[0]) == 1
+
+    # 第二单的取送点都在 r_near 当前路径沿线：顺路插入的边际成本应远小于
+    # 从零出发的空闲骑手绕行成本，即使 r_far 是"闲"的。
+    merchant_b = pd.Series({"lng": 121.315, "lat": 37.508, "food_comment_avg_score": 4.5})
+    user_b = pd.Series({"lng": 121.325, "lat": 37.515})
+    second = assign_order_route(user_b, merchant_b, riders)
+    assert second is not None
+    assert second["rider_id"] == "r_near"
+    assert bool(second["enroute"]) is True
+    assert float(second["detour"]) < 20.0
+
+
+def test_route_batch_assigns_all_orders_and_advances():
+    import pandas as pd
+
+    from foodflow.rider_sim import (
+        advance_riders_along_routes,
+        assign_orders_route_batch,
+        ensure_route_column,
+    )
+
+    riders = _route_test_riders()
+    ensure_route_column(riders)
+    orders = [
+        {
+            "order_id": f"o{i}",
+            "user_id": f"u{i}",
+            "merchant_id": f"m{i}",
+            "user_row": pd.Series({"lng": 121.31 + 0.01 * i, "lat": 37.51}),
+            "merchant_row": pd.Series({"lng": 121.30 + 0.01 * i, "lat": 37.50, "food_comment_avg_score": 4.4}),
+        }
+        for i in range(3)
+    ]
+    assignments = assign_orders_route_batch(orders, riders)
+    assert len(assignments) == 3
+    assert all("detour" in a and a["eta"] > 0 for a in assignments)
+
+    total_load_before = int(riders["load"].sum())
+    assert total_load_before == 3
+    advance_riders_along_routes(riders, elapsed_minutes=600.0)
+    assert int(riders["load"].sum()) == 0
+    assert all(len(route) == 0 for route in riders["route"])
