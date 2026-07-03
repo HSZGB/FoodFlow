@@ -65,6 +65,18 @@ python -m foodflow.cli simulate \
   --rider-tasks /path/to/lade_delivery.csv
 ```
 
+默认 `--rider-calibration-profile raw` 会直接使用外部任务表估计出的速度、服务时长、负载与可靠性。对于 LaDe 这类包裹末端配送数据，也可以使用外卖展示口径：
+
+```bash
+python -m foodflow.cli simulate \
+  --processed-dir data/processed \
+  --output outputs/results/simulation_metrics_lade_food_scaled.csv \
+  --rider-tasks /path/to/lade_delivery.csv \
+  --rider-calibration-profile food-scaled
+```
+
+`food-scaled` 不改变 LaDe 提供的任务重叠负载和可靠性 proxy，只把速度和服务时长重标定到外卖 SLA 尺度。答辩时应把 `raw` 解释为跨领域压力测试，把 `food-scaled` 解释为保留 LaDe 结构信息后的外卖口径敏感性实验。
+
 输出表会额外包含 `rider_speed_kmph` 与 `rider_service_minutes`，便于在报告中说明仿真参数来自固定默认值还是外部数据校准。
 
 ## 4. 答辩边界

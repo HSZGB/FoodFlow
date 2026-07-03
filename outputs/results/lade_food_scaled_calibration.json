@@ -1,0 +1,19 @@
+{
+  "source": "/private/tmp/lade/delivery_five_cities.csv",
+  "profile": "food-scaled",
+  "reason": "Keep LaDe load/reliability proxies, rescale speed/service time to food-delivery SLA for presentation and sensitivity analysis.",
+  "raw_calibration": {
+    "speed_kmph": 8.0,
+    "service_minutes": 90.0,
+    "initial_load_lambda": 2.5,
+    "reliability_mean": 0.9002207842293326,
+    "reliability_std": 0.1
+  },
+  "calibration": {
+    "speed_kmph": 20.0,
+    "service_minutes": 10.0,
+    "initial_load_lambda": 2.5,
+    "reliability_mean": 0.9002207842293326,
+    "reliability_std": 0.1
+  }
+}

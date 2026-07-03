@@ -28,6 +28,24 @@ LADE_COLUMN_ALIASES = {
 }
 
 
+def adapt_calibration_for_food_delivery(calibration: RiderCalibration) -> RiderCalibration:
+    """Keep LaDe load/reliability signals while using food-delivery SLA scale.
+
+    LaDe task duration includes parcel delivery batching and waiting behavior, so
+    directly using its service-time median makes a 45-minute food-delivery SLA
+    almost entirely timeout. This profile keeps the measured rider workload and
+    reliability proxies, but anchors speed/service time to the default
+    food-delivery simulation scale.
+    """
+    return RiderCalibration(
+        speed_kmph=20.0,
+        service_minutes=10.0,
+        initial_load_lambda=calibration.initial_load_lambda,
+        reliability_mean=calibration.reliability_mean,
+        reliability_std=calibration.reliability_std,
+    )
+
+
 def _first_existing_column(frame: pd.DataFrame, names: tuple[str, ...]) -> str | None:
     for name in names:
         if name in frame.columns and not frame[name].replace("", np.nan).isna().all():

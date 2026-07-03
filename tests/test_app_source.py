@@ -34,3 +34,13 @@ def test_demo_copy_is_presentation_facing():
     ]
     for phrase in forbidden_phrases:
         assert phrase not in source
+
+
+def test_demo_uses_coordinate_map_without_external_tiles():
+    source = Path("app.py").read_text(encoding="utf-8")
+
+    assert "当前订单附近的用户、商家和骑手" in source
+    assert "真实地图底图" not in source
+    assert "Scattermapbox" not in source
+    assert "open-street-map" not in source
+    assert "if not use_real_map" not in source

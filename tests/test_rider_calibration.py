@@ -1,6 +1,6 @@
 import pandas as pd
 
-from foodflow.rider_data import estimate_rider_calibration
+from foodflow.rider_data import RiderCalibration, adapt_calibration_for_food_delivery, estimate_rider_calibration
 from foodflow.rider_sim import generate_riders
 from foodflow.data import PreparedData
 from foodflow.mock_data import make_mock_trd
@@ -213,3 +213,21 @@ def test_run_simulation_accepts_rider_calibration(tmp_path):
     assert not result.empty
     assert "rider_speed_kmph" in result.columns
     assert result["rider_speed_kmph"].gt(0).all()
+
+
+def test_food_delivery_profile_rescales_lade_like_calibration():
+    raw = RiderCalibration(
+        speed_kmph=8.0,
+        service_minutes=90.0,
+        initial_load_lambda=2.5,
+        reliability_mean=0.9,
+        reliability_std=0.1,
+    )
+
+    adapted = adapt_calibration_for_food_delivery(raw)
+
+    assert adapted.speed_kmph == 20.0
+    assert adapted.service_minutes == 10.0
+    assert adapted.initial_load_lambda == raw.initial_load_lambda
+    assert adapted.reliability_mean == raw.reliability_mean
+    assert adapted.reliability_std == raw.reliability_std

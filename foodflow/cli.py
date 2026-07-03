@@ -14,7 +14,7 @@ from .figures import generate_figures
 from .mock_data import make_mock_trd
 from .preprocess import preprocess
 from .report import build_report
-from .rider_data import estimate_rider_calibration
+from .rider_data import adapt_calibration_for_food_delivery, estimate_rider_calibration
 from .simulator import run_simulation
 
 
@@ -54,6 +54,12 @@ def build_parser() -> argparse.ArgumentParser:
         type=Path,
         default=None,
         help="Optional delivery task CSV, including LaDe delivery files, used to calibrate synthetic rider speed, service time, and load.",
+    )
+    p.add_argument(
+        "--rider-calibration-profile",
+        choices=["raw", "food-scaled"],
+        default="raw",
+        help="Use raw external-task calibration, or keep LaDe load/reliability while rescaling speed/service time to food-delivery SLA.",
     )
 
     p = sub.add_parser("figures")
@@ -102,6 +108,8 @@ def main(argv: list[str] | None = None) -> None:
         rider_calibration = None
         if args.rider_tasks:
             rider_calibration = estimate_rider_calibration(pd.read_csv(args.rider_tasks))
+            if args.rider_calibration_profile == "food-scaled":
+                rider_calibration = adapt_calibration_for_food_delivery(rider_calibration)
         df = run_simulation(data, seed=args.seed, verbose=not args.quiet, rider_calibration=rider_calibration)
         args.output.parent.mkdir(parents=True, exist_ok=True)
         df.to_csv(args.output, index=False)

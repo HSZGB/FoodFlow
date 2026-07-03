@@ -140,6 +140,19 @@ make simulate-calibrated RIDER_TASKS=/path/to/lade_delivery.csv
 
 `--rider-tasks` 同时支持项目通用字段 `courier_id,accept_time,finish_time,pickup_lng,pickup_lat,delivery_lng,delivery_lat`，LaDe 分城市 delivery 字段 `courier_id,accept_time,accept_gps_lng,accept_gps_lat,delivery_time,delivery_gps_lng,delivery_gps_lat`，以及 Hugging Face 合并版 `delivery_five_cities.csv` 中的 `delivery_user_id,receipt_time,receipt_lng,receipt_lat,sign_time,poi_lng,poi_lat`。合并版坐标为投影坐标，项目会使用欧氏距离估计任务距离。LaDe 不是外卖平台数据，因此只用于骑手速度、任务时长、任务重叠负载和可靠性 proxy 的估计，不参与用户-商家推荐训练。
 
+如果使用 LaDe 做展示，推荐同时保留两种口径：默认 `raw` 口径直接使用末端包裹配送任务估计值，适合说明跨领域压力测试；`food-scaled` 口径保留 LaDe 的负载和可靠性 proxy，但把速度和服务时长重标定到外卖 SLA 尺度，适合展示策略差异：
+
+```bash
+make simulate-calibrated RIDER_TASKS=/path/to/lade_delivery.csv RIDER_PROFILE=food-scaled
+
+python -m foodflow.cli simulate \
+  --processed-dir data/processed \
+  --output outputs/results/simulation_metrics_lade_food_scaled.csv \
+  --seed 42 \
+  --rider-tasks /path/to/lade_delivery.csv \
+  --rider-calibration-profile food-scaled
+```
+
 如果要使用完整 TRD 训练集：
 
 ```bash
