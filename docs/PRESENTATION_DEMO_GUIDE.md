@@ -8,9 +8,10 @@
 
 PPT 开场可以先给出 3 个结论，后面逐页证明：
 
-1. 推荐侧有效：在真实 TRD 全量训练订单上，`Seq-Tuned` 的 Recall@20 达到 `0.4675`，NDCG@20 达到 `0.3652`，明显优于 Popular 和 BPR-MF。
-2. 三方重排有效：`Seq-xQuAD-Tripartite-Batch` 在默认骑手仿真中取得最低 Avg ETA `45.68`、最低 Timeout Rate `0.45` 和最高 Platform Utility `0.5281`。
-3. LaDe 已经被真实使用：项目用 Hugging Face 的真实 LaDe `delivery_five_cities.csv` 校准骑手参数；Raw LaDe 作为跨领域压力测试，`food-scaled` LaDe 保留负载/可靠性并重标定到外卖 SLA，适合展示策略差异。
+1. 推荐侧有效：在真实 TRD 全量训练订单上，`Seq-Tuned` 的 Recall@10 达到 `0.4187`；三方系列中 `KG-Tripartite`（叠加知识图谱兴趣信号）以 Recall@10 `0.4048` 接近纯精度模型，同时保留公平与履约分量。
+2. 三方重排有效（10 种子 ±95% CI）：常规运力下 `Seq-xQuAD/Session-SPU/KG-Tripartite + Batch` 把平均 ETA 压到约 36 分钟、超时率约 20%，显著优于纯用户侧策略（约 40.4 分钟 / 29%）。
+3. 顺路派单是高峰韧性机制：运力紧张场景（30 骑手）下 `KG-Tripartite + RouteMinETA` 平均 ETA `49.4` 分钟，比最好的槽位匹配低约 11.5 分钟、超时率 `0.55` vs `0.68`，顺路接单率 `65.5%`——运力充足时分散派单更优，机制应随供需切换。
+4. LaDe 被双重真实使用：真实城市地理（烟台核心区配送 GPS 密度，`make geocode`）+ 骑手参数校准（校准诊断 JSON 含参数来源标注与 KS 检验）。
 
 现场建议讲法：
 
@@ -41,10 +42,10 @@ PPT 开场可以先给出 3 个结论，后面逐页证明：
 
 ### LaDe 末端配送数据
 
-LaDe 是公开工业末端配送数据。论文/数据说明中给出的量级是约 6 个月、10,677k 包裹、21k 配送员，并包含 task-accept、task-finish 一类时空事件。我们实际运行的是 Hugging Face 上较轻的合并文件：
+LaDe 是公开工业末端配送数据。论文/数据说明中给出的量级是约 6 个月、10,677k 包裹、21k 配送员，并包含 task-accept、task-finish 一类时空事件。当前运行使用 Hugging Face `Cainiao-AI/LaDe-D` 的烟台城市文件（同时用于真实地理与骑手校准）：
 
 ```text
-/private/tmp/lade/delivery_five_cities.csv
+data/lade/delivery_yt.parquet   # 206,431 条真实配送任务，WGS84 坐标
 ```
 
 实际文件统计：
@@ -132,17 +133,27 @@ final_score = user_preference
 - `outputs/figures/tradeoff_ndcg_gini.png`
 - `outputs/figures/tradeoff_recall_coverage.png`
 
-### 默认骑手仿真结果
+### 默认骑手仿真结果（真实烟台地理，10 种子均值 ±95% CI，120 骑手）
 
 | 策略 | Avg ETA | Timeout Rate | Platform Utility | 讲法 |
 |---|---:|---:|---:|---|
-| Popular + Nearest | 63.98 | 0.6364 | 0.3791 | 只看热门和最近骑手，整体差 |
-| UserOnly + MinETA | 52.13 | 0.7011 | 0.4531 | 用户侧变好，但超时仍高 |
-| Seq-Tuned + MinETA | 50.84 | 0.7158 | 0.4534 | 推荐准确强，不等于履约最好 |
-| LightGBM-LTR + MinETA | 51.00 | 0.7021 | 0.4587 | 排序学习链路 |
-| Seq-xQuAD-Tripartite | 46.70 | 0.5250 | 0.5117 | 三方重排显著改善系统级指标 |
-| Seq-xQuAD-Tripartite-Batch | 45.68 | 0.4500 | 0.5281 | 当前默认结果中的综合最优 |
-| Session-SPU-Tripartite | 48.96 | 0.5412 | 0.5118 | 引入 session/SPU 后接近主线三方策略 |
+| Popular + Nearest | 59.06 ±2.28 | 0.579 | 0.391 | 只看热门和最近骑手，整体差 |
+| Seq-Tuned + MinETA | 40.44 ±1.21 | 0.287 | 0.533 | 推荐准确强，不等于履约最好 |
+| Seq-xQuAD-Tripartite + Batch | 35.90 ±1.88 | 0.195 | 0.553 | 三方重排+批量匹配显著改善履约 |
+| Session-SPU-Tripartite + Batch | 36.79 ±1.25 | 0.199 | 0.557 | session/SPU 信号，平台效用最高 |
+| KG-Tripartite + Batch | 36.90 ±1.04 | 0.211 | 0.550 | 知识图谱兴趣信号 + 离线精度最强的三方 |
+| KG-Tripartite + RouteMinETA | 39.04 ±1.18 | 0.316 | 0.516 | 顺路机制在充足运力下诚实略慢 |
+
+### 运力紧张压力场景（30 骑手，`make simulate-stress`）——顺路派单的主战场
+
+| 策略 | Avg ETA | Timeout Rate | Platform Utility | 讲法 |
+|---|---:|---:|---:|---|
+| Seq-Tuned + MinETA | 76.64 ±2.46 | 0.819 | 0.442 | 高峰爆单时纯用户侧全面恶化 |
+| Seq-xQuAD-Tripartite + Batch | 60.96 ±4.84 | 0.679 | 0.486 | 槽位匹配有帮助但仍拥堵 |
+| KG-Tripartite + RouteMinETA | **49.43 ±1.68** | **0.552** | **0.529** | 顺路合单：ETA 低 11.5 分钟，顺路率 65.5% |
+| KG-Tripartite + RouteBatch | 51.94 ±1.86 | 0.589 | 0.519 | 绕行+ETA 等权目标，车队里程更省 |
+
+一句话讲法：**顺路派单不是永远更快，而是高峰运力吃紧时的韧性机制**——与商家侧"高峰爆单风险"面板构成同一个故事。
 
 图表建议：
 

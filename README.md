@@ -257,23 +257,31 @@ make notebooklm-pack
 
 当前提交的结果已经使用完整 TRD `orders_train.txt`，数据审计显示原始训练订单 `1,068,495` 条，处理后训练订单 `1,068,495` 条，训练订单使用比例 `1.0000`。
 
-离线推荐中，`Seq-Tuned` 的 Recall@10 最高，为 `0.4187`（NDCG@10 `0.3504`，HitRate@10 `0.5800`），代表纯用户侧准确率前沿。三方系列中 `KG-Tripartite` 表现最好：Recall@10 `0.4136`、NDCG@10 `0.3429`、HitRate@10 `0.5700`，在保留商家公平、ETA 和供给分量的同时几乎追平纯精度导向的序列模型；`Seq-xQuAD-Tripartite` 与 `Session-SPU-Tripartite` 的 Recall@10 均为 `0.3987`。
+离线推荐中，`Seq-Tuned` 的 Recall@10 最高，为 `0.4187`（NDCG@10 `0.3504`，HitRate@10 `0.5800`），代表纯用户侧准确率前沿。三方系列中 `KG-Tripartite` 表现最好：Recall@10 `0.4048`、NDCG@10 `0.3412`、HitRate@10 `0.5633`，在保留商家公平、ETA 和供给分量的同时接近纯精度导向的序列模型。
 
-动态履约仿真采用 10 个随机种子重复运行，报告均值与 95% 置信区间（完整 `_std`/`_ci95` 列见 `outputs/results/simulation_metrics.csv`）。`KG-Tripartite + Batch` 在平均 ETA、超时率和平台综合效用上全面领先：
+动态履约仿真在真实城市地理（LaDe 烟台核心区）上采用 10 个随机种子重复运行，报告均值与 95% 置信区间（完整 `_std`/`_ci95` 列见 `outputs/results/simulation_metrics.csv`）。**常规运力场景（120 骑手）**下，三方重排 + 批量槽位匹配把平均 ETA 压到约 36 分钟、超时率约 20%：
 
 | 策略 | Avg ETA (±CI95) | Timeout Rate (±CI95) | Platform Utility (±CI95) |
 |---|---:|---:|---:|
-| Popular + Nearest | 81.76 ±4.00 | 0.782 ±0.023 | 0.330 ±0.007 |
-| UserOnly + MinETA | 50.05 ±1.54 | 0.593 ±0.046 | 0.446 ±0.014 |
-| Seq-Tuned + MinETA | 49.32 ±1.33 | 0.568 ±0.043 | 0.455 ±0.015 |
-| Logistic-LTR + MinETA | 50.59 ±1.13 | 0.605 ±0.035 | 0.445 ±0.012 |
-| Seq-xQuAD-Tripartite + Greedy | 46.91 ±1.27 | 0.482 ±0.043 | 0.481 ±0.015 |
-| Seq-xQuAD-Tripartite + Batch | 45.95 ±1.30 | 0.442 ±0.052 | 0.487 ±0.017 |
-| Session-SPU-Tripartite + Greedy | 46.88 ±1.27 | 0.465 ±0.043 | 0.494 ±0.007 |
-| Session-SPU-Tripartite + Batch | 45.94 ±1.11 | 0.456 ±0.045 | 0.490 ±0.010 |
-| KG-Tripartite + Batch | 45.08 ±1.13 | 0.417 ±0.043 | 0.497 ±0.009 |
+| Popular + Nearest | 59.06 ±2.28 | 0.579 ±0.023 | 0.391 ±0.007 |
+| Seq-Tuned + MinETA | 40.44 ±1.21 | 0.287 ±0.041 | 0.533 ±0.012 |
+| Seq-xQuAD-Tripartite + Batch | 35.90 ±1.88 | 0.195 ±0.036 | 0.553 ±0.009 |
+| Session-SPU-Tripartite + Batch | 36.79 ±1.25 | 0.199 ±0.029 | 0.557 ±0.010 |
+| KG-Tripartite + Batch | 36.90 ±1.04 | 0.211 ±0.033 | 0.550 ±0.011 |
+| KG-Tripartite + RouteMinETA | 39.04 ±1.18 | 0.316 ±0.041 | 0.516 ±0.012 |
+| KG-Tripartite + RouteBatch | 41.67 ±1.27 | 0.382 ±0.044 | 0.496 ±0.014 |
 
-结论不是“单一模型在所有指标上最优”，而是：`Seq-Tuned` 取得最强离线推荐准确性；`LightGBM/Logistic-LTR` 展示学习排序路线；三方重排 + 批量二分图匹配系统性改善履约（三方系列相对纯用户侧策略的 ETA/超时率差距大于 95% 置信区间）；`KG-Tripartite` 在此之上叠加知识图谱兴趣信号，取得当前最优的履约与平台效用组合。
+**运力紧张压力场景（30 骑手，模拟高峰爆单，`make simulate-stress`）**下，路径感知顺路派单反超所有槽位匹配策略——顺路接单率达 65.5%，平均 ETA 比最好的槽位匹配低约 11.5 分钟（远超置信区间）：
+
+| 策略 | Avg ETA (±CI95) | Timeout Rate (±CI95) | Platform Utility (±CI95) |
+|---|---:|---:|---:|
+| Seq-Tuned + MinETA | 76.64 ±2.46 | 0.819 ±0.014 | 0.442 ±0.014 |
+| Seq-xQuAD-Tripartite + Batch | 60.96 ±4.84 | 0.679 ±0.046 | 0.486 ±0.017 |
+| KG-Tripartite + Batch | 61.47 ±2.85 | 0.685 ±0.039 | 0.481 ±0.014 |
+| KG-Tripartite + RouteMinETA | **49.43 ±1.68** | **0.552 ±0.040** | **0.529 ±0.013** |
+| KG-Tripartite + RouteBatch | 51.94 ±1.86 | 0.589 ±0.033 | 0.519 ±0.013 |
+
+结论：`Seq-Tuned` 取得最强离线准确性；三方重排 + 批量匹配在常规运力下系统性改善履约；**顺路派单是高峰运力吃紧时的韧性机制**——运力充足时分散派单更快（route 家族的 ETA 诚实计入队列行进时间），运力紧张时顺路合单大幅降低 ETA 与超时率。派单机制应随供需状态切换，这是三方联合视角的核心论据。
 
 ## 图表示例
 
