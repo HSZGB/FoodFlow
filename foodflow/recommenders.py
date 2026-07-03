@@ -385,7 +385,10 @@ def _normalize_tripartite_components(
     if not components_by_item:
         return components_by_item
     frame = pd.DataFrame.from_dict(components_by_item, orient="index")
-    for name in TRIPARTITE_COMPONENT_NAMES:
+    # 归一化范围必须覆盖 weights 中的全部分量：子类（session/spu/kg）的附加
+    # 信号也要参与 final_score 重算，否则会在这里被四个基础分量覆盖掉。
+    component_names = list(dict.fromkeys([*TRIPARTITE_COMPONENT_NAMES, *weights]))
+    for name in component_names:
         values = pd.to_numeric(frame.get(name, 0.0), errors="coerce").fillna(0.0)
         lo = float(values.min())
         hi = float(values.max())
@@ -663,13 +666,15 @@ class SeqTripartiteRecommender(SequentialHybridRecommender):
         period: str = "lunch",
     ) -> dict[str, dict[str, float]]:
         components = {merchant_id: self.component_scores(user_id, merchant_id, period) for merchant_id in candidates}
-        weights = {
+        return _normalize_tripartite_components(components, self._tripartite_weights())
+
+    def _tripartite_weights(self) -> dict[str, float]:
+        return {
             "user_score": self.user_weight,
             "merchant_fairness": self.fairness_weight,
             "eta_score": self.eta_weight,
             "supply_score": self.supply_weight,
         }
-        return _normalize_tripartite_components(components, weights)
 
     def recommend_for_user(self, user_id: str, k: int, period: str = "lunch") -> tuple[list[str], dict[str, float]]:
         components = self._component_scores_for_candidates(user_id, self._sequential_candidates(user_id), period)
@@ -875,6 +880,13 @@ class SessionSpuTripartiteRecommender(SeqXQuadTripartiteRecommender):
             }
         return self
 
+    def _tripartite_weights(self) -> dict[str, float]:
+        return {
+            **super()._tripartite_weights(),
+            "session_score": self.session_weight,
+            "spu_score": self.spu_weight,
+        }
+
     def _spu_affinity(self, user_id: str, merchant_id: str) -> float:
         user_counts = self.user_spu_categories.get(user_id, Counter())
         merchant_counts = self.merchant_spu_categories.get(merchant_id, Counter())
@@ -1011,6 +1023,9 @@ class KGTripartiteRecommender(SessionSpuTripartiteRecommender):
                     interests[relation] = {node: value / total for node, value in bucket.items()}
             self.user_kg_interests[str(user_id)] = interests
         return self
+
+    def _tripartite_weights(self) -> dict[str, float]:
+        return {**super()._tripartite_weights(), "kg_score": self.kg_weight}
 
     def _kg_affinity(self, user_id: str, merchant_id: str) -> float:
         interests = self.user_kg_interests.get(user_id)
