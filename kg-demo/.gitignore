@@ -1,0 +1,36 @@
+# Python cache
+__pycache__/
+*.py[cod]
+*.pyo
+.pytest_cache/
+
+# Local environments
+.venv/
+venv/
+env/
+.env
+
+# Agent/local scratch files
+.agents/
+
+# Downloaded TRD raw data; re-download with scripts/download_trd.py
+data/raw/*
+!data/raw/README.md
+
+# Generated processed datasets and large KG exports
+data/processed/*.pkl
+data/processed/*.tsv
+
+# Model checkpoints and runtime logs
+outputs/*.pt
+outputs/*.log
+outputs/*.err.log
+
+# LaTeX build artifacts
+report/*.aux
+report/*.log
+report/*.out
+report/*.toc
+report/*.fls
+report/*.fdb_latexmk
+report/*.synctex.gz

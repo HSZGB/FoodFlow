@@ -1,0 +1,31 @@
+user=121762 positive_poi=2876
+
+#1 poi=2876 score=1.0000 label=1
+  - 历史订单时间衰减兴趣 -> cat1:0 -> 候选商家
+  - 历史订单时间衰减兴趣 -> price:[49,65) -> 候选商家
+  - 历史订单时间衰减兴趣 -> poi_score:medium -> 候选商家
+  - 历史订单时间衰减兴趣 -> delivery_score:excellent -> 候选商家
+
+#2 poi=2564 score=1.0000 label=0
+  - 历史订单时间衰减兴趣 -> cat1:0 -> 候选商家
+  - 历史订单时间衰减兴趣 -> poi_score:medium -> 候选商家
+  - 历史订单时间衰减兴趣 -> delivery_score:excellent -> 候选商家
+  - 历史订单时间衰减兴趣 -> cat2:0 -> 候选商家
+
+#3 poi=1561 score=1.0000 label=0
+  - 历史订单时间衰减兴趣 -> cat1:0 -> 候选商家
+  - 历史订单时间衰减兴趣 -> poi_score:medium -> 候选商家
+  - 历史订单时间衰减兴趣 -> delivery_score:excellent -> 候选商家
+  - 历史订单时间衰减兴趣 -> cat2:0 -> 候选商家
+
+#4 poi=2839 score=1.0000 label=0
+  - 历史订单时间衰减兴趣 -> cat1:0 -> 候选商家
+  - 历史订单时间衰减兴趣 -> delivery_score:excellent -> 候选商家
+  - 历史订单时间衰减兴趣 -> ingredient:2 -> 候选商家
+  - 历史订单时间衰减兴趣 -> ingredient:22 -> 候选商家
+
+#5 poi=1717 score=1.0000 label=0
+  - 历史订单时间衰减兴趣 -> cat1:0 -> 候选商家
+  - 历史订单时间衰减兴趣 -> delivery_score:excellent -> 候选商家
+  - 历史订单时间衰减兴趣 -> cat2:0 -> 候选商家
+  - 历史订单时间衰减兴趣 -> food_category:90 -> 候选商家

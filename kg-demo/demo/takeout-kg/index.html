@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>动态兴趣图谱外卖推荐 Demo</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div>
+        <p class="eyebrow">Dynamic KG Takeout Recommendation</p>
+        <h1>动态兴趣图谱外卖推荐演示</h1>
+      </div>
+      <div class="run-meta">
+        <span id="datasetSizeText">子集样本 150 家</span>
+        <span>点击临时兴趣</span>
+        <span>16 类图谱关系</span>
+      </div>
+    </header>
+
+    <main class="app-shell">
+      <section class="recommendation-panel" aria-label="商家推荐列表">
+        <div class="panel-head">
+          <div>
+            <p class="eyebrow">Top-K Merchants</p>
+            <h2>商家推荐列表</h2>
+          </div>
+          <div class="actions">
+            <button id="resetBtn" class="icon-button" type="button" aria-label="重置兴趣">
+              <span aria-hidden="true">↺</span>
+            </button>
+          </div>
+        </div>
+        <div class="state-strip">
+          <div>
+            <strong id="roundText">第 0 轮</strong>
+            <span id="stateText">初始随机推荐，等待首次点击</span>
+          </div>
+          <div class="score-legend">
+            <span><i class="legend-dot click"></i>点击兴趣</span>
+            <span><i class="legend-dot history"></i>历史兴趣</span>
+          </div>
+        </div>
+        <div id="merchantList" class="merchant-list"></div>
+      </section>
+
+      <section class="graph-panel" aria-label="兴趣图谱">
+        <div class="panel-head">
+          <div>
+            <p class="eyebrow">Interest Graph</p>
+            <h2>用户兴趣图谱</h2>
+          </div>
+          <div class="model-badge">Full: KG + Time + Temp</div>
+        </div>
+        <div class="graph-wrap">
+          <svg id="graphSvg" viewBox="0 0 900 620" role="img" aria-label="用户、点击商家、兴趣标签组成的动态图谱"></svg>
+        </div>
+        <div class="insight-grid">
+          <div>
+            <span class="metric-label">临时兴趣强度</span>
+            <strong id="tempStrength">0.00</strong>
+          </div>
+          <div>
+            <span class="metric-label">偏好覆盖</span>
+            <strong id="coverageText">0 类</strong>
+          </div>
+          <div>
+            <span class="metric-label">当前主偏好</span>
+            <strong id="topTaste">等待点击</strong>
+          </div>
+          <div>
+            <span class="metric-label">实体规模</span>
+            <strong id="entityText">0 个</strong>
+          </div>
+          <div>
+            <span class="metric-label">关系类型</span>
+            <strong id="relationText">16 类</strong>
+          </div>
+          <div>
+            <span class="metric-label">图谱边</span>
+            <strong id="edgeText">0 条</strong>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <aside class="explain-panel" aria-label="推荐解释">
+      <div>
+        <p class="eyebrow">Explainability Trace</p>
+        <h2>最近一次推荐解释</h2>
+      </div>
+      <div id="traceCards" class="trace-cards"></div>
+    </aside>
+
+    <script src="./app.js"></script>
+  </body>
+</html>
