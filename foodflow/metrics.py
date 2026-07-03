@@ -93,6 +93,25 @@ def category_jsd_at_k(
     return jensen_shannon_divergence(history_dist, rec_dist)
 
 
+def _mean_segment_recall(
+    recommendations: dict[str, list[str]],
+    truth_by_user: dict[str, set[str]],
+    history_by_user: dict[str, list[str]],
+    users: list[str],
+    k: int,
+    repeat: bool,
+) -> float:
+    values: list[float] = []
+    for user_id in users:
+        history = set(history_by_user.get(user_id, []))
+        truth = set(truth_by_user[user_id])
+        segment_truth = truth & history if repeat else truth - history
+        if not segment_truth:
+            continue
+        values.append(recall_at_k(recommendations[user_id], segment_truth, k))
+    return float(np.mean(values)) if values else 0.0
+
+
 def evaluate_recommendations(
     recommendations: dict[str, list[str]],
     truth_by_user: dict[str, set[str]],
@@ -109,6 +128,23 @@ def evaluate_recommendations(
         metrics[f"NDCG@{k}"] = float(np.mean([ndcg_at_k(recommendations[u], truth_by_user[u], k) for u in users]))
         metrics[f"MRR@{k}"] = float(np.mean([mrr_at_k(recommendations[u], truth_by_user[u], k) for u in users]))
         metrics[f"HitRate@{k}"] = float(np.mean([hitrate_at_k(recommendations[u], truth_by_user[u], k) for u in users]))
+        if history_by_user is not None:
+            metrics[f"RepeatRecall@{k}"] = _mean_segment_recall(
+                recommendations,
+                truth_by_user,
+                history_by_user,
+                users,
+                k,
+                repeat=True,
+            )
+            metrics[f"ExploreRecall@{k}"] = _mean_segment_recall(
+                recommendations,
+                truth_by_user,
+                history_by_user,
+                users,
+                k,
+                repeat=False,
+            )
     top_k = max(ks)
     exposure = Counter()
     weighted = Counter()

@@ -74,6 +74,9 @@
     "test_orders": 230550,
     "raw_test_orders": 230550,
     "test_labels": 230550,
+    "session_interactions": 4021488,
+    "order_spus_train": 3445180,
+    "order_spus_test": 752447,
     "users": 200000,
     "merchants": 29072,
     "sample_orders": 0,
@@ -85,5 +88,5 @@
   "processed_train_orders": 1068495,
   "train_sample_fraction": 1.0,
   "train_mode": "full",
-  "rider_data": "synthetic proxy; TRD has no full rider state or dispatch records"
+  "rider_data": "default synthetic proxy; LaDe delivery CSV can calibrate rider parameters, but TRD has no full rider state or dispatch records"
 }

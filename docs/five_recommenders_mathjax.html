@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>FoodFlow 五类推荐模型</title>
+<title>FoodFlow 六类推荐模型</title>
 <script>
 window.MathJax = {
   tex: {
@@ -175,8 +175,8 @@ code {
 <body>
 <main class="page">
   <section class="hero">
-    <h1>FoodFlow 五类推荐模型：核心思想、输入输出与公式</h1>
-    <p>对应 <code>foodflow/recommenders.py</code> 中 <code>build_recommenders()</code> 默认使用的五个模型。推荐输出统一为用户到商家的 Top-K 列表，后续进入离线评估、报告生成和履约仿真。</p>
+    <h1>FoodFlow 六类推荐模型：核心思想、输入输出与公式</h1>
+    <p>对应 <code>foodflow/recommenders.py</code> 中 <code>build_recommenders()</code> 默认使用的六个模型。推荐输出统一为用户到商家的 Top-K 列表，后续进入离线评估、报告生成和履约仿真。</p>
   </section>
 
   <section class="model">
@@ -332,7 +332,27 @@ code {
   </section>
 
   <section class="model">
-    <h2>5. SeqXQuadTripartiteRecommender</h2>
+    <h2>5. LightGBMRankerRecommender</h2>
+    <p class="subtitle">学习排序模型。它复用 Seq-Tuned 的候选生成与序列特征，但用 LightGBM LambdaRank 学习非线性排序函数。</p>
+    <div class="flow">
+      <div class="box input"><strong>输入</strong><span>用户-商家候选、序列特征、按用户分组</span></div>
+      <div class="box score"><strong>核心计算</strong><span>训练 LambdaRank / NDCG 排序目标</span></div>
+      <div class="box output"><strong>输出</strong><span>学习排序 Top-K 商家</span></div>
+      <div class="box fuse"><strong>后续融合</strong><span>进入 LightGBM-LTR + MinETA 仿真链路</span></div>
+    </div>
+    <div class="formula">
+      <div class="formula-title">特征向量与排序函数</div>
+      \[
+      \mathbf{x}_{u,m}=[r_{fast},r_{slow},repeat,transition,category,popularity,quality],
+      \qquad
+      \hat{s}_{u,m}=f_{\text{LGBM}}(\mathbf{x}_{u,m})
+      \]
+    </div>
+    <p class="note">当前环境安装 <code>lightgbm==4.5.0</code>，默认结果表包含真正的 <code>LightGBM-LTR</code>；缺少 LightGBM 的机器会显式退到 <code>Logistic-LTR</code>，不会冒充 LightGBM。</p>
+  </section>
+
+  <section class="model">
+    <h2>6. SeqXQuadTripartiteRecommender</h2>
     <p class="subtitle">三方重排模型。它先用序列用户分计算相关性，再融合商家公平、ETA 和供给可行性，最后用 xQuAD 做列表级多样化重排。</p>
     <div class="flow">
       <div class="box input"><strong>输入</strong><span>序列候选商家、用户位置、商家属性</span></div>

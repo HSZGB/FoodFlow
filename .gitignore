@@ -32,3 +32,6 @@ ppt/FoodFlow/speech.md
 
 *.log
 ~$*.docx
+*.out
+*.toc
+*.aux

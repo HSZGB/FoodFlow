@@ -20,12 +20,15 @@ SOURCE_FILES = [
     (ROOT / "report" / "实验报告.md", "实验报告.md"),
     (ROOT / "docs" / "DATA_SOURCE.md", "DATA_SOURCE.md"),
     (ROOT / "docs" / "DATA_AUDIT.md", "DATA_AUDIT.md"),
+    (ROOT / "docs" / "DELIVERY_AUDIT.md", "DELIVERY_AUDIT.md"),
+    (ROOT / "docs" / "REPORT_ROUTE_COVERAGE.md", "REPORT_ROUTE_COVERAGE.md"),
     (ROOT / "ppt" / "FoodFlow" / "outline.md", "ppt_outline.md"),
     (ROOT / "作业要求.md", "作业要求.md"),
     (ROOT / "硬性要求.md", "硬性要求.md"),
 ]
 
 OPTIONAL_SOURCE_FILES = [
+    (ROOT / "ppt" / "FoodFlow" / "outline_approval.md", "ppt_outline_approval.md"),
     (ROOT / "ppt" / "FoodFlow" / "drafts" / "slide_07_sample_prompt.md", "slide_07_local_draft_prompt.md"),
 ]
 
@@ -45,8 +48,11 @@ FIGURE_FILES = [
     ROOT / "outputs" / "figures" / "tradeoff_ndcg_gini.png",
     ROOT / "outputs" / "figures" / "tradeoff_recall_coverage.png",
     ROOT / "outputs" / "figures" / "simulation_avg_eta.png",
+    ROOT / "outputs" / "figures" / "simulation_p95_eta.png",
     ROOT / "outputs" / "figures" / "simulation_timeout_rate.png",
     ROOT / "outputs" / "figures" / "simulation_rider_load_std.png",
+    ROOT / "outputs" / "figures" / "simulation_active_rider_rate.png",
+    ROOT / "outputs" / "figures" / "simulation_rider_income_gini.png",
     ROOT / "outputs" / "figures" / "simulation_platform_utility.png",
     ROOT / "outputs" / "figures" / "simulation_exposure_gini.png",
     ROOT / "outputs" / "figures" / "tradeoff_eta_utility.png",

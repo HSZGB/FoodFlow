@@ -5,6 +5,7 @@ from collections import Counter
 import pandas as pd
 
 from .data import PreparedData
+from .kg import kg_explanation_parts, kg_path_summary
 from .rerank import estimate_user_merchant_eta, fairness_scores
 
 
@@ -25,11 +26,14 @@ def explain_recommendation(data: PreparedData, user_id: str, merchant_id: str, p
     )
     eta = estimate_user_merchant_eta(user, merchant, period)
     fair = fairness_scores(data.merchants).get(str(merchant_id), 0.0)
+    kg_summary = kg_path_summary(data, user_id, merchant_id)
     reasons = []
-    if repeat > 0:
-        reasons.append(f"用户历史复购该商家 {repeat} 次")
-    if user_categories.get(category, 0) > 0:
-        reasons.append(f"用户常点品类与商家品类 {category} 匹配")
+    reasons.extend(kg_explanation_parts(kg_summary))
+    if not reasons:
+        if repeat > 0:
+            reasons.append(f"用户历史复购该商家 {repeat} 次")
+        if user_categories.get(category, 0) > 0:
+            reasons.append(f"用户常点品类与商家品类 {category} 匹配")
     reasons.append(f"预计履约时间约 {eta:.1f} 分钟")
     reasons.append(f"商家曝光补偿分 {fair:.2f}，有助于降低头部商家垄断")
     return "；".join(reasons) + "。"

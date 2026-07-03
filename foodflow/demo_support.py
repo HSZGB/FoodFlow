@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import inspect
+import json
 from collections import Counter
 from typing import Callable
 
@@ -8,14 +9,16 @@ import numpy as np
 import pandas as pd
 
 from .data import PreparedData
+from .kg import kg_path_summary
 from .rerank import estimate_user_merchant_eta, fairness_scores, haversine_km, supply_score_for_merchant
 from .rider_sim import (
     acceptance_probability,
     assign_order,
+    assign_orders_batch,
     estimate_order_eta,
     generate_riders,
     rider_score,
-    update_rider_after_assignment,
+    update_rider_after_delivery,
 )
 
 
@@ -49,39 +52,82 @@ def merchant_category(merchant: pd.Series) -> str:
     return "unknown"
 
 
-def demo_user_cases(users: pd.DataFrame) -> dict[str, str]:
+VERIFIED_DEMO_USERS = [
+    ("老店命中多", "169480"),
+    ("命中新店", "167641"),
+    ("只点一类", "174231"),
+    ("客单价高", "72409"),
+    ("常点多类", "147726"),
+]
+
+
+def demo_user_cases(data: PreparedData) -> dict[str, str]:
+    """Return distinctive, data-verified users for the interactive demo.
+
+    The preferred TRD users were checked against the demo's default
+    Seq-xQuAD-Tripartite Top-20 results. Fallbacks keep mock/custom datasets
+    useful and derive their labels from the data instead of assuming TRD IDs.
+    """
+    users = data.users
     cases: dict[str, str] = {}
 
-    def add(label: str, user_id: object) -> None:
+    def add(case_type: str, user_id: object) -> None:
         user_id_str = str(user_id)
         if user_id_str and user_id_str.lower() != "nan" and user_id_str not in cases.values():
-            cases[label] = user_id_str
+            cases[f"{case_type} · 用户 {user_id_str}"] = user_id_str
 
     user_ids = set(users["user_id"].astype(str))
-    if "8" in user_ids:
-        add("默认案例：用户 8", "8")
-    elif len(users):
-        add("默认案例：首个用户", users.iloc[0]["user_id"])
+    for case_type, user_id in VERIFIED_DEMO_USERS:
+        if user_id in user_ids:
+            add(case_type, user_id)
 
-    if "history_orders" in users.columns and len(users):
-        history = pd.to_numeric(users["history_orders"], errors="coerce").fillna(0)
-        add("复购活跃型", users.loc[history.idxmax(), "user_id"])
+    if len(cases) < 5 and not data.orders_train.empty:
+        train = data.orders_train[["user_id", "wm_poi_id"]].copy()
+        train["user_id"] = train["user_id"].astype(str)
+        train["wm_poi_id"] = train["wm_poi_id"].astype(str)
+        stats = train.groupby("user_id").agg(
+            history_orders=("wm_poi_id", "size"),
+            unique_merchants=("wm_poi_id", "nunique"),
+        )
+        truth = data.truth_by_user()
+        history = data.history_by_user()
+        stats["repeat_truth"] = [
+            len(truth.get(user_id, set()).intersection(history.get(user_id, []))) for user_id in stats.index
+        ]
+        repeat_candidates = stats[stats["repeat_truth"] > 0]
+        if not repeat_candidates.empty:
+            add("常点老店", repeat_candidates["history_orders"].idxmax())
+
+        merchant_categories = data.merchants[["wm_poi_id", "primary_first_tag_id"]]
+        category_history = train.merge(merchant_categories, on="wm_poi_id", how="left")
+        category_stats = category_history.groupby("user_id").agg(
+            history_orders=("wm_poi_id", "size"),
+            unique_categories=("primary_first_tag_id", "nunique"),
+        )
+        active = category_stats[category_stats["history_orders"] >= 3]
+        if not active.empty:
+            add("常点多类", active.sort_values(["unique_categories", "history_orders"]).index[-1])
 
     price_col = "avg_order_price" if "avg_order_price" in users.columns else "avg_pay_amt"
-    if price_col in users.columns and len(users):
-        prices = pd.to_numeric(users[price_col], errors="coerce")
-        valid = users[prices.notna()].copy()
-        if len(valid):
-            valid_prices = pd.to_numeric(valid[price_col], errors="coerce")
-            add("高消费型", valid.loc[valid_prices.idxmax(), "user_id"])
-            add("价格敏感型", valid.loc[valid_prices.idxmin(), "user_id"])
+    if len(cases) < 5 and price_col in users.columns and len(users):
+        valid = users[pd.to_numeric(users[price_col], errors="coerce").notna()].copy()
+        if not valid.empty:
+            prices = pd.to_numeric(valid[price_col], errors="coerce")
+            add("客单价高", valid.loc[prices.idxmax(), "user_id"])
 
     for _, row in users.head(20).iterrows():
         if len(cases) >= 5:
             break
-        add(f"备选用户 {row['user_id']}", row["user_id"])
+        add("普通用户", row["user_id"])
 
     return cases
+
+
+def recommendation_card_batches(frame: pd.DataFrame, columns: int = 3) -> list[pd.DataFrame]:
+    """Split every recommendation row into display batches without truncation."""
+    if columns <= 0:
+        raise ValueError("columns must be positive")
+    return [frame.iloc[start : start + columns] for start in range(0, len(frame), columns)]
 
 
 def user_category_profile(data: PreparedData, user_id: str, top_n: int = 6) -> pd.DataFrame:
@@ -109,42 +155,131 @@ def user_category_profile(data: PreparedData, user_id: str, top_n: int = 6) -> p
     return counts
 
 
-def build_recommendation_frame(data: PreparedData, model, user_id: str, recs: list[str], period: str) -> pd.DataFrame:
+def _xquad_rank_scores(model, recs: list[str], components_by_item: dict[str, dict[str, float]]) -> dict[str, float]:
+    if (
+        not recs
+        or not components_by_item
+        or not hasattr(model, "diversity_weight")
+        or not hasattr(model, "tail_weight")
+        or not hasattr(model, "merchants")
+    ):
+        return {}
+
+    scores = {
+        str(merchant_id): float(values.get("final_score", 0.0))
+        for merchant_id, values in components_by_item.items()
+    }
+    candidates = [
+        merchant_id
+        for merchant_id in sorted(scores, key=scores.get, reverse=True)[:80]
+        if merchant_id in model.merchants.index
+    ]
+    if not candidates:
+        return {}
+
+    min_score = min(scores[merchant_id] for merchant_id in candidates)
+    max_score = max(scores[merchant_id] for merchant_id in candidates)
+    scale = max(max_score - min_score, 1e-9)
+    relevance_weight = max(
+        1.0 - float(getattr(model, "diversity_weight", 0.0)) - float(getattr(model, "tail_weight", 0.0)),
+        0.0,
+    )
+    covered_categories: set[str] = set()
+    rank_scores: dict[str, float] = {}
+    for merchant_id in [str(item) for item in recs]:
+        if merchant_id not in scores or merchant_id not in model.merchants.index:
+            continue
+        merchant = model.merchants.loc[merchant_id]
+        category = str(merchant.get("primary_first_tag_id", "unknown"))
+        category_gain = 0.0 if category in covered_categories else 1.0
+        order_count = float(merchant.get("order_count", 0) or 0)
+        tail_gain = 1.0 / (1.0 + np.log1p(order_count))
+        relevance = (scores[merchant_id] - min_score) / scale
+        rank_scores[merchant_id] = float(
+            relevance_weight * relevance
+            + float(getattr(model, "diversity_weight", 0.0)) * category_gain
+            + float(getattr(model, "tail_weight", 0.0)) * tail_gain
+        )
+        covered_categories.add(category)
+    return rank_scores
+
+
+def build_recommendation_frame(
+    data: PreparedData,
+    model,
+    user_id: str,
+    recs: list[str],
+    period: str,
+    ranking_scores: dict[str, float] | None = None,
+) -> pd.DataFrame:
     merchants = data.merchants.set_index("wm_poi_id", drop=False)
     users = data.users.set_index("user_id", drop=False)
     user_row = users.loc[user_id]
+    model_name = str(getattr(model, "name", type(model).__name__))
     fairness_lookup = getattr(model, "fair", fairness_scores(data.merchants))
     history = data.orders_train[data.orders_train["user_id"].astype(str) == str(user_id)]
     repeat_counts = Counter(history["wm_poi_id"].astype(str))
+    truth_merchants = data.truth_by_user().get(str(user_id), set())
     category_profile = user_category_profile(data, user_id, top_n=20)
     category_counts = dict(zip(category_profile["category"].astype(str), category_profile["orders"].astype(int)))
+    ranking_scores = ranking_scores or {}
+    normalized_components = {}
+    if hasattr(model, "_component_scores_for_candidates"):
+        candidate_pool = list(recs)
+        if hasattr(model, "_sequential_candidates"):
+            try:
+                candidate_pool = list(getattr(model, "_sequential_candidates")(user_id))
+            except Exception:
+                candidate_pool = list(recs)
+        candidate_pool = list(dict.fromkeys([str(item) for item in candidate_pool] + [str(item) for item in recs]))
+        normalized_components = model._component_scores_for_candidates(user_id, candidate_pool, period)
+    xquad_rank_scores = _xquad_rank_scores(model, recs, normalized_components)
+    uses_tripartite = bool(
+        hasattr(model, "component_scores")
+        and (
+            float(getattr(model, "fairness_weight", 0.0))
+            + float(getattr(model, "eta_weight", 0.0))
+            + float(getattr(model, "supply_weight", 0.0))
+            > 0.0
+        )
+    )
+    uses_session_spu = bool(hasattr(model, "session_weight") or hasattr(model, "spu_weight"))
+    uses_xquad = bool(xquad_rank_scores)
 
     rows = []
     for rank, merchant_id in enumerate(recs, start=1):
+        merchant_id = str(merchant_id)
         merchant = merchants.loc[merchant_id]
         if hasattr(model, "component_scores"):
-            components = model.component_scores(user_id, merchant_id, period)
+            components = normalized_components.get(merchant_id, model.component_scores(user_id, merchant_id, period))
             user_weight = float(getattr(model, "user_weight", 1.0))
             fairness_weight = float(getattr(model, "fairness_weight", 0.0))
             eta_weight = float(getattr(model, "eta_weight", 0.0))
             supply_weight = float(getattr(model, "supply_weight", 0.0))
+            session_weight = float(getattr(model, "session_weight", 0.0))
+            spu_weight = float(getattr(model, "spu_weight", 0.0))
         else:
             user_score = float(model.user_score(user_id, merchant_id, period))
             eta = estimate_user_merchant_eta(user_row, merchant, period)
+            final_score = float(ranking_scores.get(str(merchant_id), user_score))
             components = {
                 "user_score": user_score,
                 "merchant_fairness": float(fairness_lookup.get(str(merchant_id), 0.0)),
                 "eta_minutes": float(eta),
                 "eta_score": float(1.0 - min(eta / 70.0, 1.0)),
                 "supply_score": float(supply_score_for_merchant(merchant)),
-                "final_score": user_score,
+                "final_score": final_score,
             }
             user_weight = 1.0
             fairness_weight = 0.0
             eta_weight = 0.0
             supply_weight = 0.0
+            session_weight = 0.0
+            spu_weight = 0.0
         category = merchant_category(merchant)
         repeat = int(repeat_counts.get(str(merchant_id), 0))
+        is_truth = merchant_id in truth_merchants
+        truth_label = "推荐命中" if is_truth else ""
         user_price = float(user_row.get("avg_order_price", user_row.get("avg_pay_amt", 35)) or 35)
         merchant_price = float(merchant.get("avg_order_price", 35) or 35)
         distance_km = haversine_km(
@@ -166,6 +301,17 @@ def build_recommendation_frame(data: PreparedData, model, user_id: str, recs: li
             reasons.append("履约较快")
         if components["merchant_fairness"] >= 0.65:
             reasons.append("曝光补偿")
+        if components.get("session_score", 0.0) > 0:
+            reasons.append("训练期会话点击")
+        if components.get("spu_score", 0.0) > 0:
+            reasons.append("SPU菜品类目匹配")
+        kg_summary = kg_path_summary(data, user_id, merchant_id)
+        if kg_summary.repeat_orders:
+            reasons.append("KG复购路径")
+        elif kg_summary.category_orders:
+            reasons.append("KG品类路径")
+        if kg_summary.area_orders:
+            reasons.append("KG区域路径")
         if not reasons:
             reasons.append("综合得分靠前")
 
@@ -176,20 +322,33 @@ def build_recommendation_frame(data: PreparedData, model, user_id: str, recs: li
                 "merchant_name": merchant_display_name(merchant),
                 "category": category,
                 "repeat_orders": repeat,
+                "is_truth": is_truth,
+                "truth_label": truth_label,
                 "distance_km": float(distance_km),
                 "avg_price": merchant_price,
                 "poi_score": float(merchant.get("poi_score", 0) or 0),
                 "order_count": int(float(merchant.get("order_count", 0) or 0)),
                 "final_score": float(components["final_score"]),
+                "rank_score": float(xquad_rank_scores.get(merchant_id, components["final_score"])),
                 "user_score": float(components["user_score"]),
                 "fairness": float(components["merchant_fairness"]),
                 "eta_minutes": float(components["eta_minutes"]),
                 "eta_score": float(components["eta_score"]),
                 "supply": float(components["supply_score"]),
-                "user_contrib": float(user_weight * components["user_score"]),
-                "fairness_contrib": float(fairness_weight * components["merchant_fairness"]),
-                "eta_contrib": float(eta_weight * components["eta_score"]),
-                "supply_contrib": float(supply_weight * components["supply_score"]),
+                "session_score": float(components.get("session_score", 0.0)),
+                "spu_score": float(components.get("spu_score", 0.0)),
+                "user_contrib": float(user_weight * components.get("user_score_norm", components["user_score"])),
+                "fairness_contrib": float(
+                    fairness_weight * components.get("merchant_fairness_norm", components["merchant_fairness"])
+                ),
+                "eta_contrib": float(eta_weight * components.get("eta_score_norm", components["eta_score"])),
+                "supply_contrib": float(supply_weight * components.get("supply_score_norm", components["supply_score"])),
+                "session_contrib": float(session_weight * components.get("session_score", 0.0)),
+                "spu_contrib": float(spu_weight * components.get("spu_score", 0.0)),
+                "uses_tripartite": uses_tripartite,
+                "uses_session_spu": uses_session_spu,
+                "uses_xquad": uses_xquad,
+                "model_name": model_name,
                 "reason": " / ".join(reasons),
                 "lng": float(merchant.get("lng", 116.40)),
                 "lat": float(merchant.get("lat", 39.92)),
@@ -302,27 +461,115 @@ def build_rider_candidate_frame(
     return candidates[columns]
 
 
+def choose_peak_replay_merchant(
+    recs: list[str],
+    scores: dict[str, float],
+    rng: np.random.Generator,
+) -> str | None:
+    if not recs:
+        return None
+    candidates = [str(item) for item in recs]
+    raw_scores = np.asarray([float(scores.get(item, 0.0)) for item in candidates], dtype=float)
+    if np.all(np.isfinite(raw_scores)) and float(raw_scores.max() - raw_scores.min()) > 1e-9:
+        normalized_scores = (raw_scores - raw_scores.min()) / (raw_scores.max() - raw_scores.min())
+    else:
+        normalized_scores = np.linspace(1.0, 0.0, len(candidates))
+    rank_prior = np.asarray([1.0 / np.log2(rank + 1) for rank in range(1, len(candidates) + 1)], dtype=float)
+    utilities = 1.15 * normalized_scores + 0.30 * rank_prior
+    shifted = utilities - float(utilities.max())
+    probs = np.exp(shifted)
+    probs = probs / probs.sum()
+    return candidates[int(rng.choice(np.arange(len(candidates)), p=probs))]
+
+
+def peak_assignment_score(
+    user_row: pd.Series,
+    merchant_row: pd.Series,
+    rider_row: pd.Series,
+    rider_policy: str,
+    eta: float,
+) -> float:
+    if rider_policy == "load_aware":
+        acceptance = acceptance_probability(user_row, merchant_row, rider_row, eta)
+        return rider_score(eta, rider_row, acceptance)
+    if rider_policy == "min_eta":
+        return -float(eta)
+    if rider_policy == "nearest":
+        return -haversine_km(
+            float(rider_row.get("lng", 116.40)),
+            float(rider_row.get("lat", 39.92)),
+            float(merchant_row.get("lng", 116.40)),
+            float(merchant_row.get("lat", 39.92)),
+        )
+    return 0.0
+
+
+def peak_match_record(
+    order_index: int,
+    order_id: str,
+    user_id: str,
+    merchant_id: str,
+    user_row: pd.Series,
+    merchant_row: pd.Series,
+    rider_id: str,
+    rider_row: pd.Series,
+    eta: float,
+    score: float,
+    slot_number: int = 0,
+) -> dict[str, object]:
+    return {
+        "order_index": int(order_index),
+        "order_id": str(order_id),
+        "user_id": str(user_id),
+        "merchant_id": str(merchant_id),
+        "merchant_name": merchant_display_name(merchant_row),
+        "rider_id": str(rider_id),
+        "slot_number": int(slot_number),
+        "eta": float(eta),
+        "score": float(score),
+        "rider_load": int(float(rider_row.get("load", 0) or 0)),
+        "user_lng": float(user_row.get("lng", 116.40)),
+        "user_lat": float(user_row.get("lat", 39.92)),
+        "merchant_lng": float(merchant_row.get("lng", 116.40)),
+        "merchant_lat": float(merchant_row.get("lat", 39.92)),
+        "rider_lng": float(rider_row.get("lng", 116.40)),
+        "rider_lat": float(rider_row.get("lat", 39.92)),
+    }
+
+
 def build_peak_trace(
     data: PreparedData,
-    policies: dict[str, tuple[object, str]],
+    policies: dict[str, tuple[object, str] | tuple[object, str, str]],
     seed: int = 42,
     steps: int = 6,
     requests_per_step: int = 8,
     top_k: int = 10,
 ) -> pd.DataFrame:
-    random = np.random.default_rng(seed)
     truth = data.truth_by_user()
     known_users = set(data.users["user_id"].astype(str))
-    eval_users = [u for u in truth if u in known_users]
+    history_users = set(data.orders_train["user_id"].astype(str))
+    eval_users = [u for u in truth if u in known_users and u in history_users]
+    if not eval_users:
+        eval_users = [u for u in truth if u in known_users]
     if not eval_users:
         return pd.DataFrame()
 
     users_df = data.users.set_index("user_id", drop=False)
     merchants_df = data.merchants.set_index("wm_poi_id", drop=False)
+    request_rng = np.random.default_rng(seed)
+    request_batches = []
+    for _ in range(steps):
+        sample_size = min(requests_per_step, len(eval_users))
+        request_batches.append(request_rng.choice(eval_users, size=sample_size, replace=False).astype(str).tolist())
+    base_riders = generate_riders(data.merchants, n_riders=160, seed=seed)
     rows = []
 
-    for policy_name, (model, rider_policy) in policies.items():
-        riders = generate_riders(data.merchants, n_riders=160, seed=seed + len(policy_name))
+    for policy_name, policy_config in policies.items():
+        model = policy_config[0]
+        rider_policy = str(policy_config[1])
+        assignment_mode = str(policy_config[2]) if len(policy_config) >= 3 else "greedy"
+        riders = base_riders.copy(deep=True)
+        choice_rng = np.random.default_rng(seed + 17)
         etas: list[float] = []
         completed = 0
         timeout = 0
@@ -330,28 +577,42 @@ def build_peak_trace(
 
         for step in range(steps):
             current_time = step * 12
-            sample_size = min(requests_per_step, len(eval_users))
-            request_users = random.choice(eval_users, size=sample_size, replace=False).tolist()
+            request_users = request_batches[step]
             periods = {user_id: "lunch" for user_id in request_users}
             rec_result = model.recommend(request_users, top_k, periods)
             step_etas: list[float] = []
             step_completed = 0
             step_timeout = 0
+            step_example: dict[str, object] = {}
+            pending_orders: list[dict[str, object]] = []
+            step_matches: list[dict[str, object]] = []
 
-            for user_id in request_users:
+            for request_index, user_id in enumerate(request_users):
                 recs = rec_result.recommendations.get(user_id, [])
-                true_items = truth.get(user_id, set())
-                hits = [merchant_id for merchant_id in recs if merchant_id in true_items]
-                chosen = hits[0] if hits else (recs[0] if recs else None)
+                chosen = choose_peak_replay_merchant(recs, rec_result.scores.get(user_id, {}), choice_rng)
                 if chosen is None or chosen not in merchants_df.index or user_id not in users_df.index:
+                    continue
+
+                user_row = users_df.loc[user_id]
+                merchant_row = merchants_df.loc[chosen]
+                if assignment_mode == "batch":
+                    pending_orders.append(
+                        {
+                            "order_id": f"{policy_name}-{step}-{len(pending_orders)}-{user_id}",
+                            "user_id": str(user_id),
+                            "merchant_id": str(chosen),
+                            "user_row": user_row,
+                            "merchant_row": merchant_row,
+                        }
+                    )
                     continue
 
                 available = riders[riders["available_at"] <= current_time].copy()
                 if available.empty:
                     available = riders.copy()
                 rider_id, eta = assign_order(
-                    users_df.loc[user_id],
-                    merchants_df.loc[chosen],
+                    user_row,
+                    merchant_row,
                     available,
                     rider_policy,
                     "lunch",
@@ -359,7 +620,39 @@ def build_peak_trace(
                 )
                 if rider_id is None:
                     continue
-                update_rider_after_assignment(riders, rider_id, eta, current_time)
+                rider_match = available[available["rider_id"].astype(str) == str(rider_id)]
+                rider_row = rider_match.iloc[0] if not rider_match.empty else pd.Series(dtype=object)
+                order_id = f"{policy_name}-{step}-{request_index}-{user_id}"
+                step_matches.append(
+                    peak_match_record(
+                        request_index,
+                        order_id,
+                        str(user_id),
+                        str(chosen),
+                        user_row,
+                        merchant_row,
+                        rider_id,
+                        rider_row,
+                        float(eta),
+                        peak_assignment_score(user_row, merchant_row, rider_row, rider_policy, float(eta)),
+                    )
+                )
+                if not step_example and not rider_match.empty:
+                    step_example = {
+                        "sample_user_id": str(user_id),
+                        "sample_merchant_id": str(chosen),
+                        "sample_merchant_name": merchant_display_name(merchant_row),
+                        "sample_rider_id": str(rider_id),
+                        "sample_eta": float(eta),
+                        "sample_user_lng": float(user_row.get("lng", 116.40)),
+                        "sample_user_lat": float(user_row.get("lat", 39.92)),
+                        "sample_merchant_lng": float(merchant_row.get("lng", 116.40)),
+                        "sample_merchant_lat": float(merchant_row.get("lat", 39.92)),
+                        "sample_rider_lng": float(rider_row.get("lng", 116.40)),
+                        "sample_rider_lat": float(rider_row.get("lat", 39.92)),
+                        "sample_rider_load": int(float(rider_row.get("load", 0) or 0)),
+                    }
+                update_rider_after_delivery(riders, rider_id, user_row, eta, current_time)
                 completed += 1
                 step_completed += 1
                 etas.append(float(eta))
@@ -367,6 +660,71 @@ def build_peak_trace(
                 is_timeout = int(float(eta) > 45.0)
                 timeout += is_timeout
                 step_timeout += is_timeout
+
+            if assignment_mode == "batch" and pending_orders:
+                available = riders[riders["available_at"] <= current_time].copy()
+                if available.empty:
+                    available = riders.copy()
+                assignments = assign_orders_batch(pending_orders, available, rider_policy, "lunch", current_time)
+                orders_by_id = {str(order["order_id"]): order for order in pending_orders}
+                batch_matches: list[dict[str, object]] = []
+                for _, assignment in assignments.iterrows():
+                    order = orders_by_id.get(str(assignment["order_id"]))
+                    if order is None:
+                        continue
+                    rider_id = str(assignment["rider_id"])
+                    eta = float(assignment["eta"])
+                    rider_match = available[available["rider_id"].astype(str) == rider_id]
+                    rider_row = rider_match.iloc[0] if not rider_match.empty else pd.Series(dtype=object)
+                    user_row = order["user_row"]
+                    merchant_row = order["merchant_row"]
+                    batch_matches.append(
+                        peak_match_record(
+                            int(assignment.get("order_index", len(batch_matches))),
+                            str(assignment["order_id"]),
+                            str(order["user_id"]),
+                            str(order["merchant_id"]),
+                            user_row,
+                            merchant_row,
+                            rider_id,
+                            rider_row,
+                            eta,
+                            float(assignment.get("score", 0.0)),
+                            int(assignment.get("slot_number", 0)),
+                        )
+                    )
+                    if not step_example and not rider_match.empty:
+                        step_example = {
+                            "sample_user_id": str(order["user_id"]),
+                            "sample_merchant_id": str(order["merchant_id"]),
+                            "sample_merchant_name": merchant_display_name(merchant_row),
+                            "sample_rider_id": rider_id,
+                            "sample_eta": eta,
+                            "sample_user_lng": float(user_row.get("lng", 116.40)),
+                            "sample_user_lat": float(user_row.get("lat", 39.92)),
+                            "sample_merchant_lng": float(merchant_row.get("lng", 116.40)),
+                            "sample_merchant_lat": float(merchant_row.get("lat", 39.92)),
+                            "sample_rider_lng": float(rider_row.get("lng", 116.40)),
+                            "sample_rider_lat": float(rider_row.get("lat", 39.92)),
+                            "sample_rider_load": int(float(rider_row.get("load", 0) or 0)),
+                        }
+                    update_rider_after_delivery(riders, rider_id, order["user_row"], eta, current_time)
+                    completed += 1
+                    step_completed += 1
+                    etas.append(eta)
+                    step_etas.append(eta)
+                    is_timeout = int(eta > 45.0)
+                    timeout += is_timeout
+                    step_timeout += is_timeout
+                if batch_matches:
+                    step_matches = batch_matches
+                    step_example["batch_order_count"] = len(pending_orders)
+                    step_example["batch_matched_count"] = len(batch_matches)
+                    step_example["batch_matches_json"] = json.dumps(batch_matches, ensure_ascii=False)
+            if step_matches:
+                step_example["step_order_count"] = len(pending_orders) if assignment_mode == "batch" else len(request_users)
+                step_example["step_matched_count"] = len(step_matches)
+                step_example["step_matches_json"] = json.dumps(step_matches, ensure_ascii=False)
 
             assigned = riders[pd.to_numeric(riders["assigned"], errors="coerce").fillna(0) > 0]
             rows.append(
@@ -382,6 +740,9 @@ def build_peak_trace(
                     "timeout_rate": float(timeout / completed) if completed else 0.0,
                     "active_riders": int(len(assigned)),
                     "rider_load_std": float(assigned["assigned"].std(ddof=0)) if len(assigned) else 0.0,
+                    "rider_policy": rider_policy,
+                    "assignment_mode": assignment_mode,
+                    **step_example,
                 }
             )
 

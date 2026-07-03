@@ -139,7 +139,7 @@ list_score = relevance + category_coverage + long_tail_gain
 
 - Seq-Tuned Recall@20 = 0.4675，NDCG@20 = 0.3652，HitRate@20 = 0.6267
 - UserOnly Recall@20 = 0.4287，NDCG@20 = 0.3423
-- Seq-xQuAD-Tripartite Recall@20 = 0.4180，NDCG@20 = 0.3440
+- Seq-xQuAD-Tripartite Recall@20 = 0.4180，Coverage@20 = 0.2823，Exposure Gini = 0.8934
 - BPR-MF Recall@20 = 0.1620，Popular Recall@20 = 0.0470
 - Seq-xQuAD-Tripartite 不是追求单一 Recall 最大，而是在准确性、公平性和履约之间折中
 
@@ -193,23 +193,25 @@ list_score = relevance + category_coverage + long_tail_gain
 
 必须出现的文本：
 
-- Popular + Nearest：Avg ETA = 84.71，Timeout Rate = 0.7903，Utility = 0.3365
-- UserOnly + MinETA：Avg ETA = 55.33，Timeout Rate = 0.6701，Utility = 0.4831
-- Seq-Tuned + MinETA：Avg ETA = 54.74，Timeout Rate = 0.7320，Utility = 0.4664
-- Seq-xQuAD-Tripartite：Avg ETA = 50.33，Timeout Rate = 0.5319，Utility = 0.5264
-- Seq-xQuAD-Tripartite 平台综合效用最高
-- Pareto 视角：Seq-Tuned 是离线准确率前沿，Seq-xQuAD-Tripartite 是平台效用前沿
+- Popular + Nearest：Avg ETA = 89.68，Timeout Rate = 0.8025，Utility = 0.3218
+- UserOnly + MinETA：Avg ETA = 52.14，Timeout Rate = 0.6897，Utility = 0.4060
+- Seq-Tuned + MinETA：Avg ETA = 50.51，Timeout Rate = 0.6163，Utility = 0.4205
+- LightGBM-LTR + MinETA：Avg ETA = 53.96，Timeout Rate = 0.6854，Utility = 0.3903
+- Seq-xQuAD-Tripartite + Greedy：Avg ETA = 49.33，Timeout Rate = 0.5604，Utility = 0.4568
+- Seq-xQuAD-Tripartite + Batch：Avg ETA = 48.32，Timeout Rate = 0.5275，Utility = 0.4581
+- Session-SPU-Tripartite + Greedy：Avg ETA = 46.47，Timeout Rate = 0.4941，Utility = 0.4694
+- Pareto 视角：Seq-Tuned 是离线准确率前沿，三方履约策略是系统效用前沿
 
 视觉布局：
 
 - 上方放两个主图：平均 ETA、平台效用。
 - 右侧或下方补 `pareto_recall_utility.png`，展示准确性与平台效用前沿。
-- 下方放小表格，列出三条关键策略的 ETA、超时率、效用。
-- 用正式红突出 Seq-xQuAD-Tripartite 的 `0.5264`。
+- 下方放小表格，列出七条策略的 ETA、超时率、效用。
+- 用正式红突出 Session-SPU-Tripartite + Greedy 的 `0.4694`，并标注批量三方匹配相较逐单版本降低 ETA 和超时率。
 
 演讲备注：
 
-仿真结果说明，热门推荐加最近骑手会造成较高 ETA 和超时率。改为用户偏好推荐和最小 ETA 派单后明显改善；继续加入列表级覆盖、履约感知和三方重排后，Seq-xQuAD-Tripartite 平均 ETA、超时率和平台效用最好，证明推荐策略需要接受履约结果检验。
+仿真结果说明，热门推荐加最近骑手会造成较高 ETA 和超时率。改为用户偏好推荐和最小 ETA 派单后明显改善；继续加入列表级覆盖、履约感知和三方重排后，ETA、超时率和平台效用进一步改善。批量匹配版完成订单更多，但相对逐单贪心在 ETA 和效用上有取舍，证明推荐策略需要接受履约结果检验。
 
 ## Slide 9：案例解释：一次推荐如何兼顾三方
 
@@ -243,7 +245,7 @@ list_score = relevance + category_coverage + long_tail_gain
 
 - 结论 1：标准推荐指标证明模型有效
 - 结论 2：三方重排把商家公平和履约约束引入推荐
-- 结论 3：Seq-xQuAD-Tripartite 以一部分准确率代价换取更低 ETA、更低超时率和最高平台效用
+- 结论 3：Seq-xQuAD-Tripartite 以一部分准确率代价，把 ETA、超时率、订单吞吐和平台效用纳入同一套系统级权衡
 - 局限：骑手数据为合成 proxy；BPR-MF 为轻量实现；平台效用权重是解释性设置
 - 后续：接入真实派单数据、敏感性分析、图模型扩展
 
@@ -251,11 +253,11 @@ list_score = relevance + category_coverage + long_tail_gain
 
 - 上方三个结论卡片。
 - 下方一个“局限与后续”横条。
-- 右侧放关键数字摘要：Seq-Tuned Recall@20 0.4675、UserOnly Recall@20 0.4287、Seq-xQuAD-Tripartite Avg ETA 50.33、Utility 0.5264。
+- 右侧放关键数字摘要：Seq-Tuned Recall@20 0.4675、LightGBM-LTR Coverage@20 0.4345、Session-SPU-Tripartite + Greedy Avg ETA 46.47、Utility 0.4694。
 
 演讲备注：
 
-项目完成了可运行的推荐与履约仿真闭环。离线指标证明推荐不是随机有效，Seq-Tuned 把离线排序指标继续推高；Seq-xQuAD-Tripartite 让商家公平和履约可行性进入排序，系统级仿真显示它的平台效用最高。局限也很明确：骑手数据是 proxy，后续应接入真实派单并做更充分的敏感性分析。
+项目完成了可运行的推荐与履约仿真闭环。离线指标证明推荐不是随机有效，Seq-Tuned 把离线排序指标继续推高；LightGBM-LTR 补上学习排序和覆盖改善；Seq-xQuAD-Tripartite 让商家公平和履约可行性进入排序，系统级仿真展示了 ETA、超时、吞吐和效用之间的真实取舍。局限也很明确：骑手数据是 proxy，后续应接入真实派单并做更充分的敏感性分析。
 
 ## Slide 11：Q&A
 

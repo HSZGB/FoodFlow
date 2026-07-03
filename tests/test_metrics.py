@@ -11,6 +11,7 @@ from foodflow.metrics import (
     ndcg_at_k,
     recall_at_k,
 )
+from foodflow.recommenders import _normalize_tripartite_components
 
 
 def test_ranking_metrics():
@@ -55,6 +56,34 @@ def test_category_calibration_metric():
     assert metrics["CategoryJSD@2"] > 0.0
 
 
+def test_repeat_and_explore_recall_segments():
+    merchants = pd.DataFrame(
+        [
+            {"wm_poi_id": "m1", "order_count": 10},
+            {"wm_poi_id": "m2", "order_count": 5},
+            {"wm_poi_id": "m3", "order_count": 2},
+        ]
+    )
+    metrics = evaluate_recommendations(
+        {
+            "u1": ["m1", "m3"],
+            "u2": ["m3", "m1"],
+        },
+        {
+            "u1": {"m1", "m2"},
+            "u2": {"m3"},
+        },
+        merchants,
+        [2],
+        {
+            "u1": ["m1", "m4"],
+            "u2": ["m5"],
+        },
+    )
+    assert metrics["RepeatRecall@2"] == 1.0
+    assert metrics["ExploreRecall@2"] == 0.5
+
+
 def test_tripartite_frontier_marks_dominated_rows():
     points = pd.DataFrame(
         [
@@ -83,6 +112,13 @@ def test_tripartite_frontier_marks_dominated_rows():
                 "ExposureGini": 0.75,
                 "Coverage@20": 0.22,
             },
+            {
+                "model": "Session-SPU-Tripartite",
+                "Recall@20": 0.34,
+                "NDCG@20": 0.27,
+                "ExposureGini": 0.69,
+                "Coverage@20": 0.24,
+            },
         ]
     )
     simulation = pd.DataFrame(
@@ -96,7 +132,7 @@ def test_tripartite_frontier_marks_dominated_rows():
                 "platform_utility": 0.45,
             },
             {
-                "policy": "Seq-xQuAD-Tripartite",
+                "policy": "Seq-xQuAD-Tripartite + Greedy",
                 "avg_eta": 50.0,
                 "timeout_rate": 0.5,
                 "on_time_rate": 0.5,
@@ -104,7 +140,7 @@ def test_tripartite_frontier_marks_dominated_rows():
                 "platform_utility": 0.5,
             },
             {
-                "policy": "Seq-xQuAD-Tripartite-Batch",
+                "policy": "Seq-xQuAD-Tripartite + Batch",
                 "avg_eta": 48.0,
                 "timeout_rate": 0.45,
                 "on_time_rate": 0.55,
@@ -119,10 +155,34 @@ def test_tripartite_frontier_marks_dominated_rows():
                 "user_satisfaction": 0.82,
                 "platform_utility": 0.49,
             },
+            {
+                "policy": "Session-SPU-Tripartite + Batch",
+                "avg_eta": 46.0,
+                "timeout_rate": 0.40,
+                "on_time_rate": 0.60,
+                "user_satisfaction": 0.78,
+                "platform_utility": 0.56,
+            },
         ]
     )
     frontier = build_tripartite_frontier(offline, simulation)
     assert {"policy", "model", "is_frontier"}.issubset(frontier.columns)
     assert "LightGBM-LTR + MinETA" in set(frontier["policy"])
-    assert "Seq-xQuAD-Tripartite-Batch" in set(frontier["policy"])
+    assert "Seq-xQuAD-Tripartite + Batch" in set(frontier["policy"])
+    assert "Session-SPU-Tripartite + Batch" in set(frontier["policy"])
     assert frontier["is_frontier"].any()
+
+
+def test_tripartite_component_normalization():
+    rows = {
+        "m1": {"user_score": 10.0, "merchant_fairness": 0.2, "eta_score": 0.5, "supply_score": 5.0, "final_score": 0.0},
+        "m2": {"user_score": 20.0, "merchant_fairness": 0.8, "eta_score": 0.5, "supply_score": 9.0, "final_score": 0.0},
+    }
+    normalized = _normalize_tripartite_components(
+        rows,
+        {"user_score": 1.0, "merchant_fairness": 1.0, "eta_score": 1.0, "supply_score": 1.0},
+    )
+    assert normalized["m1"]["user_score_norm"] == 0.0
+    assert normalized["m2"]["user_score_norm"] == 1.0
+    assert normalized["m1"]["eta_score_norm"] == 0.0
+    assert normalized["m2"]["final_score"] > normalized["m1"]["final_score"]

@@ -44,3 +44,10 @@ def test_demo_uses_coordinate_map_without_external_tiles():
     assert "Scattermapbox" not in source
     assert "open-street-map" not in source
     assert "if not use_real_map" not in source
+
+
+def test_recommendation_result_labels_use_plain_chinese():
+    source = Path("app.py").read_text(encoding="utf-8")
+    assert "TRUTH" not in source
+    assert "测试期真实复购" not in source
+    assert 'st.success("推荐命中")' in source

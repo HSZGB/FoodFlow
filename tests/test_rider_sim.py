@@ -38,7 +38,7 @@ def test_batch_assignment_matches_multiple_orders():
                 "load": 0,
                 "available_at": 0,
                 "reliability": 0.95,
-                "speed_kmh": 22.0,
+                "speed_kmph": 22.0,
                 "service_radius_km": 7.0,
                 "acceptance_rate": 0.95,
             },
@@ -49,7 +49,7 @@ def test_batch_assignment_matches_multiple_orders():
                 "load": 0,
                 "available_at": 0,
                 "reliability": 0.92,
-                "speed_kmh": 21.0,
+                "speed_kmph": 21.0,
                 "service_radius_km": 7.0,
                 "acceptance_rate": 0.90,
             },
@@ -59,10 +59,10 @@ def test_batch_assignment_matches_multiple_orders():
         {"order_id": "o1", "user_row": users[0], "merchant_row": merchants[0]},
         {"order_id": "o2", "user_row": users[1], "merchant_row": merchants[1]},
     ]
-    assignments = assign_orders_batch(orders, riders, "lunch", 0)
+    assignments = assign_orders_batch(orders, riders, "load_aware", "lunch", 0)
     assert len(assignments) == 2
-    assert len({a["rider_id"] for a in assignments}) == 2
-    assert all(float(a["eta"]) > 0 for a in assignments)
+    assert assignments["rider_id"].nunique() == 2
+    assert assignments["eta"].min() > 0
 
 
 def test_batch_assignment_uses_rider_capacity_slots():
@@ -80,7 +80,7 @@ def test_batch_assignment_uses_rider_capacity_slots():
                 "load": 1,
                 "available_at": 0,
                 "reliability": 0.95,
-                "speed_kmh": 22.0,
+                "speed_kmph": 22.0,
                 "service_radius_km": 7.0,
                 "acceptance_rate": 0.95,
             }
@@ -90,10 +90,10 @@ def test_batch_assignment_uses_rider_capacity_slots():
         {"order_id": "o1", "user_row": users[0], "merchant_row": merchant},
         {"order_id": "o2", "user_row": users[1], "merchant_row": merchant},
     ]
-    assignments = assign_orders_batch(orders, riders, "lunch", 0)
+    assignments = assign_orders_batch(orders, riders, "load_aware", "lunch", 0)
     assert len(assignments) == 2
-    assert {a["rider_id"] for a in assignments} == {"r1"}
-    assert {a["slot_number"] for a in assignments} == {0, 1}
+    assert set(assignments["rider_id"]) == {"r1"}
+    assert set(assignments["slot_number"]) == {0, 1}
 
 
 def test_generated_riders_include_operational_fields():
@@ -104,5 +104,5 @@ def test_generated_riders_include_operational_fields():
         ]
     )
     riders = generate_riders(merchants, n_riders=4, seed=7)
-    assert {"speed_kmh", "service_radius_km", "acceptance_rate"}.issubset(riders.columns)
+    assert {"speed_kmph", "service_radius_km", "acceptance_rate"}.issubset(riders.columns)
     assert riders["acceptance_rate"].between(0.0, 1.0).all()

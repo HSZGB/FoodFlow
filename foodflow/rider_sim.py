@@ -18,13 +18,24 @@ class RiderState:
     load: int
     available_at: int
     reliability: float
-    speed_kmh: float = 20.0
     speed_kmph: float = 20.0
     service_radius_km: float = 6.0
     acceptance_rate: float = 0.9
     service_minutes: float = 10.0
     income: float = 0.0
     assigned: int = 0
+
+
+ASSIGNMENT_COLUMNS = [
+    "order_index",
+    "order_id",
+    "user_id",
+    "merchant_id",
+    "rider_id",
+    "eta",
+    "score",
+    "slot_number",
+]
 
 
 def generate_riders(
@@ -46,7 +57,6 @@ def generate_riders(
             "load": initial_loads.astype(int),
             "available_at": rng.integers(0, 10, n_riders),
             "reliability": rng.normal(calibration.reliability_mean, calibration.reliability_std, n_riders).clip(0.72, 0.99),
-            "speed_kmh": speed_values,
             "speed_kmph": speed_values,
             "service_radius_km": rng.normal(6.0, 1.0, n_riders).clip(3.5, 9.0),
             "acceptance_rate": rng.normal(0.88, 0.08, n_riders).clip(0.55, 0.99),
@@ -82,7 +92,7 @@ def estimate_order_eta(
     peak = 6.0 if period in {"lunch", "dinner"} else 2.0
     load_penalty = float(rider_row.get("load", 0)) * 5.0
     wait = max(float(rider_row.get("available_at", 0)) - current_time, 0.0)
-    pickup_speed = max(float(rider_row.get("speed_kmh", rider_row.get("speed_kmph", 20.0)) or 20.0), 1.0)
+    pickup_speed = max(float(rider_row.get("speed_kmph", 20.0) or 20.0), 1.0)
     delivery_speed = max(pickup_speed * 1.08, 1.0)
     return float(wait + prep + peak + rider_to_store / pickup_speed * 60.0 + store_to_user / delivery_speed * 60.0 + load_penalty)
 
@@ -163,14 +173,16 @@ def assign_order(
 
 
 def assign_orders_batch(
-    orders: list[dict],
+    orders: list[dict[str, object]],
     riders: pd.DataFrame,
+    policy: str = "load_aware",
     period: str = "lunch",
     current_time: int = 0,
     max_load: int = 3,
-) -> list[dict[str, object]]:
+) -> pd.DataFrame:
+    """Assign a batch against rider capacity slots with one optimal matching."""
     if not orders or riders.empty:
-        return []
+        return pd.DataFrame(columns=ASSIGNMENT_COLUMNS)
     candidates = riders.reset_index(drop=True).copy()
     slots: list[dict[str, object]] = []
     for rider_idx, rider in candidates.iterrows():
@@ -181,7 +193,7 @@ def assign_orders_batch(
             slot_rider["load"] = current_load + slot_number
             slots.append({"rider_idx": int(rider_idx), "slot_number": slot_number, "rider": slot_rider})
     if not slots:
-        return []
+        return pd.DataFrame(columns=ASSIGNMENT_COLUMNS)
 
     score_matrix = np.full((len(orders), len(slots)), -1e6, dtype=float)
     eta_matrix = np.full((len(orders), len(slots)), np.inf, dtype=float)
@@ -194,7 +206,20 @@ def assign_orders_batch(
             eta = estimate_order_eta(user_row, merchant_row, rider, period, current_time)
             acceptance = acceptance_probability(user_row, merchant_row, rider, eta)
             timeout_risk = min(max((eta - 45.0) / 60.0, 0.0), 1.0)
-            score = rider_score(eta, rider, acceptance) - 0.20 * timeout_risk
+            if policy == "nearest":
+                pickup_distance = haversine_km(
+                    float(rider.get("lng", 116.40)),
+                    float(rider.get("lat", 39.92)),
+                    float(merchant_row.get("lng", 116.40)),
+                    float(merchant_row.get("lat", 39.92)),
+                )
+                score = -pickup_distance - eta * 1e-4
+            elif policy == "min_eta":
+                score = -eta
+            elif policy == "load_aware":
+                score = rider_score(eta, rider, acceptance) - 0.20 * timeout_risk
+            else:
+                raise ValueError(f"Unknown rider policy: {policy}")
             score_matrix[order_idx, slot_idx] = score
             eta_matrix[order_idx, slot_idx] = eta
 
@@ -219,7 +244,8 @@ def assign_orders_batch(
                 "slot_number": int(slot["slot_number"]),
             }
         )
-    return sorted(assignments, key=lambda item: (str(item["rider_id"]), float(item["eta"])))
+    assignments.sort(key=lambda item: (str(item["rider_id"]), float(item["eta"])))
+    return pd.DataFrame(assignments, columns=ASSIGNMENT_COLUMNS)
 
 
 def update_rider_after_assignment(riders: pd.DataFrame, rider_id: str, eta: float, current_time: int) -> None:

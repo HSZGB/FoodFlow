@@ -1,4 +1,7 @@
+import json
 from pathlib import Path
+
+import pandas as pd
 
 from foodflow.data import PreparedData
 from foodflow.demo_support import (
@@ -7,6 +10,7 @@ from foodflow.demo_support import (
     build_rider_candidate_frame,
     build_rider_policy_frame,
     demo_user_cases,
+    recommendation_card_batches,
     streamlit_image_width_kwargs,
 )
 from foodflow.mock_data import make_mock_trd
@@ -33,9 +37,10 @@ def test_demo_recommendation_and_rider_frames(tmp_path: Path):
     preprocess(raw, processed, sample_orders=240, seed=456)
 
     data = PreparedData.load(processed)
-    cases = demo_user_cases(data.users)
+    cases = demo_user_cases(data)
     assert cases
     assert set(cases.values()).issubset(set(data.user_ids))
+    assert all(f"用户 {user_id}" in label for label, user_id in cases.items())
 
     user_model = UserOnlyRecommender().fit(data)
     seq_model = SeqTunedRecommender().fit(data)
@@ -49,7 +54,17 @@ def test_demo_recommendation_and_rider_frames(tmp_path: Path):
     seq_frame = build_recommendation_frame(data, seq_model, user_id, seq_recs, "lunch")
 
     assert len(rec_frame) == 5
-    assert {"merchant_name", "final_score", "reason", "eta_minutes"}.issubset(rec_frame.columns)
+    assert {
+        "merchant_name",
+        "final_score",
+        "rank_score",
+        "reason",
+        "eta_minutes",
+        "is_truth",
+        "truth_label",
+    }.issubset(rec_frame.columns)
+    assert rec_frame["uses_xquad"].all()
+    assert rec_frame["rank_score"].notna().all()
     assert len(user_frame) == 5
     assert user_frame["fairness_contrib"].eq(0).all()
     assert user_frame["eta_contrib"].eq(0).all()
@@ -57,6 +72,17 @@ def test_demo_recommendation_and_rider_frames(tmp_path: Path):
     assert len(rec_frame) == 5
     assert rec_frame["fairness_contrib"].gt(0).any()
     assert rec_frame["eta_contrib"].gt(0).any()
+
+    batches = recommendation_card_batches(pd.concat([rec_frame] * 4, ignore_index=True), columns=3)
+    assert sum(len(batch) for batch in batches) == 20
+    assert [len(batch) for batch in batches] == [3, 3, 3, 3, 3, 3, 2]
+
+    truth = data.truth_by_user()
+    truth_user = next(user for user, merchants in truth.items() if merchants)
+    truth_merchant = next(iter(truth[truth_user]))
+    truth_frame = build_recommendation_frame(data, user_model, truth_user, [truth_merchant], "lunch")
+    assert bool(truth_frame.iloc[0]["is_truth"])
+    assert truth_frame.iloc[0]["truth_label"] == "推荐命中"
 
     users = data.users.set_index("user_id", drop=False)
     merchants = data.merchants.set_index("wm_poi_id", drop=False)
@@ -88,14 +114,31 @@ def test_demo_recommendation_and_rider_frames(tmp_path: Path):
         {
             "UserOnly + MinETA": (user_model, "min_eta"),
             "Seq-xQuAD-Tripartite": (bridge_model, "load_aware"),
+            "Seq-xQuAD-Tripartite + Batch": (bridge_model, "load_aware", "batch"),
         },
         seed=456,
         steps=3,
         requests_per_step=4,
         top_k=5,
     )
-    assert set(trace["policy"]) == {"UserOnly + MinETA", "Seq-xQuAD-Tripartite"}
+    assert set(trace["policy"]) == {"UserOnly + MinETA", "Seq-xQuAD-Tripartite", "Seq-xQuAD-Tripartite + Batch"}
     assert trace["step"].max() == 3
     assert trace["completed_orders"].max() > 0
-    assert {"step_completed_orders", "step_avg_eta", "step_timeout_rate"}.issubset(trace.columns)
+    assert {
+        "step_completed_orders",
+        "step_avg_eta",
+        "step_timeout_rate",
+        "assignment_mode",
+        "step_matches_json",
+    }.issubset(trace.columns)
     assert trace["step_completed_orders"].ge(0).all()
+    assert "batch" in set(trace["assignment_mode"])
+    assert {"sample_user_lng", "sample_merchant_lng", "sample_rider_lng"}.issubset(trace.columns)
+    greedy_trace = trace[trace["assignment_mode"].astype(str).eq("greedy")]
+    greedy_matches = json.loads(greedy_trace["step_matches_json"].dropna().astype(str).iloc[0])
+    assert greedy_matches
+    batch_trace = trace[trace["assignment_mode"].astype(str).eq("batch")]
+    step_batch_matches = json.loads(batch_trace["step_matches_json"].dropna().astype(str).iloc[0])
+    batch_matches = json.loads(batch_trace["batch_matches_json"].dropna().astype(str).iloc[0])
+    assert step_batch_matches == batch_matches
+    assert {"order_id", "rider_id", "slot_number", "eta", "score"}.issubset(batch_matches[0])

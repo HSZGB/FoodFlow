@@ -41,6 +41,13 @@ SEQUENCE_FEATURE_NAMES = [
     "quality",
 ]
 
+TRIPARTITE_COMPONENT_NAMES = [
+    "user_score",
+    "merchant_fairness",
+    "eta_score",
+    "supply_score",
+]
+
 
 @dataclass
 class RecommendationResult:
@@ -371,6 +378,33 @@ class SequentialHybridRecommender(UserOnlyRecommender):
         return recs, {m: scores.get(m, float(self.popular.get(m, 0))) for m in recs}
 
 
+def _normalize_tripartite_components(
+    components_by_item: dict[str, dict[str, float]],
+    weights: dict[str, float],
+) -> dict[str, dict[str, float]]:
+    if not components_by_item:
+        return components_by_item
+    frame = pd.DataFrame.from_dict(components_by_item, orient="index")
+    for name in TRIPARTITE_COMPONENT_NAMES:
+        values = pd.to_numeric(frame.get(name, 0.0), errors="coerce").fillna(0.0)
+        lo = float(values.min())
+        hi = float(values.max())
+        if hi - lo <= 1e-12:
+            normalized = pd.Series(np.zeros(len(values)), index=values.index)
+        else:
+            normalized = (values - lo) / (hi - lo)
+        frame[f"{name}_norm"] = normalized.astype(float)
+    weight_sum = max(float(sum(weights.values())), 1e-12)
+    frame["raw_final_score"] = pd.to_numeric(frame.get("final_score", 0.0), errors="coerce").fillna(0.0)
+    frame["final_score"] = sum(
+        float(weight) * frame[f"{name}_norm"] for name, weight in weights.items()
+    ) / weight_sum
+    return {
+        str(index): {key: float(value) for key, value in row.dropna().items()}
+        for index, row in frame.iterrows()
+    }
+
+
 class WeightedSequentialRecommender(SequentialHybridRecommender):
     name = "Seq-Weighted"
 
@@ -492,6 +526,92 @@ class LightGBMRankerRecommender(WeightedSequentialRecommender):
         return recs, {m: scores.get(m, float(self.popular.get(m, 0))) for m in recs}
 
 
+class LogisticLTRRecommender(WeightedSequentialRecommender):
+    name = "Logistic-LTR"
+
+    def __init__(
+        self,
+        seed: int = 42,
+        max_train_users: int = 1000,
+        candidate_limit: int = 160,
+        max_iter: int = 250,
+    ):
+        super().__init__(name=self.name, weights=SEQ_TUNED_WEIGHTS)
+        self.seed = seed
+        self.max_train_users = max_train_users
+        self.candidate_limit = candidate_limit
+        self.max_iter = max_iter
+        self.model = None
+        self.backend = "logistic"
+        self.feature_importances_: dict[str, float] = {}
+
+    def _feature_vector(self, user_id: str, merchant_id: str) -> list[float]:
+        values = self._sequence_feature_values(user_id, merchant_id)
+        return [float(values.get(name, 0.0)) for name in SEQUENCE_FEATURE_NAMES]
+
+    def fit(self, data: PreparedData) -> "LogisticLTRRecommender":
+        super().fit(data)
+        try:
+            from sklearn.linear_model import LogisticRegression
+        except ImportError:
+            self.model = None
+            self.backend = "seq_tuned_fallback"
+            return self
+
+        users = [user_id for user_id, counts in self.user_item_counts.items() if counts]
+        rng = np.random.default_rng(self.seed)
+        if len(users) > self.max_train_users:
+            users = rng.choice(users, size=self.max_train_users, replace=False).astype(str).tolist()
+
+        features: list[list[float]] = []
+        labels: list[int] = []
+        for user_id in users:
+            positives = set(self.user_item_counts.get(user_id, Counter()))
+            candidates = self._sequential_candidates(user_id)[: self.candidate_limit]
+            if not candidates:
+                continue
+            user_labels = [int(merchant_id in positives) for merchant_id in candidates]
+            if not any(user_labels) or all(user_labels):
+                continue
+            features.extend([self._feature_vector(user_id, merchant_id) for merchant_id in candidates])
+            labels.extend(user_labels)
+
+        if not features or len(set(labels)) < 2:
+            self.model = None
+            self.backend = "seq_tuned_fallback"
+            return self
+
+        self.model = LogisticRegression(
+            class_weight="balanced",
+            max_iter=self.max_iter,
+            random_state=self.seed,
+            solver="lbfgs",
+        )
+        self.model.fit(np.asarray(features, dtype=float), np.asarray(labels, dtype=int))
+        coefs = np.abs(self.model.coef_[0])
+        denom = float(coefs.sum()) or 1.0
+        self.feature_importances_ = {
+            name: float(value / denom) for name, value in zip(SEQUENCE_FEATURE_NAMES, coefs)
+        }
+        return self
+
+    def recommend_for_user(self, user_id: str, k: int, period: str = "lunch") -> tuple[list[str], dict[str, float]]:
+        if self.model is None:
+            return super().recommend_for_user(user_id, k, period)
+        candidates = self._sequential_candidates(user_id)
+        if not candidates:
+            return super().recommend_for_user(user_id, k, period)
+        features = np.asarray([self._feature_vector(user_id, merchant_id) for merchant_id in candidates], dtype=float)
+        if len(getattr(self.model, "classes_", [])) < 2:
+            return super().recommend_for_user(user_id, k, period)
+        positive_index = int(np.where(self.model.classes_ == 1)[0][0])
+        predictions = self.model.predict_proba(features)[:, positive_index]
+        scores = {merchant_id: float(score) for merchant_id, score in zip(candidates, predictions)}
+        ranked = sorted(scores, key=scores.get, reverse=True)
+        recs = self._remove_seen_and_backfill(user_id, ranked, k)
+        return recs, {m: scores.get(m, float(self.popular.get(m, 0))) for m in recs}
+
+
 class SeqTripartiteRecommender(SequentialHybridRecommender):
     name = "Seq-Tripartite"
 
@@ -536,10 +656,24 @@ class SeqTripartiteRecommender(SequentialHybridRecommender):
             "final_score": final,
         }
 
+    def _component_scores_for_candidates(
+        self,
+        user_id: str,
+        candidates: list[str],
+        period: str = "lunch",
+    ) -> dict[str, dict[str, float]]:
+        components = {merchant_id: self.component_scores(user_id, merchant_id, period) for merchant_id in candidates}
+        weights = {
+            "user_score": self.user_weight,
+            "merchant_fairness": self.fairness_weight,
+            "eta_score": self.eta_weight,
+            "supply_score": self.supply_weight,
+        }
+        return _normalize_tripartite_components(components, weights)
+
     def recommend_for_user(self, user_id: str, k: int, period: str = "lunch") -> tuple[list[str], dict[str, float]]:
-        scores = {}
-        for merchant_id in self._sequential_candidates(user_id):
-            scores[merchant_id] = self.component_scores(user_id, merchant_id, period)["final_score"]
+        components = self._component_scores_for_candidates(user_id, self._sequential_candidates(user_id), period)
+        scores = {merchant_id: values["final_score"] for merchant_id, values in components.items()}
         ranked = sorted(scores, key=scores.get, reverse=True)
         recs = self._remove_seen_and_backfill(user_id, ranked, k)
         return recs, {m: scores[m] for m in recs}
@@ -675,10 +809,8 @@ class SeqXQuadTripartiteRecommender(SeqTripartiteRecommender):
         return selected
 
     def recommend_for_user(self, user_id: str, k: int, period: str = "lunch") -> tuple[list[str], dict[str, float]]:
-        scores = {
-            merchant_id: self.component_scores(user_id, merchant_id, period)["final_score"]
-            for merchant_id in self._sequential_candidates(user_id)
-        }
+        components = self._component_scores_for_candidates(user_id, self._sequential_candidates(user_id), period)
+        scores = {merchant_id: values["final_score"] for merchant_id, values in components.items()}
         recs = self._rerank_xquad(scores, k)
         recs = self._remove_seen_and_backfill(user_id, recs, k)
         return recs, {m: scores.get(m, float(self.popular.get(m, 0))) for m in recs}
@@ -706,10 +838,20 @@ class SessionSpuTripartiteRecommender(SeqXQuadTripartiteRecommender):
         super().fit(data)
         if not data.session_interactions.empty:
             sessions = data.session_interactions.copy()
+            if "split" in sessions.columns:
+                sessions = sessions[sessions["split"].astype(str).eq("train")].copy()
             sessions["rank"] = pd.to_numeric(sessions.get("rank", 1), errors="coerce").fillna(1)
-            sessions = sessions.sort_values(["user_id", "rank"])
+            sort_columns = ["user_id"]
+            ascending = [True]
+            if "order_timestamp" in sessions.columns:
+                sessions["order_timestamp"] = pd.to_numeric(sessions["order_timestamp"], errors="coerce").fillna(0)
+                sort_columns.append("order_timestamp")
+                ascending.append(False)
+            sort_columns.append("rank")
+            ascending.append(True)
+            sessions = sessions.sort_values(sort_columns, ascending=ascending)
             self.session_by_user = {
-                str(user_id): group["wm_poi_id"].astype(str).tolist()
+                str(user_id): list(dict.fromkeys(group["wm_poi_id"].astype(str)))
                 for user_id, group in sessions.groupby("user_id", sort=False)
             }
         else:
@@ -863,13 +1005,18 @@ def lightgbm_available() -> bool:
     return True
 
 
-def build_recommenders(seed: int = 42) -> list[BaseRecommender]:
-    learned_seq_recommender: BaseRecommender
+def learned_ltr_model_name() -> str:
+    return "LightGBM-LTR" if lightgbm_available() else "Logistic-LTR"
+
+
+def build_learned_ltr_recommender(seed: int = 42) -> BaseRecommender:
     if lightgbm_available():
-        learned_seq_recommender = LightGBMRankerRecommender(seed=seed)
-    else:
-        learned_seq_recommender = SeqTunedRecommender()
-        learned_seq_recommender.name = "Seq-Tuned (LightGBM fallback)"
+        return LightGBMRankerRecommender(seed=seed)
+    return LogisticLTRRecommender(seed=seed)
+
+
+def build_recommenders(seed: int = 42) -> list[BaseRecommender]:
+    learned_seq_recommender = build_learned_ltr_recommender(seed=seed)
     return [
         PopularRecommender(),
         BPRMFRecommender(seed=seed),

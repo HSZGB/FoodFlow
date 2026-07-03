@@ -6,8 +6,23 @@ from foodflow.evaluate import run_offline_eval
 from foodflow.figures import generate_figures
 from foodflow.mock_data import make_mock_trd
 from foodflow.preprocess import preprocess
+from foodflow.recommenders import build_recommenders, learned_ltr_model_name
 from foodflow.report import build_report
-from foodflow.simulator import run_simulation
+from foodflow.simulator import learned_ltr_policy_name, run_simulation
+
+
+def test_default_recommenders_include_explicit_learned_ltr():
+    names = [recommender.name for recommender in build_recommenders(seed=123)]
+    assert names == [
+        "Popular",
+        "BPR-MF",
+        "UserOnly",
+        learned_ltr_model_name(),
+        "Seq-Tuned",
+        "Seq-xQuAD-Tripartite",
+        "Session-SPU-Tripartite",
+    ]
+    assert learned_ltr_model_name() in {"LightGBM-LTR", "Logistic-LTR"}
 
 
 def test_tiny_pipeline(tmp_path: Path):
@@ -25,10 +40,21 @@ def test_tiny_pipeline(tmp_path: Path):
     sim.to_csv(results / "simulation_metrics.csv", index=False)
     assert len(sim) >= 6
     policies = set(sim["policy"])
-    assert "LightGBM-LTR + MinETA" in policies
-    assert "Seq-xQuAD-Tripartite-Batch" in policies
-    assert {"p95_eta", "active_rider_rate", "rider_income_gini"}.issubset(sim.columns)
-    seq_rows = sim.set_index("policy").loc[["Seq-xQuAD-Tripartite", "Seq-xQuAD-Tripartite-Batch"]]
+    assert learned_ltr_policy_name() in policies
+    assert "Seq-xQuAD-Tripartite + Greedy" in policies
+    assert "Seq-xQuAD-Tripartite + Batch" in policies
+    assert "Session-SPU-Tripartite + Greedy" in policies
+    assert {
+        "assignment_mode",
+        "choice_model",
+        "unassigned_orders",
+        "p95_eta",
+        "active_rider_rate",
+        "rider_income_gini",
+    }.issubset(sim.columns)
+    seq_rows = sim.set_index("policy").loc[
+        ["Seq-xQuAD-Tripartite + Greedy", "Seq-xQuAD-Tripartite + Batch"]
+    ]
     assert seq_rows["total_orders"].nunique() == 1
     audit = audit_data(raw, processed, results / "data_audit.json", tmp_path / "DATA_AUDIT.md")
     assert audit["required_raw_files_present"]

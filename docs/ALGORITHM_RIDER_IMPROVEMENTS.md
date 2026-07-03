@@ -4,10 +4,10 @@
 
 本轮新增 `Session-SPU-Tripartite` 推荐器。它复用原有 `Seq-xQuAD-Tripartite` 的三方重排逻辑，并增加两个来自 TRD optional txt 文件的信号：
 
-- `orders_poi_session.txt`：下单前点击过的商家序列，预处理后写入 `data/processed/session_interactions.csv`。
-- `orders_spu_train.txt` / `orders_test_spu.txt`：订单中的菜品 SPU，预处理后写入 `order_spus_train.csv` 和 `order_spus_test.csv`。
+- `orders_poi_session.txt`：下单前点击过的商家序列，兼容真实文件的 `#` 分隔符；只保留训练期信号后写入 `data/processed/session_interactions.csv`。
+- `orders_spu_train.txt` / `orders_spu_test_label.txt`：订单中的菜品 SPU，预处理后写入 `order_spus_train.csv` 和 `order_spus_test.csv`。
 
-推荐器会优先把近期点击商家纳入候选集，并用用户历史菜品类别与商家历史菜品类别的重合度补充排序分。这样算法改进仍然来自同一个 TRD 数据源，不需要额外伪造用户行为。
+推荐器会优先把训练期近期点击商家纳入候选集，并用训练期菜品类别重合度补充排序分。测试期会话不会进入模型，避免离线评估信息泄漏。
 
 ## 2. 新增骑手校准路径
 

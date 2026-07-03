@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import math
 import os
+import json
 from pathlib import Path
 
 import pandas as pd
@@ -17,15 +18,19 @@ from foodflow.demo_support import (
     build_rider_policy_frame,
     clamp01,
     demo_user_cases,
+    recommendation_card_batches,
     streamlit_image_width_kwargs,
     user_category_profile,
 )
 from foodflow.frontier import POLICY_MODEL_MAP, build_tripartite_frontier
 from foodflow.recommenders import (
     PopularRecommender,
+    SessionSpuTripartiteRecommender,
     SeqTunedRecommender,
     SeqXQuadTripartiteRecommender,
     UserOnlyRecommender,
+    build_learned_ltr_recommender,
+    learned_ltr_model_name,
 )
 from foodflow.rider_sim import generate_riders
 
@@ -35,8 +40,18 @@ st.set_page_config(page_title="FoodFlow", layout="wide")
 st.title("FoodFlow 外卖推荐与配送仿真")
 st.caption("把一次下单拆开看：用户看到哪些商家，商家拿到多少曝光，订单最后派给哪位骑手。")
 
-DEMO_STRATEGIES = ["UserOnly", "Seq-Tuned", "Seq-xQuAD-Tripartite"]
-PEAK_POLICIES = ["Popular + Nearest", "UserOnly + MinETA", "Seq-Tuned + MinETA", "Seq-xQuAD-Tripartite"]
+LEARNED_LTR_MODEL = learned_ltr_model_name()
+LEARNED_LTR_POLICY = f"{LEARNED_LTR_MODEL} + MinETA"
+DEMO_STRATEGIES = ["UserOnly", "Seq-Tuned", LEARNED_LTR_MODEL, "Seq-xQuAD-Tripartite", "Session-SPU-Tripartite"]
+PEAK_POLICIES = [
+    "Popular + Nearest",
+    "UserOnly + MinETA",
+    "Seq-Tuned + MinETA",
+    LEARNED_LTR_POLICY,
+    "Seq-xQuAD-Tripartite + Greedy",
+    "Session-SPU-Tripartite + Greedy",
+    "Session-SPU-Tripartite + Batch",
+]
 
 processed_dir = Path("data/processed")
 if not (processed_dir / "users.csv").exists():
@@ -70,6 +85,13 @@ def build_interactive_data(
         train_sample = pd.concat([kept, sampled], ignore_index=True)
     else:
         train_sample = kept.copy()
+    order_ids = set(train_sample["wm_order_id"].astype(str)) if "wm_order_id" in train_sample.columns else set()
+
+    def filter_optional_orders(frame: pd.DataFrame) -> pd.DataFrame:
+        if frame.empty or not order_ids or "wm_order_id" not in frame.columns:
+            return frame
+        return frame[frame["wm_order_id"].astype(str).isin(order_ids)].copy()
+
     return PreparedData(
         users=_data.users,
         merchants=_data.merchants,
@@ -77,6 +99,9 @@ def build_interactive_data(
         orders_test=_data.orders_test,
         test_interactions=_data.test_interactions,
         spus=_data.spus,
+        session_interactions=filter_optional_orders(_data.session_interactions),
+        order_spus_train=filter_optional_orders(_data.order_spus_train),
+        order_spus_test=_data.order_spus_test,
     )
 
 
@@ -86,7 +111,9 @@ def load_model(strategy: str, data_key: str, _data: PreparedData) -> object:
         "Popular": PopularRecommender,
         "UserOnly": UserOnlyRecommender,
         "Seq-Tuned": SeqTunedRecommender,
+        LEARNED_LTR_MODEL: lambda: build_learned_ltr_recommender(seed=42),
         "Seq-xQuAD-Tripartite": SeqXQuadTripartiteRecommender,
+        "Session-SPU-Tripartite": SessionSpuTripartiteRecommender,
     }
     return factories[strategy]().fit(_data)
 
@@ -103,7 +130,20 @@ def load_peak_trace(
         "Popular + Nearest": (load_model("Popular", data_key, _data), "nearest"),
         "UserOnly + MinETA": (load_model("UserOnly", data_key, _data), "min_eta"),
         "Seq-Tuned + MinETA": (load_model("Seq-Tuned", data_key, _data), "min_eta"),
-        "Seq-xQuAD-Tripartite": (load_model("Seq-xQuAD-Tripartite", data_key, _data), "load_aware"),
+        LEARNED_LTR_POLICY: (load_model(LEARNED_LTR_MODEL, data_key, _data), "min_eta"),
+        "Seq-xQuAD-Tripartite + Greedy": (
+            load_model("Seq-xQuAD-Tripartite", data_key, _data),
+            "load_aware",
+        ),
+        "Session-SPU-Tripartite + Greedy": (
+            load_model("Session-SPU-Tripartite", data_key, _data),
+            "load_aware",
+        ),
+        "Session-SPU-Tripartite + Batch": (
+            load_model("Session-SPU-Tripartite", data_key, _data),
+            "load_aware",
+            "batch",
+        ),
     }
     policies = {name: all_policies[name] for name in PEAK_POLICIES}
     return build_peak_trace(
@@ -119,7 +159,11 @@ def load_peak_trace(
 DEMO_COLORS = {
     "Popular": "#64748B",
     "Seq-Tuned": "#B45309",
+    "LightGBM-LTR": "#7C3AED",
+    "Logistic-LTR": "#7C3AED",
+    "Seq-xQuAD-Tripartite + Greedy": "#F97316",
     "Seq-xQuAD-Tripartite": "#B5121B",
+    "Session-SPU-Tripartite": "#0F766E",
     "UserOnly": "#2563EB",
 }
 
@@ -134,6 +178,88 @@ def demo_color(name: object) -> str:
 
 def demo_color_map(values) -> dict[str, str]:
     return {str(value): demo_color(value) for value in values}
+
+
+def algorithm_focus(model_name: str) -> dict[str, str]:
+    if model_name == "Popular":
+        return {
+            "focus": "全局热度基线",
+            "reason": "用商家历史订单量排序，主要用于证明个性化模型相对热门榜的增益。",
+            "display": "关注 Recall 和 Coverage 是否明显低于个性化模型。",
+        }
+    if model_name == "BPR-MF":
+        return {
+            "focus": "隐式反馈矩阵分解",
+            "reason": "用用户和商家的潜向量点积做成对排序，冷启动用户回退热门榜。",
+            "display": "关注 Recall/NDCG 与覆盖率，作为传统协同过滤对照。",
+        }
+    if model_name == "UserOnly":
+        return {
+            "focus": "用户画像可解释排序",
+            "reason": "品类、复购、价格、时段和质量共同组成用户侧偏好分。",
+            "display": "重点展示复购、品类和价格匹配理由。",
+        }
+    if model_name == "Seq-Tuned":
+        return {
+            "focus": "序列和复购强化",
+            "reason": "固定权重组合快慢最近性、复购、商家转移、品类、热度和质量。",
+            "display": "重点展示 Recall、NDCG 以及复购/转移理由。",
+        }
+    if model_name in {"LightGBM-LTR", "Logistic-LTR"}:
+        return {
+            "focus": "学习排序",
+            "reason": "复用七类序列特征，由 LambdaRank 或 Logistic fallback 学习非线性排序分。",
+            "display": "重点展示学习排序分、Coverage 和序列特征诊断。",
+        }
+    if model_name == "Seq-xQuAD-Tripartite":
+        return {
+            "focus": "三方重排",
+            "reason": "候选内归一化用户分、商家公平、ETA 分和供给分，再用 xQuAD 做品类覆盖和长尾重排。",
+            "display": "重点展示商家履约 ETA、供给稳定和曝光公平理由。",
+        }
+    if model_name == "Session-SPU-Tripartite":
+        return {
+            "focus": "会话和菜品增强",
+            "reason": "在三方重排基础上加入训练期点击会话与用户/商家的 SPU 菜品类目重合。",
+            "display": "重点展示会话点击、SPU 菜品类目匹配和履约 ETA。",
+        }
+    return {"focus": "推荐模型", "reason": "按当前离线指标展示。", "display": "关注 Recall、NDCG 和覆盖率。"}
+
+
+def best_simulation_text(model_name: str, sim: pd.DataFrame) -> str:
+    if sim.empty:
+        return ""
+    policies = [policy for policy, mapped in POLICY_MODEL_MAP.items() if mapped == model_name]
+    matched = sim[sim["policy"].astype(str).isin(policies)]
+    if matched.empty:
+        return ""
+    best = matched.sort_values(["platform_utility", "on_time_rate"], ascending=[False, False]).iloc[0]
+    return (
+        f"{best['policy']}: ETA {float(best['avg_eta']):.1f} min, "
+        f"超时率 {float(best['timeout_rate']):.1%}, 综合分 {float(best['platform_utility']):.4f}"
+    )
+
+
+def build_algorithm_evaluation_frame(offline: pd.DataFrame, sim: pd.DataFrame) -> pd.DataFrame:
+    rows = []
+    for _, row in offline.iterrows():
+        model_name = str(row["model"])
+        focus = algorithm_focus(model_name)
+        rows.append(
+            {
+                "模型": model_name,
+                "展示重点": focus["focus"],
+                "Recall@20": float(row.get("Recall@20", 0.0)),
+                "NDCG@20": float(row.get("NDCG@20", 0.0)),
+                "Coverage@20": float(row.get("Coverage@20", 0.0)),
+                "曝光Gini": float(row.get("ExposureGini", 0.0)),
+                "长尾曝光": float(row.get("LongTailExposure@20", 0.0)),
+                "算法解释": focus["reason"],
+                "Demo理由": focus["display"],
+                "履约仿真证据": best_simulation_text(model_name, sim),
+            }
+        )
+    return pd.DataFrame(rows)
 
 
 def geo_circle(lng: float, lat: float, radius_km: float, points: int = 96) -> tuple[list[float], list[float]]:
@@ -155,6 +281,193 @@ def viewport_range(values: list[float], padding_ratio: float = 0.18) -> list[flo
     span = max(high - low, 0.01)
     padding = span * padding_ratio
     return [low - padding, high + padding]
+
+
+def parse_step_matches(row: pd.Series) -> list[dict[str, object]]:
+    raw = row.get("step_matches_json", row.get("batch_matches_json", ""))
+    if raw is None or pd.isna(raw) or not str(raw).strip():
+        return []
+    try:
+        matches = json.loads(str(raw))
+    except json.JSONDecodeError:
+        return []
+    return matches if isinstance(matches, list) else []
+
+
+def render_step_matching_view(row: pd.Series, height: int = 430, show_table: bool = True) -> None:
+    matches = parse_step_matches(row)
+    if not matches:
+        st.caption("该时间步没有可展示的匹配。")
+        return
+
+    display_matches = matches[:16]
+    plot_df = pd.DataFrame(display_matches).copy()
+    plot_df["order_no"] = range(1, len(plot_df) + 1)
+    for column in [
+        "user_lng",
+        "user_lat",
+        "merchant_lng",
+        "merchant_lat",
+        "rider_lng",
+        "rider_lat",
+        "slot_number",
+        "eta",
+        "score",
+        "rider_load",
+    ]:
+        plot_df[column] = pd.to_numeric(plot_df[column], errors="coerce").fillna(0.0)
+    slot_offsets = []
+    for _, match in plot_df.iterrows():
+        angle = (float(match["slot_number"]) + 1.0) * 2.2
+        slot_offsets.append((math.cos(angle) * 0.00045, math.sin(angle) * 0.00045))
+    plot_df["slot_lng"] = plot_df["rider_lng"] + [offset[0] for offset in slot_offsets]
+    plot_df["slot_lat"] = plot_df["rider_lat"] + [offset[1] for offset in slot_offsets]
+    plot_df["slot_label"] = plot_df.apply(
+        lambda item: f"{item['rider_id']} 槽位 {int(item['slot_number']) + 1}",
+        axis=1,
+    )
+
+    fig = go.Figure()
+    for _, match in plot_df.iterrows():
+        eta = float(match["eta"])
+        fig.add_trace(
+            go.Scatter(
+                x=[float(match["slot_lng"]), float(match["merchant_lng"])],
+                y=[float(match["slot_lat"]), float(match["merchant_lat"])],
+                mode="lines",
+                name="骑手到商家",
+                line=dict(color="#7c3aed", width=1.8, dash="dot"),
+                opacity=0.42,
+                hovertemplate=(
+                    f"{match['slot_label']} -> {match.get('merchant_name', '商家')}"
+                    f" | O{int(match['order_no'])}"
+                ),
+                showlegend=False,
+            )
+        )
+        fig.add_trace(
+            go.Scatter(
+                x=[float(match["slot_lng"]), float(match["user_lng"])],
+                y=[float(match["slot_lat"]), float(match["user_lat"])],
+                mode="lines",
+                name="匹配连线",
+                line=dict(color="#dc6803" if eta > 45.0 else "#0f766e", width=2.6),
+                opacity=0.58,
+                hovertemplate=(
+                    f"O{int(match['order_no'])} -> {match['slot_label']}"
+                    f" | ETA {eta:.1f} min | 边权 {float(match['score']):.3f}"
+                ),
+                showlegend=False,
+            )
+        )
+    fig.add_trace(
+        go.Scatter(
+            x=plot_df["merchant_lng"],
+            y=plot_df["merchant_lat"],
+            mode="markers",
+            name="下单商家",
+            text=plot_df["merchant_name"].astype(str),
+            customdata=plot_df[["order_no", "merchant_id"]].to_numpy(),
+            marker=dict(size=8, color="#0f766e", opacity=0.55, symbol="diamond", line=dict(color="#ffffff", width=0.8)),
+            hovertemplate="O%{customdata[0]} 商家 %{text} | ID %{customdata[1]}",
+        )
+    )
+    fig.add_trace(
+        go.Scatter(
+            x=plot_df["user_lng"],
+            y=plot_df["user_lat"],
+            mode="markers+text",
+            name="用户订单",
+            text=plot_df["order_no"].map(lambda value: f"O{int(value)}"),
+            customdata=plot_df[["user_id", "merchant_name", "eta"]].to_numpy(),
+            textposition="top center",
+            marker=dict(size=13, color="#2563eb", symbol="circle", line=dict(color="#ffffff", width=1.2)),
+            hovertemplate="用户 %{customdata[0]} | %{customdata[1]} | ETA %{customdata[2]:.1f} min",
+        )
+    )
+    fig.add_trace(
+        go.Scatter(
+            x=plot_df["slot_lng"],
+            y=plot_df["slot_lat"],
+            mode="markers+text",
+            name="骑手容量槽位",
+            text=plot_df["order_no"].map(lambda value: f"S{int(value)}"),
+            customdata=plot_df[["slot_label", "rider_load", "score"]].to_numpy(),
+            textposition="bottom center",
+            marker=dict(size=14, color="#7c3aed", symbol="square", line=dict(color="#ffffff", width=1.2)),
+            hovertemplate="%{customdata[0]} | 原负载 %{customdata[1]} | 边权 %{customdata[2]:.3f}",
+        )
+    )
+    focus_lng = (
+        plot_df["user_lng"].dropna().astype(float).tolist()
+        + plot_df["merchant_lng"].dropna().astype(float).tolist()
+        + plot_df["slot_lng"].dropna().astype(float).tolist()
+    )
+    focus_lat = (
+        plot_df["user_lat"].dropna().astype(float).tolist()
+        + plot_df["merchant_lat"].dropna().astype(float).tolist()
+        + plot_df["slot_lat"].dropna().astype(float).tolist()
+    )
+    fig.update_layout(
+        title=dict(
+            text=(
+                f"{row['policy']} · 第 {int(row['step'])} 步 {row.get('assignment_mode', 'greedy')} 地图匹配 "
+                f"({int(row.get('step_matched_count', len(matches)))} / {int(row.get('step_order_count', len(matches)))})"
+            ),
+            font=dict(color="#111827", size=15),
+        ),
+        font=dict(color="#111827"),
+        height=height,
+        margin=dict(l=6, r=6, t=54, b=6),
+        plot_bgcolor="#f6f8fb",
+        paper_bgcolor="#ffffff",
+        legend=dict(orientation="h", yanchor="bottom", y=1.03, xanchor="left", x=0, font=dict(size=10, color="#111827")),
+        dragmode="pan",
+    )
+    fig.update_xaxes(visible=False, showgrid=False, zeroline=False, range=viewport_range(focus_lng, 0.28))
+    fig.update_yaxes(
+        visible=False,
+        showgrid=False,
+        zeroline=False,
+        range=viewport_range(focus_lat, 0.28),
+        scaleanchor="x",
+        scaleratio=1,
+    )
+    if not show_table:
+        st.plotly_chart(fig, use_container_width=True)
+        return
+    st.caption(
+        "蓝色 O 是用户订单，紫色 S 是骑手或骑手容量槽位，橙/绿实线表示该策略的匹配结果；"
+        "紫色虚线表示骑手到商家的取餐段，绿色菱形是订单对应商家。Greedy 是逐单局部选择，Batch 是整批二分图匹配。"
+    )
+    st.plotly_chart(fig, use_container_width=True)
+
+    match_df = pd.DataFrame(display_matches)
+    match_df = match_df[
+        ["order_index", "user_id", "merchant_name", "rider_id", "slot_number", "eta", "score", "rider_load"]
+    ].rename(
+        columns={
+            "order_index": "订单序号",
+            "user_id": "用户",
+            "merchant_name": "商家",
+            "rider_id": "骑手",
+            "slot_number": "槽位",
+            "eta": "ETA",
+            "score": "边权",
+            "rider_load": "原负载",
+        }
+    )
+    match_df["订单序号"] = pd.to_numeric(match_df["订单序号"], errors="coerce").fillna(0).astype(int) + 1
+    match_df["槽位"] = pd.to_numeric(match_df["槽位"], errors="coerce").fillna(0).astype(int) + 1
+    st.dataframe(
+        match_df,
+        use_container_width=True,
+        hide_index=True,
+        column_config={
+            "ETA": st.column_config.NumberColumn(format="%.1f"),
+            "边权": st.column_config.NumberColumn(format="%.3f"),
+        },
+    )
 
 
 def bounded_env_int(name: str, default: int, min_value: int, max_value: int) -> int:
@@ -193,8 +506,14 @@ def render_peak_policy_card(row: pd.Series, rank: int) -> None:
 
 
 def render_recommendation_card(row: pd.Series, selected: bool = False) -> None:
+    uses_tripartite = bool(row.get("uses_tripartite", False))
+    uses_session_spu = bool(row.get("uses_session_spu", False))
+    uses_xquad = bool(row.get("uses_xquad", False))
+    model_name = str(row.get("model_name", ""))
     with st.container(border=True):
-        st.caption("当前下单商家" if selected else f"TOP {int(row['rank'])}")
+        if bool(row.get("is_truth", False)):
+            st.success("推荐命中")
+        st.caption("当前下单商家" if selected else f"第 {int(row['rank'])} 名")
         st.write(f"**{row['merchant_name']}**")
         st.caption(
             f"ID {row['merchant_id']} · 品类 {row['category']} · "
@@ -203,19 +522,37 @@ def render_recommendation_card(row: pd.Series, selected: bool = False) -> None:
         )
         st.write(str(row["reason"]).replace(" / ", "、"))
         m1, m2 = st.columns(2)
-        m1.metric("总分", f"{float(row['final_score']):.3f}")
+        if uses_xquad:
+            m1.metric("列表排序分", f"{float(row['rank_score']):.3f}")
+        else:
+            m1.metric("总分", f"{float(row['final_score']):.3f}")
         m2.metric("ETA", f"{float(row['eta_minutes']):.1f} min")
-        score_bar("用户偏好", float(row["user_score"]))
-        score_bar("商家公平", float(row["fairness"]))
-        score_bar("履约速度", float(row["eta_score"]))
-        score_bar("供给稳定", float(row["supply"]))
+        if uses_tripartite:
+            if uses_xquad:
+                score_bar("候选相关性", float(row["final_score"]))
+            score_bar("用户偏好", float(row["user_score"]))
+            score_bar("商家公平", float(row["fairness"]))
+            score_bar("履约速度", float(row["eta_score"]))
+            score_bar("供给稳定", float(row["supply"]))
+            if uses_session_spu:
+                score_bar("会话点击", float(row.get("session_score", 0.0)))
+                score_bar("SPU菜品", float(row.get("spu_score", 0.0)))
+        elif "LTR" in model_name:
+            score_bar("序列特征", float(row["user_score"]))
+            st.caption(f"学习排序分 {float(row['final_score']):.3f} · ETA诊断 {float(row['eta_minutes']):.1f} min")
+        else:
+            score_bar("模型偏好", float(row["user_score"]))
+            st.caption(
+                f"ETA诊断 {float(row['eta_minutes']):.1f} min · "
+                f"商家公平 {float(row['fairness']):.2f} · 供给 {float(row['supply']):.2f}"
+            )
 
 
 data = load_data()
 user_ids = data.user_ids
 user_set = set(user_ids)
 default_user = "8" if "8" in user_set else user_ids[0]
-case_options = demo_user_cases(data.users)
+case_options = demo_user_cases(data)
 demo_max_orders = bounded_env_int("FOODFLOW_DEMO_MAX_ORDERS", 12000, 0, 2_000_000)
 demo_rider_count = bounded_env_int("FOODFLOW_DEMO_RIDERS", 1200, 120, 2400)
 
@@ -230,7 +567,7 @@ with st.sidebar:
         user_id = default_user
     else:
         user_id = typed_user
-    period_label = st.selectbox("时段", ["午餐高峰", "晚餐高峰", "早餐", "夜宵"], index=0)
+    period_label = st.selectbox("下单时段（影响配送耗时）", ["午餐高峰", "晚餐高峰", "早餐", "夜宵"], index=0)
     period_map = {"午餐高峰": "lunch", "晚餐高峰": "dinner", "早餐": "breakfast", "夜宵": "night"}
     period = period_map[period_label]
     strategy_name = st.selectbox(
@@ -244,14 +581,21 @@ interactive_data = build_interactive_data(user_id, demo_max_orders, tuple(case_o
 model_data_key = f"orders={len(interactive_data.orders_train)};user={user_id};max={demo_max_orders}"
 if len(interactive_data.orders_train) < len(data.orders_train):
     st.caption(
-        f"交互推荐模型使用 {len(interactive_data.orders_train):,} 条训练订单；完整实验指标仍来自全量 TRD 输出。"
+        f"交互推荐模型使用 {len(interactive_data.orders_train):,} 条训练订单；实验页读取离线评估与履约仿真输出。"
     )
 
 with st.spinner(f"正在加载 {strategy_name} 推荐模型，首次运行会建立缓存..."):
     model = load_model(strategy_name, model_data_key, interactive_data)
 rec_result = model.recommend([user_id], top_k, {user_id: period})
 recs = rec_result.recommendations[user_id]
-rec_df = build_recommendation_frame(interactive_data, model, user_id, recs, period)
+rec_df = build_recommendation_frame(
+    interactive_data,
+    model,
+    user_id,
+    recs,
+    period,
+    rec_result.scores.get(user_id, {}),
+)
 
 users_df = data.users.set_index("user_id", drop=False)
 merchants = data.merchants.set_index("wm_poi_id", drop=False)
@@ -262,13 +606,16 @@ if not rec_df.empty:
     top_row = rec_df.iloc[0]
     avg_eta = float(rec_df["eta_minutes"].mean())
     avg_fairness = float(rec_df["fairness"].mean())
+    strategy_caption = "会话/SPU、曝光与履约" if strategy_name == "Session-SPU-Tripartite" else (
+        "用户偏好、曝光与履约" if "Tripartite" in strategy_name else "用户偏好与排序分"
+    )
     summary_cols = st.columns(5)
     with summary_cols[0]:
         st.metric("当前用户", str(user_id))
         st.caption(f"历史 {int(user_row.get('history_orders', 0))} 单")
     with summary_cols[1]:
         st.metric("推荐策略", strategy_name)
-        st.caption("用户偏好、曝光与履约")
+        st.caption(strategy_caption)
     with summary_cols[2]:
         st.metric("首位商家", str(top_row["merchant_name"]))
         st.caption(f"TOP1 分数 {float(top_row['final_score']):.3f}")
@@ -313,6 +660,12 @@ with tab_case:
             st.plotly_chart(fig, use_container_width=True)
 
     st.subheader(f"{strategy_name} 推荐商家卡片")
+    truth_total = len(data.truth_by_user().get(str(user_id), set()))
+    truth_hits = int(rec_df["is_truth"].sum()) if "is_truth" in rec_df.columns else 0
+    st.caption(
+        f"当前推荐 {len(rec_df)} 家，其中 {truth_hits} 家是用户后来实际下单的商家；"
+        f"该用户后来一共在 {truth_total} 家商家下过单。绿色提示只用于核对推荐结果，不参与排序。"
+    )
     reason_choices = sorted({item for text in rec_df["reason"].astype(str) for item in text.split(" / ") if item})
     selected_reasons = st.multiselect("推荐理由筛选", reason_choices, default=[])
     if selected_reasons:
@@ -325,10 +678,10 @@ with tab_case:
         st.info("当前筛选无匹配，已显示完整推荐列表。")
         card_df = rec_df.copy()
 
-    card_count = min(9, len(card_df))
-    for start in range(0, card_count, 3):
+    st.caption(f"卡片显示 {len(card_df)}/{len(rec_df)} 家商户。")
+    for batch in recommendation_card_batches(card_df, columns=3):
         cols = st.columns(3)
-        for col, (_, row) in zip(cols, card_df.iloc[start : start + 3].iterrows()):
+        for col, (_, row) in zip(cols, batch.iterrows()):
             with col:
                 render_recommendation_card(row)
 
@@ -339,8 +692,16 @@ with tab_case:
         for name in DEMO_STRATEGIES:
             with st.spinner(f"加载 {name} 并生成对比..."):
                 candidate_model = load_model(name, model_data_key, interactive_data)
-                candidate_recs = candidate_model.recommend([user_id], top_k, {user_id: period}).recommendations[user_id]
-                candidate_frame = build_recommendation_frame(interactive_data, candidate_model, user_id, candidate_recs, period)
+                candidate_result = candidate_model.recommend([user_id], top_k, {user_id: period})
+                candidate_recs = candidate_result.recommendations[user_id]
+                candidate_frame = build_recommendation_frame(
+                    interactive_data,
+                    candidate_model,
+                    user_id,
+                    candidate_recs,
+                    period,
+                    candidate_result.scores.get(user_id, {}),
+                )
             strategy_rows.append(
                 {
                     "策略": name,
@@ -381,7 +742,8 @@ with tab_case:
         st.caption("开启后会临时加载三条主线策略，首次计算需要等待。")
 
     option_labels = [
-        f"TOP {int(row.rank)} · {row.merchant_name} · ID {row.merchant_id}" for row in rec_df.itertuples(index=False)
+        f"{'[推荐命中] ' if row.is_truth else ''}第 {int(row.rank)} 名 · {row.merchant_name} · 商家编号 {row.merchant_id}"
+        for row in rec_df.itertuples(index=False)
     ]
     chosen_label = st.selectbox("模拟下单商家", option_labels)
     chosen_idx = option_labels.index(chosen_label)
@@ -402,24 +764,30 @@ with tab_case:
         c3.metric("骑手负载", int(load_aware["load"]))
 
     with right:
-        contrib = pd.DataFrame(
-            {
-                "component": ["用户偏好", "商家公平", "ETA 履约", "供给稳定"],
-                "weighted_score": [
-                    chosen_row["user_contrib"],
-                    chosen_row["fairness_contrib"],
-                    chosen_row["eta_contrib"],
-                    chosen_row["supply_contrib"],
-                ],
-            }
-        )
+        if bool(chosen_row.get("uses_tripartite", False)):
+            contrib_rows = [
+                {"component": "用户偏好", "weighted_score": chosen_row["user_contrib"]},
+                {"component": "商家公平", "weighted_score": chosen_row["fairness_contrib"]},
+                {"component": "ETA 履约", "weighted_score": chosen_row["eta_contrib"]},
+                {"component": "供给稳定", "weighted_score": chosen_row["supply_contrib"]},
+            ]
+            if bool(chosen_row.get("uses_session_spu", False)):
+                contrib_rows.extend(
+                    [
+                        {"component": "会话点击", "weighted_score": chosen_row.get("session_contrib", 0.0)},
+                        {"component": "SPU菜品", "weighted_score": chosen_row.get("spu_contrib", 0.0)},
+                    ]
+                )
+        else:
+            contrib_rows = [{"component": "模型排序分", "weighted_score": chosen_row["final_score"]}]
+        contrib = pd.DataFrame(contrib_rows)
         contrib_fig = px.bar(
             contrib,
             x="component",
             y="weighted_score",
             color="component",
             title=f"{strategy_name} 分数组成",
-            color_discrete_sequence=["#2563eb", "#0f766e", "#dc6803", "#7c3aed"],
+            color_discrete_sequence=["#2563eb", "#0f766e", "#dc6803", "#7c3aed", "#0891b2", "#b45309"],
         )
         contrib_fig.update_layout(showlegend=False, height=280, margin=dict(l=8, r=8, t=48, b=8))
         st.plotly_chart(contrib_fig, use_container_width=True)
@@ -496,7 +864,7 @@ with tab_case:
                 yaxis_title="",
                 plot_bgcolor="#f8fafc",
                 paper_bgcolor="#ffffff",
-                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0),
+                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0, font=dict(size=10, color="#111827")),
             )
             score_fig.update_xaxes(gridcolor="#e2e8f0", range=[0, max(float(candidate_plot["score"].max()) * 1.08, 0.1)])
             score_fig.update_yaxes(showgrid=False)
@@ -737,7 +1105,7 @@ with tab_case:
             margin=dict(l=8, r=8, t=52, b=8),
             plot_bgcolor="#f6f8fb",
             paper_bgcolor="#ffffff",
-            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0, font=dict(size=10)),
+            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0, font=dict(size=10, color="#111827")),
             dragmode="pan",
         )
         map_fig.update_xaxes(
@@ -759,6 +1127,7 @@ with tab_case:
     st.subheader("推荐明细")
     table_cols = [
         "rank",
+        "truth_label",
         "merchant_name",
         "category",
         "final_score",
@@ -769,16 +1138,27 @@ with tab_case:
         "distance_km",
         "reason",
     ]
+    if "rank_score" in rec_df.columns and rec_df.get("uses_xquad", pd.Series(dtype=bool)).any():
+        table_cols.insert(3, "rank_score")
+    if "session_score" in rec_df.columns and rec_df["session_score"].gt(0).any():
+        table_cols.insert(-2, "session_score")
+    if "spu_score" in rec_df.columns and rec_df["spu_score"].gt(0).any():
+        table_cols.insert(-2, "spu_score")
+    score_label = "候选相关性" if "rank_score" in table_cols else "总分"
     display_df = rec_df[table_cols].rename(
         columns={
             "rank": "排名",
+            "truth_label": "推荐结果",
             "merchant_name": "商家",
             "category": "品类",
-            "final_score": "总分",
+            "rank_score": "列表排序分",
+            "final_score": score_label,
             "user_score": "用户偏好",
             "fairness": "商家公平",
             "eta_minutes": "ETA",
             "supply": "供给",
+            "session_score": "会话",
+            "spu_score": "SPU菜品",
             "distance_km": "距离km",
             "reason": "解释",
         }
@@ -787,6 +1167,10 @@ with tab_case:
 
 with tab_peak:
     st.subheader("午餐高峰回放")
+    st.caption(
+        "按时间步模拟午餐高峰请求流：每步抽一批用户，先推荐商家，再模拟用户选店和骑手派单。"
+        "Batch 策略会把同一时间步的订单与骑手容量槽位做二分图最大权匹配。"
+    )
     replay_c1, replay_c2 = st.columns(2)
     with replay_c1:
         replay_steps = st.slider("回放时间步", min_value=8, max_value=32, value=16, step=2)
@@ -839,6 +1223,8 @@ with tab_peak:
                     showlegend=False,
                     plot_bgcolor="#f8fafc",
                     paper_bgcolor="#ffffff",
+                    yaxis=dict(tickfont=dict(color="#111827")),
+                    xaxis=dict(tickfont=dict(color="#111827")),
                 )
                 order_fig.update_xaxes(tickangle=20, showgrid=False)
                 order_fig.update_yaxes(gridcolor="#e2e8f0")
@@ -877,6 +1263,8 @@ with tab_peak:
                     showlegend=False,
                     plot_bgcolor="#f8fafc",
                     paper_bgcolor="#ffffff",
+                    yaxis=dict(tickfont=dict(color="#111827")),
+                    xaxis=dict(tickfont=dict(color="#111827")),
                 )
                 timeout_fig.update_xaxes(tickangle=20, showgrid=False)
                 timeout_fig.update_yaxes(gridcolor="#e2e8f0", tickformat=".0%")
@@ -899,7 +1287,44 @@ with tab_peak:
                 )
                 st.plotly_chart(load_fig, use_container_width=True)
 
-            st.dataframe(trace_df, use_container_width=True, hide_index=True)
+            if "assignment_mode" in trace_df.columns and "step_matches_json" in trace_df.columns:
+                match_rows = trace_df[
+                    trace_df["step_matches_json"].fillna("").astype(str).str.len().gt(2)
+                ].copy()
+                if not match_rows.empty:
+                    st.subheader("仿真策略相对位置")
+                    match_steps = sorted(match_rows["step"].dropna().astype(int).unique().tolist())
+                    selected_match_step = st.selectbox(
+                        "时间步",
+                        match_steps,
+                        index=max(len(match_steps) - 1, 0),
+                        key="peak_match_step_grid",
+                    )
+                    st.caption(
+                        "每张小地图展示同一时间步内的批量订单匹配：蓝色 O 为用户订单，紫色 S 为骑手或骑手槽位，"
+                        "绿色菱形为商家，实线为最终匹配，紫色虚线为骑手到商家的取餐段。"
+                    )
+                    step_map_rows = match_rows[
+                        match_rows["step"].astype(int) == int(selected_match_step)
+                    ].copy()
+                    if step_map_rows.empty:
+                        step_map_rows = match_rows.sort_values("step").groupby("policy", as_index=False).tail(1)
+                    else:
+                        step_map_rows = (
+                            step_map_rows.sort_values("step").groupby("policy", as_index=False).tail(1)
+                        )
+                    map_order = {policy: index for index, policy in enumerate(ops_board["policy"].astype(str).tolist())}
+                    step_map_rows = step_map_rows.assign(
+                        _order=step_map_rows["policy"].astype(str).map(map_order).fillna(999)
+                    ).sort_values("_order")
+                    for start in range(0, len(step_map_rows), 3):
+                        cols = st.columns(min(3, len(step_map_rows) - start))
+                        for col, (_, map_row) in zip(cols, step_map_rows.iloc[start : start + 3].iterrows()):
+                            with col:
+                                render_step_matching_view(map_row, height=300, show_table=False)
+
+            trace_display = trace_df.drop(columns=["batch_matches_json", "step_matches_json"], errors="ignore")
+            st.dataframe(trace_display, use_container_width=True, hide_index=True)
     else:
         st.caption("开启后会连续运行多轮推荐与派单仿真，首次计算需要等待。")
 
@@ -938,6 +1363,12 @@ with tab_method:
             model_metric_text("Seq-Tuned", "Recall@20", "Recall@20"),
         ),
         (
+            "学习排序",
+            f"{LEARNED_LTR_MODEL}：用数据学习候选排序",
+            "默认使用 LightGBM LambdaRank；如果运行环境缺少 LightGBM，会显式显示 Logistic-LTR 后备排序器。",
+            model_metric_text(LEARNED_LTR_MODEL, "Coverage@20", "Coverage@20"),
+        ),
+        (
             "商家侧",
             "三方重排：不只照顾用户点击",
             "把曝光公平、ETA 和供给情况一起放进排序，避免平台只推少数头部店。",
@@ -947,7 +1378,13 @@ with tab_method:
             "骑手侧",
             "订单派给骑手：看时间，也看负载",
             "用户选店之后继续模拟派单，用超时率和综合分看这条链路稳不稳。",
-            policy_metric_text("Seq-xQuAD-Tripartite", "platform_utility", "Platform Utility"),
+            policy_metric_text("Seq-xQuAD-Tripartite + Greedy", "platform_utility", "Platform Utility"),
+        ),
+        (
+            "菜品增强",
+            "Session-SPU：加入会话和菜品信号",
+            "用训练期点击商家和 SPU 菜品类目重合扩展候选，并保留菜品匹配证据。",
+            model_metric_text("Session-SPU-Tripartite", "NDCG@20", "NDCG@20"),
         ),
     ]
     for start in range(0, len(method_rows), 3):
@@ -960,7 +1397,9 @@ with tab_method:
         pd.DataFrame(
             [
                 {"评价对象": "用户偏好", "项目做法": "用最近订单、复购次数和店铺转移来排商家", "对应模块": "Seq-Tuned"},
+                {"评价对象": "学习排序", "项目做法": "用同一批序列特征训练学习排序器", "对应模块": LEARNED_LTR_MODEL},
                 {"评价对象": "商家曝光", "项目做法": "把曝光公平、ETA 和供给情况接到重排里", "对应模块": "Seq-xQuAD-Tripartite"},
+                {"评价对象": "菜品偏好", "项目做法": "用训练期会话点击和 SPU 菜品类目重合增强候选", "对应模块": "Session-SPU-Tripartite"},
                 {"评价对象": "订单履约", "项目做法": "模拟骑手候选排序和负载感知派单", "对应模块": "骑手仿真"},
             ]
         ),
@@ -1047,6 +1486,22 @@ with tab_metrics:
         k3.metric("品类最贴近历史", f"{calibration_best.get('CategoryJSD@20', 0.0):.4f}", str(calibration_best["model"]))
         k4.metric("最低 Avg ETA", f"{eta_best['avg_eta']:.2f}", str(eta_best["policy"]))
         k5.metric("最高平台综合分", f"{utility_best['platform_utility']:.4f}", str(utility_best["policy"]))
+
+        st.subheader("推荐算法离线评估")
+        algorithm_eval = build_algorithm_evaluation_frame(offline, sim)
+        st.caption("推荐指标来自离线评估表；带 ETA、超时率和综合分的证据来自同一推荐模型对应的履约仿真策略。")
+        st.dataframe(
+            algorithm_eval,
+            use_container_width=True,
+            hide_index=True,
+            column_config={
+                "Recall@20": st.column_config.NumberColumn(format="%.4f"),
+                "NDCG@20": st.column_config.NumberColumn(format="%.4f"),
+                "Coverage@20": st.column_config.NumberColumn(format="%.4f"),
+                "曝光Gini": st.column_config.NumberColumn(format="%.4f"),
+                "长尾曝光": st.column_config.NumberColumn(format="%.4f"),
+            },
+        )
 
         frontier_df = frontier.rename(
             columns={

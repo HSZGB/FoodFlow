@@ -18,7 +18,10 @@ NotebookLM 上传时建议保留原文件名。图表页要优先使用 PNG 作�
 |---|---|
 | `sources/实验报告.md` | 项目目标、数据来源、算法、指标、结果和结论 |
 | `sources/DATA_SOURCE.md` | TRD 数据来源、Zenodo DOI、合成骑手边界 |
+| `sources/DELIVERY_AUDIT.md` | 课程硬性要求与当前交付证据映射 |
+| `sources/REPORT_ROUTE_COVERAGE.md` | 最新版调研报告 P0-P6 路线覆盖与边界说明 |
 | `sources/ppt_outline.md` | 已确认的 11 页答辩结构 |
+| `sources/ppt_outline_approval.md` | Codex PPT 大纲审批摘要和严格输入图片映射 |
 | `sources/作业要求.md` | 课程评分与展示要求 |
 | `sources/硬性要求.md` | 指标展示、数据来源、讲故事、PPT 等硬性要求 |
 
@@ -42,8 +45,11 @@ NotebookLM 上传时建议保留原文件名。图表页要优先使用 PNG 作�
 | `figures/tradeoff_ndcg_gini.png` | Slide 6 | 推荐准确性与曝光公平 trade-off |
 | `figures/tradeoff_recall_coverage.png` | Slide 6 | 推荐召回与商家覆盖率 trade-off |
 | `figures/simulation_avg_eta.png` | Slide 8 | 主图，展示平均 ETA |
+| `figures/simulation_p95_eta.png` | Slide 8 | 展示高分位履约时长和尾部风险 |
 | `figures/simulation_timeout_rate.png` | Slide 8 | 展示超时率 |
 | `figures/simulation_rider_load_std.png` | Slide 8 | 展示骑手负载均衡 |
+| `figures/simulation_active_rider_rate.png` | Slide 8 | 展示骑手资源利用率 |
+| `figures/simulation_rider_income_gini.png` | Slide 8 | 展示骑手收入公平性 |
 | `figures/simulation_platform_utility.png` | Slide 8 | 主图，展示平台综合效用 |
 | `figures/simulation_exposure_gini.png` | Slide 8 | 展示仿真中的商家曝光集中度 |
 | `figures/tradeoff_eta_utility.png` | Slide 8 | 展示 ETA 与平台效用权衡 |

@@ -6,6 +6,7 @@ from pathlib import Path
 import pandas as pd
 
 from .io import ensure_dir
+from .recommenders import learned_ltr_model_name
 
 
 def _markdown_table(path: Path) -> str:
@@ -81,6 +82,7 @@ def build_report(
     simulation_table = _markdown_table(results_dir / "simulation_metrics.csv")
     data_mode = _data_mode_text(data_note_path, data_audit_path)
     data_audit = _data_audit_summary(data_audit_path)
+    learned_ltr = learned_ltr_model_name()
     figures_md = _figure_links(figures_dir)
 
     text = f"""# FoodFlow：融合学习排序、公平重排与履约仿真的外卖推荐系统
@@ -105,25 +107,29 @@ FoodFlow 面向外卖平台推荐场景，先用真实外卖订单数据评估�
 
 ## 3. 方法设计
 
-默认离线实验保留代表模型：Popular、BPR-MF、UserOnly、Seq-Tuned、LightGBM-LTR、Seq-xQuAD-Tripartite 和 Session-SPU-Tripartite。若当前环境未安装 LightGBM，离线表会把该链路标为 `Seq-Tuned (LightGBM fallback)`，表示使用相同序列特征的可解释权重模型替代学习排序器。
+默认实验保留 7 个代表策略：Popular、BPR-MF、UserOnly、Seq-Tuned、{learned_ltr}、Seq-xQuAD-Tripartite 和 Session-SPU-Tripartite。LightGBM 不可用时显式使用 Logistic-LTR；Session-SPU-Tripartite 只使用训练期点击会话与菜品信号，避免把测试期行为泄漏到离线排序。
 
 Popular 是全局热度对照；BPR-MF 是传统隐式反馈矩阵分解；UserOnly 使用品类、复购、价格、时段和商家质量构造可解释画像分；LightGBM-LTR 复用 Seq-Tuned 的 recency、repeat、transition、category、popularity、quality 等特征，但用 LightGBM LambdaRank 学习排序函数，替代手动硬编码的 `SEQ_TUNED_WEIGHTS`；Seq-xQuAD-Tripartite 把列表级覆盖、商家公平、ETA 和供给约束接到同一个重排器；Session-SPU-Tripartite 进一步加入 TRD session 点击候选和菜品 SPU 类目偏好，用来评估更丰富的真实行为信号是否改善履约链路。
 
-`Seq-Tuned` 仍保留为可解释规则基线和 LightGBM 不可用时的 fallback，但不再把硬编码权重作为唯一的高准确序列主线。
+`Seq-Tuned` 保留为可解释规则基线；LightGBM 不可用时，系统使用 Logistic-LTR，而不是把规则模型伪装成学习排序。仿真共 7 条链路，并对 Seq-xQuAD-Tripartite 同时运行逐单贪心和容量槽位批量最大权匹配。各策略共享请求流和初始骑手池，同一推荐器还共享 MNL 选择噪声，减少随机场景差异。
 
-仿真保留 7 条代表链路：Popular + Nearest、UserOnly + MinETA、Seq-Tuned + MinETA、LightGBM-LTR + MinETA、Seq-xQuAD-Tripartite、Seq-xQuAD-Tripartite-Batch 和 Session-SPU-Tripartite。每轮模拟午餐高峰的一批用户请求，推荐列表经过选择模型产生订单，再由最近骑手、最小 ETA、负载感知或批量最大权匹配策略派单。同一推荐器下不同派单策略使用相同请求流、选择噪声和初始骑手池，以减少随机场景差异对对照结果的影响。
+轻量 KG 解释用于吸收知识图谱路线的可解释性亮点，但不引入高风险图神经网络训练。系统从训练订单、商家品类、商圈/区域和价格段构造 `user-ordered-poi`、`user-prefers-category`、`poi-has-category`、`poi-located-in-area`、`has-price-range` 等路径。`explain-case` 会输出类似 “user -> category <- poi” 的证据路径，并同时保留 ETA、曝光补偿等真实打分字段，避免空泛模板解释。
+
+三方重排的用户分、公平分、ETA 分和供给分在候选集合内做 min-max 归一化后再加权合成，避免不同数值尺度让权重失去解释性。离线表中 `LightGBM-LTR` 更突出覆盖改善和曝光集中度下降；`Seq-xQuAD-Tripartite` 的价值则主要体现在把商家公平、ETA、供给和列表级覆盖纳入排序，并需要结合后续履约仿真判断系统级收益。
 
 ## 4. 离线推荐结果
 
 {offline_table}
 
-推荐侧指标使用 Recall@K、NDCG@K、MRR@K 和 HitRate@K；商家侧指标使用 Coverage、Long-tail Exposure 和 Exposure Gini；校准侧指标使用 CategoryJSD@20。LightGBM-LTR 的意义在于从历史交互中学习特征组合和非线性排序函数，减少固定权重在数据分布变化时失效的风险。
+推荐侧指标使用 Recall@K、NDCG@K、MRR@K 和 HitRate@K；RepeatRecall@K 只统计测试真值中用户训练期点过的复购商家，ExploreRecall@K 只统计训练期未点过的新商家，用来拆开“复购命中”和“探索命中”。商家侧指标使用 Coverage、Long-tail Exposure 和 Exposure Gini；校准侧指标使用 CategoryJSD@20，衡量推荐列表品类分布与用户历史品类分布的 Jensen-Shannon divergence，数值越低越贴近用户习惯。这样既能看推荐是否命中真实下单，也能看曝光是否过度集中，以及列表是否偏离用户长期品类偏好。全量 TRD 结果中，Seq-Tuned 或 {learned_ltr} 通常代表离线准确率前沿，说明外卖推荐强烈受复购序列和商家转移影响；Seq-xQuAD-Tripartite 的离线准确性可能低于纯用户侧序列模型，但它把商家曝光和履约约束纳入同一条链路，需要结合仿真指标判断系统级收益。
 
 ## 5. 动态履约仿真结果
 
 {simulation_table}
 
-履约侧指标包括完成订单数、平均 ETA、P95 ETA、超时率、骑手负载标准差、活跃骑手比例、骑手收入 Gini 和平台综合效用。LightGBM-LTR + MinETA 用来检验学习排序模型进入派单链路后的履约表现；Seq-xQuAD-Tripartite 则进一步把三方约束和列表多样性接入推荐阶段；Seq-xQuAD-Tripartite-Batch 把同一时间步内订单和骑手剩余容量槽位构造成二分图，用最大权匹配减少逐单贪心导致的局部最优。
+履约侧指标包括完成和未分配订单数、平均/P95 ETA、超时率、骑手负载、活跃骑手比例、骑手收入 Gini 和平台综合效用。骑手速度、服务时长和初始负载可由外部配送任务 CSV 校准；没有外部数据时继续使用固定 seed 的合成参数。
+
+为避免只展示单点权重，图表中额外生成 `pareto_recall_utility.png` 和 `tripartite_frontier.csv`，把 Recall@20、Exposure Gini、平均 ETA、超时率和平台效用合并为非支配前沿视角。答辩时可以用这张图说明：Seq-Tuned/{learned_ltr} 代表离线准确率前沿，Seq-xQuAD-Tripartite 代表系统效用前沿，它们共同构成三方推荐的权衡边界。
 
 ## 6. 图表展示
 
