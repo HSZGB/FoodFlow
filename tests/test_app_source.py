@@ -36,14 +36,23 @@ def test_demo_copy_is_presentation_facing():
         assert phrase not in source
 
 
-def test_demo_uses_coordinate_map_without_external_tiles():
+def test_demo_map_supports_real_tiles_with_offline_fallback():
     source = Path("app.py").read_text(encoding="utf-8")
 
     assert "当前订单附近的用户、商家和骑手" in source
-    assert "真实地图底图" not in source
-    assert "Scattermapbox" not in source
-    assert "open-street-map" not in source
-    assert "if not use_real_map" not in source
+    # 真实底图（Scattermap/carto-positron）默认开启，离线时可切回抽象画布。
+    assert "go.Scattermap(" in source
+    assert "carto-positron" in source
+    assert "use_real_map" in source
+    assert "离线请关闭" in source
+
+
+def test_demo_has_tripartite_perspective_panels():
+    source = Path("app.py").read_text(encoding="utf-8")
+    assert "top_dishes_for_user" in source
+    assert "merchant_supply_pressure" in source
+    assert "enroute_opportunities" in source
+    assert "配送地图回放" in source
 
 
 def test_recommendation_result_labels_use_plain_chinese():

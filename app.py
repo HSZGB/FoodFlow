@@ -18,8 +18,11 @@ from foodflow.demo_support import (
     build_rider_policy_frame,
     clamp01,
     demo_user_cases,
+    enroute_opportunities,
+    merchant_supply_pressure,
     recommendation_card_batches,
     streamlit_image_width_kwargs,
+    top_dishes_for_user,
     user_category_profile,
 )
 from foodflow.frontier import POLICY_MODEL_MAP, build_tripartite_frontier
@@ -199,6 +202,52 @@ def demo_color(name: object) -> str:
 
 def demo_color_map(values) -> dict[str, str]:
     return {str(value): demo_color(value) for value in values}
+
+
+def map_scatter(real_map: bool, lng, lat, **kwargs):
+    """构造散点轨迹：真实底图用 Scattermap（经纬度语义），离线回退到抽象画布。"""
+    use_gl = kwargs.pop("use_gl", False)
+    if real_map:
+        marker = kwargs.get("marker")
+        if isinstance(marker, dict):
+            kwargs["marker"] = {key: value for key, value in marker.items() if key not in {"symbol", "line"}}
+        kwargs.pop("fill", None)
+        kwargs.pop("fillcolor", None)
+        return go.Scattermap(lon=lng, lat=lat, **kwargs)
+    trace_cls = go.Scattergl if use_gl else go.Scatter
+    return trace_cls(x=lng, y=lat, **kwargs)
+
+
+def apply_map_layout(fig, real_map: bool, focus_lng: list[float], focus_lat: list[float], title: str, height: int = 460) -> None:
+    fig.update_layout(
+        title=title,
+        height=height,
+        margin=dict(l=8, r=8, t=52, b=8),
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0, font=dict(size=10, color="#111827")),
+    )
+    clean_lng = [float(v) for v in focus_lng if pd.notna(v)]
+    clean_lat = [float(v) for v in focus_lat if pd.notna(v)]
+    if real_map:
+        pad_lng = max((max(clean_lng) - min(clean_lng)) * 0.08, 0.002) if clean_lng else 0.01
+        pad_lat = max((max(clean_lat) - min(clean_lat)) * 0.08, 0.002) if clean_lat else 0.01
+        fig.update_layout(
+            map=dict(
+                style="carto-positron",
+                bounds=dict(
+                    west=min(clean_lng) - pad_lng if clean_lng else 121.2,
+                    east=max(clean_lng) + pad_lng if clean_lng else 121.5,
+                    south=min(clean_lat) - pad_lat if clean_lat else 37.4,
+                    north=max(clean_lat) + pad_lat if clean_lat else 37.6,
+                ),
+            )
+        )
+    else:
+        fig.update_layout(plot_bgcolor="#f6f8fb", paper_bgcolor="#ffffff", dragmode="pan")
+        fig.update_xaxes(visible=False, showgrid=False, zeroline=False, range=viewport_range(clean_lng))
+        fig.update_yaxes(
+            visible=False, showgrid=False, zeroline=False, range=viewport_range(clean_lat),
+            scaleanchor="x", scaleratio=1,
+        )
 
 
 def algorithm_focus(model_name: str) -> dict[str, str]:
@@ -603,6 +652,7 @@ with st.sidebar:
         index=DEMO_STRATEGIES.index("Seq-xQuAD-Tripartite"),
     )
     top_k = st.slider("推荐数量", min_value=8, max_value=20, value=12, step=1)
+    use_real_map = st.checkbox("真实地图底图（需联网加载瓦片，离线请关闭）", value=True)
     preheat_clicked = st.button("预热演示缓存（全部策略 + 高峰回放）", use_container_width=True)
     st.caption("答辩前点一次：预先训练全部策略并跑一遍高峰回放，现场切换即走缓存不卡顿。")
 
@@ -853,6 +903,44 @@ with tab_case:
         eta_fig.update_layout(showlegend=False, height=270, margin=dict(l=8, r=8, t=48, b=8), yaxis_title="分钟")
         st.plotly_chart(eta_fig, use_container_width=True)
 
+    st.subheader("三方视角：这一单对用户、商家、骑手分别意味着什么")
+    view_user, view_merchant, view_rider = st.tabs(["用户：菜品级推荐", "商家：供给压力", "骑手：顺路单"])
+    with view_user:
+        dishes = top_dishes_for_user(interactive_data, user_id, chosen_id)
+        if dishes.empty:
+            st.info("该商家暂无菜品级订单记录（SPU 信号缺失时自动隐藏）。")
+        else:
+            st.caption("按该商家菜品历史销量排序，标注与用户历史口味类目（Top3）契合的菜品；名称与类目为 TRD 匿名化编号。")
+            st.dataframe(dishes, use_container_width=True, hide_index=True)
+    with view_merchant:
+        pressure = merchant_supply_pressure(data, merchant_row, period)
+        risk_color = {"高": "🔴", "中": "🟠", "低": "🟢"}[pressure["risk_level"]]
+        p1, p2, p3 = st.columns(3)
+        p1.metric("高峰爆单风险", f"{risk_color} {pressure['risk_level']}")
+        p2.metric("需求分位", f"{pressure['demand_percentile']:.0%}")
+        p3.metric("供给能力分", f"{pressure['capacity_score']:.2f}")
+        st.caption(pressure["risk_advice"])
+        quota = pressure["category_quota"]
+        if isinstance(quota, pd.DataFrame) and not quota.empty:
+            st.caption("按品类受欢迎程度给出的高峰供给配额建议（受欢迎度 × 高峰倍率）：")
+            st.dataframe(quota, use_container_width=True, hide_index=True)
+    with view_rider:
+        matched_rider_rows = riders[riders["rider_id"].astype(str) == str(load_aware["rider_id"])]
+        if matched_rider_rows.empty:
+            st.info("暂无匹配骑手。")
+        else:
+            st.caption(
+                "骑手视角：以当前配送路径（骑手→商家→用户）为基准，评估附近商家新单的边际绕行成本——"
+                "顺路单只需极小的额外时间，这正是路径感知派单（RouteBatch）合并订单的依据。"
+            )
+            opportunities = enroute_opportunities(
+                interactive_data, matched_rider_rows.iloc[0], merchant_row, user_row, period
+            )
+            if opportunities.empty:
+                st.info("附近暂无可评估的顺路单。")
+            else:
+                st.dataframe(opportunities, use_container_width=True, hide_index=True)
+
     candidate_left, candidate_right = st.columns([1.1, 1])
     if not rider_candidates.empty:
         candidate_view = rider_candidates.copy()
@@ -979,12 +1067,15 @@ with tab_case:
             f"小蓝点是附近用户样本，小绿点是附近商家样本，灰色点是 {nearby_count} 名近场骑手；"
             "紫色编号 R1/R2... 是派单候选榜，两个圆分别是商家和用户周边 2.5km 参考范围。"
         )
-        st.caption("半透明圆只是距离参考，不是等高线、热力图或真实配送边界。")
+        if not use_real_map:
+            st.caption("半透明圆只是距离参考，不是等高线、热力图或真实配送边界。")
         map_fig = go.Figure()
         map_fig.add_trace(
-            go.Scattergl(
-                x=nearby_users["lng"],
-                y=nearby_users["lat"],
+            map_scatter(
+                use_real_map,
+                nearby_users["lng"],
+                nearby_users["lat"],
+                use_gl=True,
                 mode="markers",
                 name="附近用户样本",
                 text=nearby_users["user_id"].astype(str),
@@ -993,9 +1084,11 @@ with tab_case:
             )
         )
         map_fig.add_trace(
-            go.Scattergl(
-                x=nearby_merchants["lng"],
-                y=nearby_merchants["lat"],
+            map_scatter(
+                use_real_map,
+                nearby_merchants["lng"],
+                nearby_merchants["lat"],
+                use_gl=True,
                 mode="markers",
                 name="附近商家样本",
                 text=nearby_merchants["wm_poi_id"].astype(str),
@@ -1004,9 +1097,10 @@ with tab_case:
             )
         )
         map_fig.add_trace(
-            go.Scatter(
-                x=merchant_circle_x,
-                y=merchant_circle_y,
+            map_scatter(
+                use_real_map,
+                merchant_circle_x,
+                merchant_circle_y,
                 mode="lines",
                 fill="toself",
                 fillcolor="rgba(15, 118, 110, 0.07)",
@@ -1016,9 +1110,10 @@ with tab_case:
             )
         )
         map_fig.add_trace(
-            go.Scatter(
-                x=user_circle_x,
-                y=user_circle_y,
+            map_scatter(
+                use_real_map,
+                user_circle_x,
+                user_circle_y,
                 mode="lines",
                 fill="toself",
                 fillcolor="rgba(37, 99, 235, 0.06)",
@@ -1028,9 +1123,11 @@ with tab_case:
             )
         )
         map_fig.add_trace(
-            go.Scattergl(
-                x=nearby_riders["lng"],
-                y=nearby_riders["lat"],
+            map_scatter(
+                use_real_map,
+                nearby_riders["lng"],
+                nearby_riders["lat"],
+                use_gl=True,
                 mode="markers",
                 name="近场骑手",
                 text=nearby_riders["rider_id"],
@@ -1047,9 +1144,10 @@ with tab_case:
         )
         if not rider_candidates.empty:
             map_fig.add_trace(
-                go.Scatter(
-                    x=rider_candidates["lng"],
-                    y=rider_candidates["lat"],
+                map_scatter(
+                    use_real_map,
+                    rider_candidates["lng"],
+                    rider_candidates["lat"],
                     mode="markers+text",
                     name="Top 候选骑手",
                     text=rider_candidates["rank"].astype(int).map(lambda value: f"R{value}"),
@@ -1069,19 +1167,21 @@ with tab_case:
                 )
             )
         map_fig.add_trace(
-            go.Scatter(
-                x=[rider_lng, merchant_lng],
-                y=[rider_lat, merchant_lat],
+            map_scatter(
+                use_real_map,
+                [rider_lng, merchant_lng],
+                [rider_lat, merchant_lat],
                 mode="lines",
                 name="取餐段",
-                line=dict(color="#7c3aed", width=3, dash="dot"),
+                line=dict(color="#7c3aed", width=3, dash="dot") if not use_real_map else dict(color="#7c3aed", width=3),
                 hoverinfo="skip",
             )
         )
         map_fig.add_trace(
-            go.Scatter(
-                x=[merchant_lng, user_lng],
-                y=[merchant_lat, user_lat],
+            map_scatter(
+                use_real_map,
+                [merchant_lng, user_lng],
+                [merchant_lat, user_lat],
                 mode="lines",
                 name="配送段",
                 line=dict(color="#dc6803", width=3),
@@ -1089,9 +1189,10 @@ with tab_case:
             )
         )
         map_fig.add_trace(
-            go.Scatter(
-                x=[user_lng],
-                y=[user_lat],
+            map_scatter(
+                use_real_map,
+                [user_lng],
+                [user_lat],
                 mode="markers+text",
                 name="用户",
                 text=[f"用户 {user_id}"],
@@ -1100,9 +1201,10 @@ with tab_case:
             )
         )
         map_fig.add_trace(
-            go.Scatter(
-                x=rec_df["lng"],
-                y=rec_df["lat"],
+            map_scatter(
+                use_real_map,
+                rec_df["lng"],
+                rec_df["lat"],
                 mode="markers+text",
                 name="推荐商家",
                 text=rec_df["rank"].astype(int).map(lambda value: f"T{value}"),
@@ -1118,9 +1220,10 @@ with tab_case:
             )
         )
         map_fig.add_trace(
-            go.Scatter(
-                x=[merchant_lng],
-                y=[merchant_lat],
+            map_scatter(
+                use_real_map,
+                [merchant_lng],
+                [merchant_lat],
                 mode="markers+text",
                 name="下单商家",
                 text=[str(chosen_row["merchant_name"])],
@@ -1129,9 +1232,10 @@ with tab_case:
             )
         )
         map_fig.add_trace(
-            go.Scatter(
-                x=[rider_lng],
-                y=[rider_lat],
+            map_scatter(
+                use_real_map,
+                [rider_lng],
+                [rider_lat],
                 mode="markers+text",
                 name="匹配骑手",
                 text=[str(rider_point["rider_id"])],
@@ -1141,36 +1245,15 @@ with tab_case:
         )
         focus_lng = [user_lng, merchant_lng, rider_lng] + rec_df["lng"].dropna().astype(float).tolist()
         focus_lat = [user_lat, merchant_lat, rider_lat] + rec_df["lat"].dropna().astype(float).tolist()
-        focus_lng += nearby_users["lng"].dropna().astype(float).tolist()
-        focus_lat += nearby_users["lat"].dropna().astype(float).tolist()
-        focus_lng += nearby_merchants["lng"].dropna().astype(float).tolist()
-        focus_lat += nearby_merchants["lat"].dropna().astype(float).tolist()
-        focus_lng += nearby_riders["lng"].dropna().astype(float).tolist()
-        focus_lat += nearby_riders["lat"].dropna().astype(float).tolist()
         focus_lng += rider_candidates["lng"].dropna().astype(float).tolist()
         focus_lat += rider_candidates["lat"].dropna().astype(float).tolist()
-        map_fig.update_layout(
-            title="当前订单附近的用户、商家和骑手",
-            height=430,
-            margin=dict(l=8, r=8, t=52, b=8),
-            plot_bgcolor="#f6f8fb",
-            paper_bgcolor="#ffffff",
-            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0, font=dict(size=10, color="#111827")),
-            dragmode="pan",
-        )
-        map_fig.update_xaxes(
-            visible=False,
-            showgrid=False,
-            zeroline=False,
-            range=viewport_range(focus_lng),
-        )
-        map_fig.update_yaxes(
-            visible=False,
-            showgrid=False,
-            zeroline=False,
-            range=viewport_range(focus_lat),
-            scaleanchor="x",
-            scaleratio=1,
+        apply_map_layout(
+            map_fig,
+            use_real_map,
+            focus_lng,
+            focus_lat,
+            title="当前订单附近的用户、商家和骑手（真实城市底图）" if use_real_map else "当前订单附近的用户、商家和骑手",
+            height=460,
         )
         st.plotly_chart(map_fig, use_container_width=True)
 
@@ -1341,6 +1424,105 @@ with tab_peak:
                 match_rows = trace_df[
                     trace_df["step_matches_json"].fillna("").astype(str).str.len().gt(2)
                 ].copy()
+                if not match_rows.empty and use_real_map:
+                    st.subheader("配送地图回放（真实城市底图）")
+                    st.caption(
+                        "拖动时间步查看该策略在高峰期的派单演化：橙色菱形为商家、蓝色圆点为用户、"
+                        "骑手颜色随负载加深，紫色线为取餐段、橙色线为配送段。"
+                    )
+                    anim_policies = sorted(match_rows["policy"].astype(str).unique().tolist())
+                    anim_c1, anim_c2 = st.columns([1.2, 2])
+                    with anim_c1:
+                        anim_policy = st.selectbox("回放策略", anim_policies, key="peak_anim_policy")
+                    policy_rows = match_rows[match_rows["policy"].astype(str) == anim_policy]
+                    anim_steps = sorted(policy_rows["step"].dropna().astype(int).unique().tolist())
+                    with anim_c2:
+                        anim_step = st.select_slider("时间步（分钟）", options=anim_steps, value=anim_steps[-1], key="peak_anim_step")
+                    anim_row = policy_rows[policy_rows["step"].astype(int) == int(anim_step)].iloc[-1]
+                    try:
+                        anim_matches = json.loads(str(anim_row.get("step_matches_json", "[]")))
+                    except (TypeError, ValueError):
+                        anim_matches = []
+                    if anim_matches:
+                        anim_df = pd.DataFrame(anim_matches)
+                        anim_fig = go.Figure()
+                        for _, match in anim_df.iterrows():
+                            anim_fig.add_trace(
+                                go.Scattermap(
+                                    lon=[match["rider_lng"], match["merchant_lng"]],
+                                    lat=[match["rider_lat"], match["merchant_lat"]],
+                                    mode="lines",
+                                    line=dict(color="#7c3aed", width=2),
+                                    hoverinfo="skip",
+                                    showlegend=False,
+                                )
+                            )
+                            anim_fig.add_trace(
+                                go.Scattermap(
+                                    lon=[match["merchant_lng"], match["user_lng"]],
+                                    lat=[match["merchant_lat"], match["user_lat"]],
+                                    mode="lines",
+                                    line=dict(color="#dc6803", width=2),
+                                    hoverinfo="skip",
+                                    showlegend=False,
+                                )
+                            )
+                        anim_fig.add_trace(
+                            go.Scattermap(
+                                lon=anim_df["merchant_lng"],
+                                lat=anim_df["merchant_lat"],
+                                mode="markers",
+                                name="商家",
+                                text=anim_df["merchant_name"].astype(str),
+                                marker=dict(size=13, color="#dc6803"),
+                                hovertemplate="%{text}",
+                            )
+                        )
+                        anim_fig.add_trace(
+                            go.Scattermap(
+                                lon=anim_df["user_lng"],
+                                lat=anim_df["user_lat"],
+                                mode="markers",
+                                name="用户",
+                                text=anim_df["user_id"].astype(str),
+                                marker=dict(size=11, color="#2563eb"),
+                                hovertemplate="用户 %{text}",
+                            )
+                        )
+                        anim_fig.add_trace(
+                            go.Scattermap(
+                                lon=anim_df["rider_lng"],
+                                lat=anim_df["rider_lat"],
+                                mode="markers",
+                                name="骑手",
+                                text=anim_df["rider_id"].astype(str),
+                                customdata=anim_df[["rider_load", "eta"]].to_numpy(),
+                                marker=dict(
+                                    size=13,
+                                    color=pd.to_numeric(anim_df["rider_load"], errors="coerce").fillna(0),
+                                    colorscale=[[0, "#c4b5fd"], [1, "#4c1d95"]],
+                                ),
+                                hovertemplate="骑手 %{text} | 负载 %{customdata[0]} | ETA %{customdata[1]:.1f} min",
+                            )
+                        )
+                        anim_lng = (
+                            anim_df["merchant_lng"].tolist() + anim_df["user_lng"].tolist() + anim_df["rider_lng"].tolist()
+                        )
+                        anim_lat = (
+                            anim_df["merchant_lat"].tolist() + anim_df["user_lat"].tolist() + anim_df["rider_lat"].tolist()
+                        )
+                        apply_map_layout(
+                            anim_fig,
+                            True,
+                            anim_lng,
+                            anim_lat,
+                            title=f"{anim_policy} · 第 {anim_step} 步的批量派单",
+                            height=480,
+                        )
+                        st.plotly_chart(anim_fig, use_container_width=True)
+                    else:
+                        st.info("该时间步没有可回放的匹配记录。")
+
                 if not match_rows.empty:
                     st.subheader("仿真策略相对位置")
                     match_steps = sorted(match_rows["step"].dropna().astype(int).unique().tolist())

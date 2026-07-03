@@ -747,3 +747,144 @@ def build_peak_trace(
             )
 
     return pd.DataFrame(rows)
+
+
+def top_dishes_for_user(data: PreparedData, user_id: str, merchant_id: str, k: int = 6) -> pd.DataFrame:
+    """商家菜品(SPU)级推荐：按菜品在该商家的历史销量排序，并标注与用户口味类目的契合。
+
+    TRD 菜品名称与类目均为匿名化编号，展示时保留编号、价格与销量证据。
+    """
+    columns = ["菜品", "类目", "价格", "历史销量", "契合用户口味"]
+    if data.order_spus_train.empty or data.spus.empty:
+        return pd.DataFrame(columns=columns)
+    order_spus = data.order_spus_train
+    merchant_spus = order_spus[order_spus["wm_poi_id"].astype(str) == str(merchant_id)]
+    if merchant_spus.empty:
+        return pd.DataFrame(columns=columns)
+    counts = merchant_spus.groupby("wm_food_spu_id").size().rename("sales")
+    spus = data.spus.copy()
+    spus["wm_food_spu_id"] = spus["wm_food_spu_id"].astype(str)
+    counts.index = counts.index.astype(str)
+    joined = spus.set_index("wm_food_spu_id").join(counts, how="inner")
+    if joined.empty:
+        return pd.DataFrame(columns=columns)
+
+    user_spus = order_spus[order_spus["user_id"].astype(str) == str(user_id)]
+    user_categories: set[str] = set()
+    if not user_spus.empty and "category" in spus.columns:
+        user_joined = user_spus.merge(
+            data.spus[["wm_food_spu_id", "category"]], on="wm_food_spu_id", how="left"
+        ).dropna(subset=["category"])
+        user_categories = set(user_joined["category"].astype(str).value_counts().head(3).index)
+
+    joined = joined.sort_values("sales", ascending=False).head(max(k * 3, k))
+    joined["match"] = joined.get("category", pd.Series(index=joined.index, dtype=str)).astype(str).isin(user_categories)
+    joined = joined.sort_values(["match", "sales"], ascending=[False, False]).head(k)
+    return pd.DataFrame(
+        {
+            "菜品": ["菜品 " + str(idx) for idx in joined.index],
+            "类目": joined.get("category", "").astype(str),
+            "价格": pd.to_numeric(joined.get("price", np.nan), errors="coerce").round(1),
+            "历史销量": joined["sales"].astype(int),
+            "契合用户口味": joined["match"].map({True: "是", False: ""}),
+        }
+    ).reset_index(drop=True)
+
+
+def merchant_supply_pressure(data: PreparedData, merchant_row: pd.Series, period: str = "lunch") -> dict[str, object]:
+    """商家供给压力评估：需求分位 × 高峰倍率 vs 供给能力，输出爆单风险与品类配额建议。"""
+    order_counts = pd.to_numeric(data.merchants["order_count"], errors="coerce").fillna(0)
+    merchant_orders = float(merchant_row.get("order_count", 0) or 0)
+    demand_percentile = float((order_counts <= merchant_orders).mean())
+    peak_multiplier = 1.6 if period in {"lunch", "dinner"} else 1.0
+    capacity = supply_score_for_merchant(merchant_row)
+    pressure = demand_percentile * peak_multiplier * (1.0 - 0.5 * capacity)
+    if pressure >= 1.15:
+        risk_level, risk_advice = "高", "高峰时段接近产能上限：建议限流爆款、预告出餐延迟或临时增加出餐位。"
+    elif pressure >= 0.75:
+        risk_level, risk_advice = "中", "高峰需求明显：建议提前备货热销品类，压缩低销菜品的现做占比。"
+    else:
+        risk_level, risk_advice = "低", "当前供给余量充足，可承接推荐系统带来的额外曝光。"
+
+    quota = pd.DataFrame()
+    if not data.order_spus_train.empty and "category" in data.spus.columns:
+        merchant_spus = data.order_spus_train[
+            data.order_spus_train["wm_poi_id"].astype(str) == str(merchant_row.get("wm_poi_id"))
+        ]
+        if not merchant_spus.empty:
+            categories = merchant_spus.merge(
+                data.spus[["wm_food_spu_id", "category"]], on="wm_food_spu_id", how="left"
+            ).dropna(subset=["category"])
+            if not categories.empty:
+                share = categories["category"].astype(str).value_counts(normalize=True).head(6)
+                quota = pd.DataFrame(
+                    {
+                        "品类": share.index,
+                        "受欢迎度": (share * 100).round(1).astype(str) + "%",
+                        "建议供给配额": (share * peak_multiplier * 100).clip(upper=100).round(0).astype(int).astype(str) + "%",
+                    }
+                )
+    return {
+        "demand_percentile": demand_percentile,
+        "peak_multiplier": peak_multiplier,
+        "capacity_score": capacity,
+        "pressure": float(pressure),
+        "risk_level": risk_level,
+        "risk_advice": risk_advice,
+        "category_quota": quota,
+        "expected_peak_orders": float(merchant_orders / max(len(data.orders_train), 1) * 1000 * peak_multiplier),
+    }
+
+
+def enroute_opportunities(
+    data: PreparedData,
+    rider_row: pd.Series,
+    merchant_row: pd.Series,
+    user_row: pd.Series,
+    period: str = "lunch",
+    k: int = 5,
+    candidate_pool: int = 60,
+) -> pd.DataFrame:
+    """骑手顺路单推荐：给定当前配送路径（骑手→商家→用户），评估附近商家新单的边际绕行成本。"""
+    from .rider_sim import route_insertion_cost
+
+    columns = ["商家", "距路径中点", "边际绕行", "顺路评级"]
+    rider = rider_row.copy()
+    rider["route"] = [
+        {"kind": "pickup", "lng": float(merchant_row.get("lng", 0.0)), "lat": float(merchant_row.get("lat", 0.0)), "order_id": "current"},
+        {"kind": "dropoff", "lng": float(user_row.get("lng", 0.0)), "lat": float(user_row.get("lat", 0.0)), "order_id": "current"},
+    ]
+    mid_lng = (float(merchant_row.get("lng", 0.0)) + float(user_row.get("lng", 0.0))) / 2
+    mid_lat = (float(merchant_row.get("lat", 0.0)) + float(user_row.get("lat", 0.0))) / 2
+    merchants = data.merchants.copy()
+    merchants["lng"] = pd.to_numeric(merchants["lng"], errors="coerce")
+    merchants["lat"] = pd.to_numeric(merchants["lat"], errors="coerce")
+    merchants = merchants.dropna(subset=["lng", "lat"])
+    merchants["mid_distance"] = merchants.apply(
+        lambda row: haversine_km(float(row["lng"]), float(row["lat"]), mid_lng, mid_lat), axis=1
+    )
+    nearby = merchants[merchants["wm_poi_id"].astype(str) != str(merchant_row.get("wm_poi_id"))]
+    nearby = nearby.nsmallest(candidate_pool, "mid_distance")
+
+    rows = []
+    for _, candidate in nearby.iterrows():
+        # 假设新单的送达点在候选商家常见配送半径内（用用户当前位置方向近似）。
+        pseudo_user = pd.Series({"lng": float(user_row.get("lng", 0.0)), "lat": float(user_row.get("lat", 0.0))})
+        cost = route_insertion_cost(rider, candidate, pseudo_user, period)
+        if cost is None:
+            continue
+        rows.append(
+            {
+                "商家": merchant_display_name(candidate),
+                "距路径中点": f"{candidate['mid_distance']:.2f} km",
+                "边际绕行": f"+{cost['detour']:.1f} min",
+                "_detour": cost["detour"],
+            }
+        )
+    if not rows:
+        return pd.DataFrame(columns=columns)
+    frame = pd.DataFrame(rows).sort_values("_detour").head(k)
+    frame["顺路评级"] = pd.cut(
+        frame["_detour"], bins=[-1, 8, 15, float("inf")], labels=["顺路", "小幅绕行", "明显绕行"]
+    ).astype(str)
+    return frame.drop(columns=["_detour"]).reset_index(drop=True)
