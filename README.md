@@ -254,21 +254,23 @@ make notebooklm-pack
 
 当前提交的结果已经使用完整 TRD `orders_train.txt`，数据审计显示原始训练订单 `1,068,495` 条，处理后训练订单 `1,068,495` 条，训练订单使用比例 `1.0000`。
 
-离线推荐中，`Seq-Tuned` 的 Recall@20 最高，为 `0.4675`，NDCG@20 为 `0.3652`，HitRate@20 为 `0.6267`，并取得最高 ExploreRecall@20 `0.1246`。`LightGBM-LTR` 的 Recall@20 为 `0.4424`，Coverage@20 为 `0.4345`，Exposure Gini 降到 `0.7942`，ExploreRecall@20 为 `0.0974`，说明默认评估中已经包含真正训练出来的学习排序。归一化后的 `Seq-xQuAD-Tripartite` 的 Recall@20 为 `0.4180`，NDCG@20 为 `0.3439`，把商家公平、ETA、供给分和列表级覆盖纳入同一套重排。
+离线推荐中，`Seq-Tuned` 的 Recall@10 最高，为 `0.4187`（NDCG@10 `0.3504`，HitRate@10 `0.5800`），代表纯用户侧准确率前沿。三方系列中 `KG-Tripartite` 表现最好：Recall@10 `0.4136`、NDCG@10 `0.3429`、HitRate@10 `0.5700`，在保留商家公平、ETA 和供给分量的同时几乎追平纯精度导向的序列模型；`Seq-xQuAD-Tripartite` 与 `Session-SPU-Tripartite` 的 Recall@10 均为 `0.3987`。
 
-动态履约仿真中，`Session-SPU-Tripartite + Greedy` 取得最低平均 ETA、最低超时率和最高平台综合效用；在同一批 91 个订单上，批量三方匹配相较逐单版本进一步降低 ETA 和超时率：
+动态履约仿真采用 10 个随机种子重复运行，报告均值与 95% 置信区间（完整 `_std`/`_ci95` 列见 `outputs/results/simulation_metrics.csv`）。`KG-Tripartite + Batch` 在平均 ETA、超时率和平台综合效用上全面领先：
 
-| 策略 | Avg ETA | Timeout Rate | Platform Utility |
+| 策略 | Avg ETA (±CI95) | Timeout Rate (±CI95) | Platform Utility (±CI95) |
 |---|---:|---:|---:|
-| Popular + Nearest | 89.68 | 0.8025 | 0.3218 |
-| UserOnly + MinETA | 52.14 | 0.6897 | 0.4060 |
-| Seq-Tuned + MinETA | 50.51 | 0.6163 | 0.4205 |
-| LightGBM-LTR + MinETA | 53.96 | 0.6854 | 0.3903 |
-| Seq-xQuAD-Tripartite + Greedy | 49.33 | 0.5604 | 0.4568 |
-| Seq-xQuAD-Tripartite + Batch | 48.32 | 0.5275 | 0.4581 |
-| Session-SPU-Tripartite + Greedy | 46.47 | 0.4941 | 0.4694 |
+| Popular + Nearest | 81.76 ±4.00 | 0.782 ±0.023 | 0.330 ±0.007 |
+| UserOnly + MinETA | 50.05 ±1.54 | 0.593 ±0.046 | 0.446 ±0.014 |
+| Seq-Tuned + MinETA | 49.32 ±1.33 | 0.568 ±0.043 | 0.455 ±0.015 |
+| Logistic-LTR + MinETA | 50.59 ±1.13 | 0.605 ±0.035 | 0.445 ±0.012 |
+| Seq-xQuAD-Tripartite + Greedy | 46.91 ±1.27 | 0.482 ±0.043 | 0.481 ±0.015 |
+| Seq-xQuAD-Tripartite + Batch | 45.95 ±1.30 | 0.442 ±0.052 | 0.487 ±0.017 |
+| Session-SPU-Tripartite + Greedy | 46.88 ±1.27 | 0.465 ±0.043 | 0.494 ±0.007 |
+| Session-SPU-Tripartite + Batch | 45.94 ±1.11 | 0.456 ±0.045 | 0.490 ±0.010 |
+| KG-Tripartite + Batch | 45.08 ±1.13 | 0.417 ±0.043 | 0.497 ±0.009 |
 
-结论不是“单一模型在所有指标上最优”，而是：`Seq-Tuned` 取得最强离线推荐准确性；`LightGBM-LTR` 展示学习排序和覆盖改善；三方匹配改善履约；`Session-SPU-Tripartite` 进一步利用训练期会话与菜品信号取得当前最高平台效用。
+结论不是“单一模型在所有指标上最优”，而是：`Seq-Tuned` 取得最强离线推荐准确性；`LightGBM/Logistic-LTR` 展示学习排序路线；三方重排 + 批量二分图匹配系统性改善履约（三方系列相对纯用户侧策略的 ETA/超时率差距大于 95% 置信区间）；`KG-Tripartite` 在此之上叠加知识图谱兴趣信号，取得当前最优的履约与平台效用组合。
 
 ## 图表示例
 
