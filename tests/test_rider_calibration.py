@@ -1,6 +1,11 @@
 import pandas as pd
 
-from foodflow.rider_data import RiderCalibration, adapt_calibration_for_food_delivery, estimate_rider_calibration
+from foodflow.rider_data import (
+    RiderCalibration,
+    adapt_calibration_for_food_delivery,
+    calibration_diagnostics,
+    estimate_rider_calibration,
+)
 from foodflow.rider_sim import generate_riders
 from foodflow.data import PreparedData
 from foodflow.mock_data import make_mock_trd
@@ -213,6 +218,60 @@ def test_run_simulation_accepts_rider_calibration(tmp_path):
     assert not result.empty
     assert "rider_speed_kmph" in result.columns
     assert result["rider_speed_kmph"].gt(0).all()
+
+
+def _make_tasks(durations: list[float]) -> pd.DataFrame:
+    return pd.DataFrame(
+        [
+            {
+                "courier_id": f"r{i % 3}",
+                "accept_time": i * 10,
+                "finish_time": i * 10 + duration,
+                "pickup_lng": 116.400 + 0.001 * i,
+                "pickup_lat": 39.900,
+                "delivery_lng": 116.400 + 0.001 * i + 0.03,
+                "delivery_lat": 39.920,
+            }
+            for i, duration in enumerate(durations)
+        ]
+    )
+
+
+def test_reliability_uses_explicit_sla_threshold_not_sample_quantile():
+    fast = estimate_rider_calibration(_make_tasks([20.0] * 12), sla_minutes=45.0)
+    slow = estimate_rider_calibration(_make_tasks([80.0] * 12), sla_minutes=45.0)
+
+    # 相对样本分位数定义的准时率恒等于分位点，快慢车队会得到相同 reliability；
+    # 相对显式 SLA 定义时，全部超时的车队必须得到更低的 reliability。
+    assert fast.reliability_mean > slow.reliability_mean
+    assert slow.reliability_mean == 0.72
+
+
+def test_calibration_diagnostics_reports_provenance_and_ks():
+    tasks = _make_tasks([18.0, 22.0, 25.0, 30.0, 35.0, 40.0, 44.0, 50.0, 55.0, 60.0, 28.0, 33.0])
+    raw = estimate_rider_calibration(tasks)
+    applied = adapt_calibration_for_food_delivery(raw)
+
+    diagnostics = calibration_diagnostics(tasks, applied, raw=raw, profile="food-scaled", seed=7)
+
+    assert diagnostics["profile"] == "food-scaled"
+    assert diagnostics["parameter_provenance"]["speed_kmph"] == "food-delivery-default"
+    assert diagnostics["parameter_provenance"]["initial_load_lambda"] == "task-data-derived"
+    assert diagnostics["empirical"]["task_duration_minutes"]["n"] == 12
+    duration_fit = diagnostics["lognormal_fit"]["task_duration_minutes"]
+    assert duration_fit is not None and 0.0 <= duration_fit["ks_statistic"] <= 1.0
+    speed_ks = diagnostics["simulation_vs_data_ks"]["speed_kmph"]
+    assert speed_ks is not None and 0.0 <= speed_ks["ks_statistic"] <= 1.0
+
+
+def test_calibration_diagnostics_raw_profile_marks_speed_as_data_derived():
+    tasks = _make_tasks([18.0, 22.0, 25.0, 30.0, 35.0, 40.0, 44.0, 50.0, 55.0, 60.0, 28.0, 33.0])
+    raw = estimate_rider_calibration(tasks)
+
+    diagnostics = calibration_diagnostics(tasks, raw, profile="raw", seed=7)
+
+    assert diagnostics["parameter_provenance"]["speed_kmph"] == "task-data-derived"
+    assert diagnostics["parameter_provenance"]["service_minutes"] == "task-data-derived"
 
 
 def test_food_delivery_profile_rescales_lade_like_calibration():

@@ -12,6 +12,7 @@ from .data import PreparedData
 from .metrics import gini
 from .recommenders import (
     PopularRecommender,
+    KGTripartiteRecommender,
     SessionSpuTripartiteRecommender,
     SeqTunedRecommender,
     SeqXQuadTripartiteRecommender,
@@ -57,6 +58,13 @@ DEFAULT_POLICIES = [
         fairness=True,
     ),
     SimulationPolicy("Session-SPU-Tripartite + Greedy", "session_spu_tripartite", "load_aware", fairness=True),
+    SimulationPolicy(
+        "KG-Tripartite + Batch",
+        "kg_tripartite",
+        "load_aware",
+        assignment_mode="batch",
+        fairness=True,
+    ),
 ]
 
 
@@ -81,6 +89,8 @@ def _select_recommender(data: PreparedData, name: str, seed: int):
         return SeqXQuadTripartiteRecommender().fit(data)
     if name == "session_spu_tripartite":
         return SessionSpuTripartiteRecommender().fit(data)
+    if name == "kg_tripartite":
+        return KGTripartiteRecommender().fit(data)
     raise ValueError(name)
 
 
@@ -297,3 +307,60 @@ def run_simulation(
             )
 
     return pd.DataFrame(results)
+
+
+def run_simulation_multi_seed(
+    data: PreparedData,
+    seeds: list[int],
+    policies: list[SimulationPolicy] | None = None,
+    requests_per_step: int = 16,
+    steps: int = 8,
+    top_k: int = 10,
+    verbose: bool = False,
+    rider_calibration: RiderCalibration | None = None,
+) -> pd.DataFrame:
+    """Run the simulation once per seed and aggregate per-policy mean/std/95% CI.
+
+    单种子结果是点估计，策略间效用差通常只有 0.01–0.05 量级，没有方差无法
+    判断显著性。输出保持单种子 schema（数值列为跨种子均值），并追加
+    <metric>_std / <metric>_ci95 / n_seeds 列，下游 figures/report 兼容读取。
+    """
+    if not seeds:
+        raise ValueError("seeds must be a non-empty list")
+    runs = []
+    for run_index, seed in enumerate(seeds, start=1):
+        if verbose:
+            print(f"[simulate] seed {run_index}/{len(seeds)} (seed={seed})", flush=True)
+        frame = run_simulation(
+            data,
+            policies=policies,
+            seed=seed,
+            requests_per_step=requests_per_step,
+            steps=steps,
+            top_k=top_k,
+            verbose=verbose,
+            rider_calibration=rider_calibration,
+        )
+        runs.append(frame.assign(seed=seed))
+    stacked = pd.concat(runs, ignore_index=True)
+
+    numeric_columns = [
+        column
+        for column in stacked.columns
+        if column not in {"seed"} and pd.api.types.is_numeric_dtype(stacked[column])
+    ]
+    identity_columns = [column for column in stacked.columns if column not in numeric_columns and column != "seed"]
+
+    rows = []
+    for policy_name in stacked["policy"].drop_duplicates():
+        group = stacked[stacked["policy"] == policy_name]
+        row = {column: group.iloc[0][column] for column in identity_columns}
+        row["n_seeds"] = int(len(group))
+        for column in numeric_columns:
+            values = group[column].to_numpy(dtype=float)
+            std = float(values.std(ddof=1)) if len(values) > 1 else 0.0
+            row[column] = float(values.mean())
+            row[f"{column}_std"] = std
+            row[f"{column}_ci95"] = float(1.96 * std / np.sqrt(len(values))) if len(values) > 1 else 0.0
+        rows.append(row)
+    return pd.DataFrame(rows)

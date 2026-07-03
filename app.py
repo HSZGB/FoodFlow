@@ -24,6 +24,7 @@ from foodflow.demo_support import (
 )
 from foodflow.frontier import POLICY_MODEL_MAP, build_tripartite_frontier
 from foodflow.recommenders import (
+    KGTripartiteRecommender,
     PopularRecommender,
     SessionSpuTripartiteRecommender,
     SeqTunedRecommender,
@@ -39,10 +40,22 @@ st.set_page_config(page_title="FoodFlow", layout="wide")
 
 st.title("FoodFlow 外卖推荐与配送仿真")
 st.caption("把一次下单拆开看：用户看到哪些商家，商家拿到多少曝光，订单最后派给哪位骑手。")
+st.info(
+    "**一句话主线：推荐不只是排商家——它改变订单的空间分布，进而影响骑手负载、送达时效和商家曝光。**  "
+    "演示路径：① 推荐工作台看单个用户的推荐与派单 → ② 高峰回放看策略在高峰期的整体差异 → ③ 实验结果看离线指标与三方权衡。  "
+    "三方策略在保持推荐命中的同时降低超时率、拉平商家曝光；KG-Tripartite 额外叠加知识图谱兴趣路径，可给出图谱化推荐解释。"
+)
 
 LEARNED_LTR_MODEL = learned_ltr_model_name()
 LEARNED_LTR_POLICY = f"{LEARNED_LTR_MODEL} + MinETA"
-DEMO_STRATEGIES = ["UserOnly", "Seq-Tuned", LEARNED_LTR_MODEL, "Seq-xQuAD-Tripartite", "Session-SPU-Tripartite"]
+DEMO_STRATEGIES = [
+    "UserOnly",
+    "Seq-Tuned",
+    LEARNED_LTR_MODEL,
+    "Seq-xQuAD-Tripartite",
+    "Session-SPU-Tripartite",
+    "KG-Tripartite",
+]
 PEAK_POLICIES = [
     "Popular + Nearest",
     "UserOnly + MinETA",
@@ -51,6 +64,7 @@ PEAK_POLICIES = [
     "Seq-xQuAD-Tripartite + Greedy",
     "Session-SPU-Tripartite + Greedy",
     "Session-SPU-Tripartite + Batch",
+    "KG-Tripartite + Batch",
 ]
 
 processed_dir = Path("data/processed")
@@ -114,6 +128,7 @@ def load_model(strategy: str, data_key: str, _data: PreparedData) -> object:
         LEARNED_LTR_MODEL: lambda: build_learned_ltr_recommender(seed=42),
         "Seq-xQuAD-Tripartite": SeqXQuadTripartiteRecommender,
         "Session-SPU-Tripartite": SessionSpuTripartiteRecommender,
+        "KG-Tripartite": KGTripartiteRecommender,
     }
     return factories[strategy]().fit(_data)
 
@@ -144,6 +159,11 @@ def load_peak_trace(
             "load_aware",
             "batch",
         ),
+        "KG-Tripartite + Batch": (
+            load_model("KG-Tripartite", data_key, _data),
+            "load_aware",
+            "batch",
+        ),
     }
     policies = {name: all_policies[name] for name in PEAK_POLICIES}
     return build_peak_trace(
@@ -164,6 +184,7 @@ DEMO_COLORS = {
     "Seq-xQuAD-Tripartite + Greedy": "#F97316",
     "Seq-xQuAD-Tripartite": "#B5121B",
     "Session-SPU-Tripartite": "#0F766E",
+    "KG-Tripartite": "#9D174D",
     "UserOnly": "#2563EB",
 }
 
@@ -222,6 +243,12 @@ def algorithm_focus(model_name: str) -> dict[str, str]:
             "focus": "会话和菜品增强",
             "reason": "在三方重排基础上加入训练期点击会话与用户/商家的 SPU 菜品类目重合。",
             "display": "重点展示会话点击、SPU 菜品类目匹配和履约 ETA。",
+        }
+    if model_name == "KG-Tripartite":
+        return {
+            "focus": "知识图谱兴趣路径",
+            "reason": "在会话/SPU 三方重排之上，叠加用户对品类、商圈、价位等图谱节点的时间衰减兴趣，与商家属性做关系加权匹配（完整动态 KG 注意力模型见 kg-demo 模块）。",
+            "display": "重点展示图谱路径解释（品类/区域/价位）与推荐命中的关系。",
         }
     return {"focus": "推荐模型", "reason": "按当前离线指标展示。", "display": "关注 Recall、NDCG 和覆盖率。"}
 
@@ -576,9 +603,26 @@ with st.sidebar:
         index=DEMO_STRATEGIES.index("Seq-xQuAD-Tripartite"),
     )
     top_k = st.slider("推荐数量", min_value=8, max_value=20, value=12, step=1)
+    preheat_clicked = st.button("预热演示缓存（全部策略 + 高峰回放）", use_container_width=True)
+    st.caption("答辩前点一次：预先训练全部策略并跑一遍高峰回放，现场切换即走缓存不卡顿。")
 
 interactive_data = build_interactive_data(user_id, demo_max_orders, tuple(case_options.values()), data)
 model_data_key = f"orders={len(interactive_data.orders_train)};user={user_id};max={demo_max_orders}"
+
+if preheat_clicked:
+    preheat_progress = st.progress(0.0, text="正在预热演示缓存...")
+    for preheat_index, preheat_name in enumerate(DEMO_STRATEGIES, start=1):
+        preheat_progress.progress(
+            preheat_index / (len(DEMO_STRATEGIES) + 1),
+            text=f"预热推荐策略 {preheat_index}/{len(DEMO_STRATEGIES)}：{preheat_name}",
+        )
+        load_model(preheat_name, model_data_key, interactive_data)
+    preheat_progress.progress(
+        len(DEMO_STRATEGIES) / (len(DEMO_STRATEGIES) + 1),
+        text="预热高峰回放（默认 16 步 × 每步 8 单）...",
+    )
+    load_peak_trace(model_data_key, top_k, 16, 8, interactive_data)
+    preheat_progress.progress(1.0, text="预热完成，策略对比与高峰回放已缓存。")
 if len(interactive_data.orders_train) < len(data.orders_train):
     st.caption(
         f"交互推荐模型使用 {len(interactive_data.orders_train):,} 条训练订单；实验页读取离线评估与履约仿真输出。"
@@ -606,8 +650,14 @@ if not rec_df.empty:
     top_row = rec_df.iloc[0]
     avg_eta = float(rec_df["eta_minutes"].mean())
     avg_fairness = float(rec_df["fairness"].mean())
-    strategy_caption = "会话/SPU、曝光与履约" if strategy_name == "Session-SPU-Tripartite" else (
-        "用户偏好、曝光与履约" if "Tripartite" in strategy_name else "用户偏好与排序分"
+    strategy_caption = (
+        "图谱兴趣、曝光与履约"
+        if strategy_name == "KG-Tripartite"
+        else "会话/SPU、曝光与履约"
+        if strategy_name == "Session-SPU-Tripartite"
+        else "用户偏好、曝光与履约"
+        if "Tripartite" in strategy_name
+        else "用户偏好与排序分"
     )
     summary_cols = st.columns(5)
     with summary_cols[0]:

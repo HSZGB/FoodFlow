@@ -6,11 +6,12 @@
 
 ## 项目亮点
 
-- 用户侧推荐：默认实验包含 Popular、BPR-MF、UserOnly、Seq-Tuned、LightGBM/Logistic-LTR、Seq-xQuAD-Tripartite 和 Session-SPU-Tripartite。
+- 用户侧推荐：默认实验包含 Popular、BPR-MF、UserOnly、Seq-Tuned、LightGBM/Logistic-LTR、Seq-xQuAD-Tripartite、Session-SPU-Tripartite 和 KG-Tripartite。
 - 商家侧公平：在重排中引入商家曝光公平、长尾曝光与 Exposure Gini 等指标。
 - 骑手侧履约：比较最近骑手、最小 ETA、负载感知逐单派单和容量槽位批量最大权匹配，并支持外部任务数据校准参数。
 - 动态仿真：模拟午餐高峰多时间步请求，持续更新骑手状态和订单履约结果。
-- 轻量 KG 解释：从历史下单、品类、区域和价格段构造路径证据，解释推荐原因。
+- 知识图谱融合：`KG-Tripartite` 在三方重排之上叠加时间衰减的图谱兴趣信号（品类/商圈/价位节点的关系加权匹配），并从历史下单、品类、区域和价格段构造路径证据解释推荐原因；完整的动态 KG 注意力模型（torch 实现与 GPU 实验）见 `kg-demo/` 子项目。
+- 统计严谨性：`simulate --simulation-seeds` 输出多种子均值与 95% 置信区间；`--rider-tasks` 校准同时产出分布诊断 JSON（对数正态拟合 + KS 检验 + 逐参数来源标注）。
 - 多指标评估：同时输出 Recall、NDCG、MRR、HitRate、Repeat/Explore Recall、Coverage、Exposure Gini、Avg ETA、Timeout Rate、Rider Load Std、Platform Utility。
 - 工程闭环：提供 Makefile、CLI、测试、图表、实验报告、Streamlit demo 和 NotebookLM PPT 素材包。
 
@@ -79,6 +80,7 @@ outputs/             # 指标 CSV 与图表
 report/              # 实验报告
 ppt/notebooklm/      # NotebookLM PPT 生成素材包
 tests/               # 单元测试与集成 smoke 测试
+kg-demo/             # 动态知识图谱注意力推荐子项目（torch 训练版 + 网页 demo + GPU 实验结果）
 ```
 
 ## 快速开始
@@ -280,7 +282,7 @@ make notebooklm-pack
 
 - 骑手数据默认为合成 proxy；如提供 LaDe delivery CSV，可校准速度、服务时长和负载分布，但 LaDe 仍不能替代真实外卖派单数据。
 - BPR-MF 是轻量实现，未追求大规模深度模型最优性能。
-- 项目实现的是轻量 KG 路径解释，没有实现 LightGCN、KGAT 或完整知识图谱训练模型，这些作为调研背景和后续增强方向。
+- 主管线的 `KG-Tripartite` 是免训练的图谱兴趣近似（时间衰减 + 关系加权匹配）；完整的动态 KG 注意力模型、LightGCN 等训练版实现与 GPU 实验结果在 `kg-demo/` 子项目中（`kg-demo/src/`、`kg-demo/outputs/`），两者共用 TRD 数据、叙事上互为轻量/深度版本。
 - 平台效用权重是课程项目中的解释性设置，后续可做权重敏感性分析。
 - 当前三方优化采用“推荐重排 + 下单后骑手匹配”的解耦闭环，不是工业级端到端联合调度系统。
 

@@ -102,6 +102,8 @@
 
 注意：PPT skill 明确要求审批门禁。未获得大纲、风格、后端和样张确认前，不创建最终 `deck_spec.json`、`speech.md`、slide images 或 `.pptx`。
 
+现状：7 分钟答辩版 deck 已存在于 `outputs/foodflow_7min_defense.pptx`（对应大纲 `ppt/FoodFlow/outline_7min.md`、讲稿与操作指引 `docs/PRESENTATION_DEMO_GUIDE.md`）；上面的审批门禁条目针对正式流程版 deck，是否走完由课程组自行决定。
+
 ### 阶段 7：总验收
 
 - [x] `make smoke` 通过。

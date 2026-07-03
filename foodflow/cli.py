@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 from pathlib import Path
 
 import pandas as pd
@@ -14,8 +15,8 @@ from .figures import generate_figures
 from .mock_data import make_mock_trd
 from .preprocess import preprocess
 from .report import build_report
-from .rider_data import adapt_calibration_for_food_delivery, estimate_rider_calibration
-from .simulator import run_simulation
+from .rider_data import adapt_calibration_for_food_delivery, calibration_diagnostics, estimate_rider_calibration
+from .simulator import run_simulation, run_simulation_multi_seed
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -60,6 +61,19 @@ def build_parser() -> argparse.ArgumentParser:
         choices=["raw", "food-scaled"],
         default="raw",
         help="Use raw external-task calibration, or keep LaDe load/reliability while rescaling speed/service time to food-delivery SLA.",
+    )
+    p.add_argument(
+        "--calibration-output",
+        type=Path,
+        default=None,
+        help="Where to write calibration diagnostics JSON (defaults to <output stem>_calibration.json when --rider-tasks is set).",
+    )
+    p.add_argument(
+        "--simulation-seeds",
+        type=int,
+        nargs="+",
+        default=None,
+        help="Run the simulation once per seed and aggregate mean/std/95%% CI per policy (overrides --seed).",
     )
 
     p = sub.add_parser("figures")
@@ -107,10 +121,32 @@ def main(argv: list[str] | None = None) -> None:
         data = PreparedData.load(args.processed_dir)
         rider_calibration = None
         if args.rider_tasks:
-            rider_calibration = estimate_rider_calibration(pd.read_csv(args.rider_tasks))
+            tasks = pd.read_csv(args.rider_tasks)
+            raw_calibration = estimate_rider_calibration(tasks)
+            rider_calibration = raw_calibration
             if args.rider_calibration_profile == "food-scaled":
-                rider_calibration = adapt_calibration_for_food_delivery(rider_calibration)
-        df = run_simulation(data, seed=args.seed, verbose=not args.quiet, rider_calibration=rider_calibration)
+                rider_calibration = adapt_calibration_for_food_delivery(raw_calibration)
+            diagnostics = calibration_diagnostics(
+                tasks,
+                rider_calibration,
+                raw=raw_calibration,
+                profile=args.rider_calibration_profile,
+                seed=args.seed,
+            )
+            diagnostics["source"] = str(args.rider_tasks)
+            calibration_output = args.calibration_output or args.output.with_name(f"{args.output.stem}_calibration.json")
+            calibration_output.parent.mkdir(parents=True, exist_ok=True)
+            calibration_output.write_text(json.dumps(diagnostics, indent=2, ensure_ascii=False), encoding="utf-8")
+            print(f"Calibration diagnostics written to {calibration_output}")
+        if args.simulation_seeds:
+            df = run_simulation_multi_seed(
+                data,
+                seeds=args.simulation_seeds,
+                verbose=not args.quiet,
+                rider_calibration=rider_calibration,
+            )
+        else:
+            df = run_simulation(data, seed=args.seed, verbose=not args.quiet, rider_calibration=rider_calibration)
         args.output.parent.mkdir(parents=True, exist_ok=True)
         df.to_csv(args.output, index=False)
         print(df.to_string(index=False))

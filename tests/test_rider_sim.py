@@ -106,3 +106,31 @@ def test_generated_riders_include_operational_fields():
     riders = generate_riders(merchants, n_riders=4, seed=7)
     assert {"speed_kmph", "service_radius_km", "acceptance_rate"}.issubset(riders.columns)
     assert riders["acceptance_rate"].between(0.0, 1.0).all()
+
+
+def test_run_simulation_multi_seed_aggregates_mean_and_ci(tmp_path):
+    from foodflow.data import PreparedData
+    from foodflow.mock_data import make_mock_trd
+    from foodflow.preprocess import preprocess
+    from foodflow.simulator import DEFAULT_POLICIES, run_simulation_multi_seed
+
+    raw = tmp_path / "raw"
+    processed = tmp_path / "processed"
+    make_mock_trd(raw, seed=21, users=24, merchants=18, foods=42)
+    preprocess(raw, processed, sample_orders=260, seed=21)
+    data = PreparedData.load(processed)
+
+    result = run_simulation_multi_seed(
+        data,
+        seeds=[1, 2, 3],
+        policies=DEFAULT_POLICIES[:2],
+        requests_per_step=4,
+        steps=2,
+        top_k=5,
+    )
+
+    assert len(result) == 2
+    assert (result["n_seeds"] == 3).all()
+    assert "avg_eta_std" in result.columns
+    assert "platform_utility_ci95" in result.columns
+    assert result["avg_eta_ci95"].ge(0).all()

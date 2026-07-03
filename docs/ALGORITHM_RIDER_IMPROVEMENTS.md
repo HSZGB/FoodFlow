@@ -79,6 +79,21 @@ python -m foodflow.cli simulate \
 
 输出表会额外包含 `rider_speed_kmph` 与 `rider_service_minutes`，便于在报告中说明仿真参数来自固定默认值还是外部数据校准。
 
+### 校准诊断（分布一致性与参数来源）
+
+传入 `--rider-tasks` 时，`simulate` 会同时写出 `<output stem>_calibration.json`（或用 `--calibration-output` 指定路径），内容包括：
+
+- `parameter_provenance`：逐参数标注来源是 `task-data-derived` 还是 `food-delivery-default`，避免"LaDe 校准"过度声称——`food-scaled` 口径下速度与服务时长是外卖默认值，只有负载与可靠性来自 LaDe；
+- `empirical`：任务时长、任务速度、接单时并发负载的样本分位数（p25/p50/p75/p95）；
+- `lognormal_fit`：对时长/速度拟合对数正态分布并做 KS 拟合优度检验（末端配送时长是重尾分布，仅取中位数会丢失信息）；
+- `simulation_vs_data_ks`：对仿真实际使用的生成分布（与 `generate_riders` 同一采样规则）抽样，与任务数据做双样本 KS 检验，把"仿真输入分布离真实数据有多远"量化写进产物。
+
+可靠性 proxy 的准时率现以显式 SLA 阈值（默认 45 分钟，与仿真超时口径一致）计算：`reliability_mean = 0.72 + 0.24 × P(任务时长 ≤ SLA)`。旧实现以样本 75 分位数为阈值，准时率按定义恒等于 0.75，与数据无关，已修正。
+
+### 多种子置信区间
+
+单种子结果是点估计，策略间平台效用差通常只有 0.01–0.05 量级。`simulate --simulation-seeds 42 43 ...` 会逐种子运行并按策略聚合，数值列输出跨种子均值，并追加 `<metric>_std` / `<metric>_ci95` / `n_seeds` 列。答辩与报告中的策略对比应引用该口径。
+
 ## 4. 答辩边界
 
 这项增强不能把 TRD 变成真实派单数据。更准确的表述是：

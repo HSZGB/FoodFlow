@@ -920,6 +920,116 @@ class SessionSpuTripartiteRecommender(SeqXQuadTripartiteRecommender):
         return components
 
 
+class KGTripartiteRecommender(SessionSpuTripartiteRecommender):
+    """Session-SPU 三方推荐器之上叠加轻量知识图谱兴趣信号。
+
+    思想来自 kg-demo（动态 KG 注意力模型）的免训练近似：用户兴趣 = 对其
+    历史商家 KG 属性（品类/商圈/价位）的时间衰减加权分布，商家由同一组
+    KG 属性刻画，kg_score 为两者在关系加权下的匹配度。torch 版的完整
+    实现与 GPU 实验结果见 kg-demo/。
+    """
+
+    name = "KG-Tripartite"
+
+    RELATION_FIELDS = {
+        "has_category": "primary_first_tag_id",
+        "located_in_area": "aor_id",
+        "has_price_range": "avg_order_price",
+    }
+
+    def __init__(
+        self,
+        user_weight: float = 0.86,
+        fairness_weight: float = 0.025,
+        eta_weight: float = 0.03,
+        supply_weight: float = 0.015,
+        diversity_weight: float = 0.12,
+        tail_weight: float = 0.04,
+        session_weight: float = 0.055,
+        spu_weight: float = 0.015,
+        kg_weight: float = 0.05,
+        kg_decay: float = 6.0,
+        relation_weights: dict[str, float] | None = None,
+    ):
+        super().__init__(
+            user_weight,
+            fairness_weight,
+            eta_weight,
+            supply_weight,
+            diversity_weight,
+            tail_weight,
+            session_weight,
+            spu_weight,
+        )
+        self.kg_weight = kg_weight
+        self.kg_decay = kg_decay
+        self.relation_weights = relation_weights or {
+            "has_category": 0.6,
+            "has_price_range": 0.25,
+            "located_in_area": 0.15,
+        }
+
+    def _merchant_kg_nodes(self, merchant: pd.Series) -> dict[str, str]:
+        from .kg import price_bucket
+
+        nodes: dict[str, str] = {}
+        category = str(merchant.get("primary_first_tag_id", "") or "").strip()
+        if category and category.lower() not in {"nan", "unknown"}:
+            nodes["has_category"] = f"category:{category}"
+        area = str(merchant.get("aor_id", "") or "").strip()
+        if area and area.lower() not in {"nan", "unknown"}:
+            nodes["located_in_area"] = f"area:{area}"
+        bucket = price_bucket(merchant.get("avg_order_price"))
+        if bucket != "price_unknown":
+            nodes["has_price_range"] = f"price:{bucket}"
+        return nodes
+
+    def fit(self, data: PreparedData) -> "KGTripartiteRecommender":
+        super().fit(data)
+        self.merchant_kg_nodes: dict[str, dict[str, str]] = {
+            str(merchant_id): self._merchant_kg_nodes(merchant)
+            for merchant_id, merchant in self.merchants.iterrows()
+        }
+
+        orders = data.orders_train[["user_id", "wm_poi_id"] + (["order_timestamp"] if "order_timestamp" in data.orders_train.columns else [])].copy()
+        orders["user_id"] = orders["user_id"].astype(str)
+        orders["wm_poi_id"] = orders["wm_poi_id"].astype(str)
+        if "order_timestamp" in orders.columns:
+            orders = orders.sort_values(["user_id", "order_timestamp"], ascending=[True, False])
+
+        self.user_kg_interests: dict[str, dict[str, dict[str, float]]] = {}
+        for user_id, group in orders.groupby("user_id", sort=False):
+            interests: dict[str, dict[str, float]] = {}
+            for position, merchant_id in enumerate(group["wm_poi_id"]):
+                weight = float(np.exp(-position / self.kg_decay))
+                for relation, node in self.merchant_kg_nodes.get(merchant_id, {}).items():
+                    bucket = interests.setdefault(relation, {})
+                    bucket[node] = bucket.get(node, 0.0) + weight
+            for relation, bucket in interests.items():
+                total = sum(bucket.values())
+                if total > 0:
+                    interests[relation] = {node: value / total for node, value in bucket.items()}
+            self.user_kg_interests[str(user_id)] = interests
+        return self
+
+    def _kg_affinity(self, user_id: str, merchant_id: str) -> float:
+        interests = self.user_kg_interests.get(user_id)
+        nodes = self.merchant_kg_nodes.get(merchant_id)
+        if not interests or not nodes:
+            return 0.0
+        score = 0.0
+        for relation, node in nodes.items():
+            score += self.relation_weights.get(relation, 0.0) * interests.get(relation, {}).get(node, 0.0)
+        return float(min(score, 1.0))
+
+    def component_scores(self, user_id: str, merchant_id: str, period: str = "lunch") -> dict[str, float]:
+        components = super().component_scores(user_id, merchant_id, period)
+        kg_score = self._kg_affinity(user_id, merchant_id)
+        components["kg_score"] = kg_score
+        components["final_score"] = float(components["final_score"] + self.kg_weight * kg_score)
+        return components
+
+
 class TripartiteRerankRecommender(UserOnlyRecommender):
     name = "Tripartite-Rerank"
 
@@ -1025,4 +1135,5 @@ def build_recommenders(seed: int = 42) -> list[BaseRecommender]:
         SeqTunedRecommender(),
         SeqXQuadTripartiteRecommender(),
         SessionSpuTripartiteRecommender(),
+        KGTripartiteRecommender(),
     ]

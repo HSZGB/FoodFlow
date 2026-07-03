@@ -16,6 +16,9 @@ POLICY_MODEL_MAP = {
     "Seq-xQuAD-Tripartite": "Seq-xQuAD-Tripartite",
     "Seq-xQuAD-Tripartite-Batch": "Seq-xQuAD-Tripartite",
     "Session-SPU-Tripartite": "Session-SPU-Tripartite",
+    "KG-Tripartite + Greedy": "KG-Tripartite",
+    "KG-Tripartite + Batch": "KG-Tripartite",
+    "KG-Tripartite": "KG-Tripartite",
 }
 
 

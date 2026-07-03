@@ -21,6 +21,7 @@ def test_default_recommenders_include_explicit_learned_ltr():
         "Seq-Tuned",
         "Seq-xQuAD-Tripartite",
         "Session-SPU-Tripartite",
+        "KG-Tripartite",
     ]
     assert learned_ltr_model_name() in {"LightGBM-LTR", "Logistic-LTR"}
 
