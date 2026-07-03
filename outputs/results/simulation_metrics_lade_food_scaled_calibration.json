@@ -1,0 +1,84 @@
+{
+  "profile": "food-scaled",
+  "sla_minutes": 45.0,
+  "on_time_rate_at_sla": 0.0579837502147819,
+  "raw_calibration": {
+    "speed_kmph": 8.0,
+    "service_minutes": 90.0,
+    "initial_load_lambda": 2.5,
+    "reliability_mean": 0.7339161000515476,
+    "reliability_std": 0.1
+  },
+  "calibration": {
+    "speed_kmph": 25.0,
+    "service_minutes": 10.0,
+    "initial_load_lambda": 2.5,
+    "reliability_mean": 0.7339161000515476,
+    "reliability_std": 0.1
+  },
+  "parameter_provenance": {
+    "speed_kmph": "food-delivery-default",
+    "service_minutes": "food-delivery-default",
+    "initial_load_lambda": "task-data-derived",
+    "reliability_mean": "task-data-derived",
+    "reliability_std": "task-data-derived"
+  },
+  "empirical": {
+    "task_duration_minutes": {
+      "n": 203695,
+      "mean": 266.86049731215786,
+      "std": 295.2068467078094,
+      "p25": 114.0,
+      "p50": 207.0,
+      "p75": 343.0,
+      "p95": 596.0
+    },
+    "task_speed_kmph": {
+      "n": 203695,
+      "mean": 7.0142040981977605,
+      "std": 286.87428077025703,
+      "p25": 0.6665730138072108,
+      "p50": 1.3027454647702164,
+      "p75": 2.3598083030320662,
+      "p95": 5.372169993423729
+    },
+    "active_load_at_accept": {
+      "n": 195241,
+      "mean": 9.794218427481933,
+      "std": 8.493900087599727,
+      "p25": 3.0,
+      "p50": 8.0,
+      "p75": 15.0,
+      "p95": 27.0
+    }
+  },
+  "lognormal_fit": {
+    "task_duration_minutes": {
+      "sigma": 0.9215306643893504,
+      "median": 186.1644914060196,
+      "ks_statistic": 0.0541483486558233,
+      "ks_pvalue": 0.0
+    },
+    "task_speed_kmph": {
+      "sigma": 1.0861355213700727,
+      "median": 1.205259933761615,
+      "ks_statistic": 0.04382433236332858,
+      "ks_pvalue": 0.0
+    }
+  },
+  "simulation_vs_data_ks": {
+    "speed_kmph": {
+      "ks_statistic": 0.9957207454773068,
+      "ks_pvalue": 0.0
+    },
+    "service_minutes_vs_task_duration": {
+      "ks_statistic": 0.9842709749871131,
+      "ks_pvalue": 0.0
+    },
+    "initial_load": {
+      "ks_statistic": 0.717687370992773,
+      "ks_pvalue": 0.0
+    }
+  },
+  "source": "data/lade/delivery_yt.parquet"
+}

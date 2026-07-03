@@ -8,7 +8,8 @@
 
 - 用户侧推荐：默认实验包含 Popular、BPR-MF、UserOnly、Seq-Tuned、LightGBM/Logistic-LTR、Seq-xQuAD-Tripartite、Session-SPU-Tripartite 和 KG-Tripartite。
 - 商家侧公平：在重排中引入商家曝光公平、长尾曝光与 Exposure Gini 等指标。
-- 骑手侧履约：比较最近骑手、最小 ETA、负载感知逐单派单和容量槽位批量最大权匹配，并支持外部任务数据校准参数。
+- 骑手侧履约：比较最近骑手、最小 ETA、负载感知逐单派单、容量槽位批量最大权匹配，以及**路径感知顺路派单**（cheapest-insertion 边际绕行成本 + 匈牙利轮次匹配，骑手沿真实路径行进）；支持外部任务数据校准参数与运力紧张压力场景（`--n-riders`）。
+- 真实城市地理：用户/商家嵌入 LaDe 真实城市配送 GPS 分布（`make geocode`），距离与 ETA 具备真实街区尺度，demo 在真实地图底图上展示配送路径与高峰派单回放。
 - 动态仿真：模拟午餐高峰多时间步请求，持续更新骑手状态和订单履约结果。
 - 知识图谱融合：`KG-Tripartite` 在三方重排之上叠加时间衰减的图谱兴趣信号（品类/商圈/价位节点的关系加权匹配），并从历史下单、品类、区域和价格段构造路径证据解释推荐原因；完整的动态 KG 注意力模型（torch 实现与 GPU 实验）见 `kg-demo/` 子项目。
 - 统计严谨性：`simulate --simulation-seeds` 输出多种子均值与 95% 置信区间；`--rider-tasks` 校准同时产出分布诊断 JSON（对数正态拟合 + KS 检验 + 逐参数来源标注）。
@@ -26,6 +27,8 @@
 - 使用文件：用户、商家、菜品、训练订单、测试订单和测试标签
 
 项目默认下载 TRD 的 txt 文件，不下载约 1.8GB 的 `graph.bin`，因为核心实现不依赖 DGL 图文件。TRD 不包含完整骑手状态和真实派单记录，因此骑手位置、在线状态、负载、可靠性和收入为固定 seed 合成 proxy，仅用于履约仿真，不声称为真实骑手数据。若有 LaDe 等公开末端配送任务 CSV，可通过 `--rider-tasks` 校准骑手速度、服务时长和负载分布。
+
+TRD 也不含坐标。项目通过 `make geocode GEO_TASKS=data/lade/delivery_yt.parquet` 把用户/商家嵌入 LaDe（Cainiao 末端配送数据集，Hugging Face `Cainiao-AI/LaDe-D`）真实城市的配送 GPS 密度分布——商圈映射到真实高密度簇、用户从真实配送点采样，元数据见 `data/processed/geo_note.json`。诚实口径：实体的具体位置仍是合成分配，但空间分布、距离与 ETA 具备真实城市尺度（详见 `docs/ALGORITHM_RIDER_IMPROVEMENTS.md`）。
 
 ## 方法概览
 
@@ -282,7 +285,8 @@ make notebooklm-pack
 
 ## 局限与说明
 
-- 骑手数据默认为合成 proxy；如提供 LaDe delivery CSV，可校准速度、服务时长和负载分布，但 LaDe 仍不能替代真实外卖派单数据。
+- 骑手数据默认为合成 proxy；如提供 LaDe delivery 数据，可校准速度、服务时长和负载分布并提供真实城市地理，但 LaDe 仍不能替代真实外卖派单数据。
+- 顺路派单不是在所有场景下更优：运力充足时槽位批量匹配的 ETA 更好，顺路合单的优势出现在运力紧张的高峰场景（见 `simulation_metrics_peak_stress.csv`），报告中按两个场景分别呈现。
 - BPR-MF 是轻量实现，未追求大规模深度模型最优性能。
 - 主管线的 `KG-Tripartite` 是免训练的图谱兴趣近似（时间衰减 + 关系加权匹配）；完整的动态 KG 注意力模型、LightGCN 等训练版实现与 GPU 实验结果在 `kg-demo/` 子项目中（`kg-demo/src/`、`kg-demo/outputs/`），两者共用 TRD 数据、叙事上互为轻量/深度版本。
 - 平台效用权重是课程项目中的解释性设置，后续可做权重敏感性分析。

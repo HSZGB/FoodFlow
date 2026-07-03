@@ -55,7 +55,17 @@ eval:
 	$(PYTHON) -m foodflow.cli eval-offline --processed-dir data/processed --output outputs/results/offline_metrics.csv --top-k 10 20 --seed 42
 
 simulate:
-	$(PYTHON) -m foodflow.cli simulate --processed-dir data/processed --output outputs/results/simulation_metrics.csv --seed 42
+	$(PYTHON) -m foodflow.cli simulate --processed-dir data/processed --output outputs/results/simulation_metrics.csv --simulation-seeds 42 43 44 45 46 47 48 49 50 51
+
+simulate-stress:
+	$(PYTHON) -m foodflow.cli simulate --processed-dir data/processed --output outputs/results/simulation_metrics_peak_stress.csv --n-riders 30 --simulation-seeds 42 43 44 45 46 47 48 49 50 51
+
+geocode:
+	@if [ -z "$(GEO_TASKS)" ]; then \
+		printf "Set GEO_TASKS=/path/to/lade_delivery.parquet (e.g. data/lade/delivery_yt.parquet) before running geocode.\n"; \
+		exit 1; \
+	fi
+	$(PYTHON) -m foodflow.cli geocode --processed-dir data/processed --tasks $(GEO_TASKS) --seed 42
 
 simulate-calibrated:
 	@if [ -z "$(RIDER_TASKS)" ]; then \
