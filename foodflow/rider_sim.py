@@ -558,13 +558,20 @@ def advance_riders_along_routes(riders: pd.DataFrame, elapsed_minutes: float) ->
         remaining = list(route)
         while remaining:
             waypoint = remaining[0]
-            cost = _route_leg_minutes(lng, lat, float(waypoint["lng"]), float(waypoint["lat"]), speed)
-            cost += PICKUP_STOP_MINUTES if waypoint["kind"] == "pickup" else DROPOFF_STOP_MINUTES
-            if cost > budget:
-                break
-            budget -= cost
-            lng, lat = float(waypoint["lng"]), float(waypoint["lat"])
-            remaining.pop(0)
+            leg = _route_leg_minutes(lng, lat, float(waypoint["lng"]), float(waypoint["lat"]), speed)
+            stop = PICKUP_STOP_MINUTES if waypoint["kind"] == "pickup" else DROPOFF_STOP_MINUTES
+            if leg + stop <= budget:
+                budget -= leg + stop
+                lng, lat = float(waypoint["lng"]), float(waypoint["lat"])
+                remaining.pop(0)
+                continue
+            # 预算不足以完成整段：沿当前路段按比例部分推进（时间预算不跨调用
+            # 累积，若不做部分推进，超过单步时长的路段将永远走不完）。
+            if leg > 0 and budget > 0:
+                fraction = min(budget / leg, 1.0)
+                lng += (float(waypoint["lng"]) - lng) * fraction
+                lat += (float(waypoint["lat"]) - lat) * fraction
+            break
         riders.at[i, "route"] = remaining
         riders.loc[i, "lng"] = lng
         riders.loc[i, "lat"] = lat

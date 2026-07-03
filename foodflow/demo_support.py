@@ -888,3 +888,117 @@ def enroute_opportunities(
         frame["_detour"], bins=[-1, 8, 15, float("inf")], labels=["顺路", "小幅绕行", "明显绕行"]
     ).astype(str)
     return frame.drop(columns=["_detour"]).reset_index(drop=True)
+
+
+def build_delivery_replay(
+    data: PreparedData,
+    recommender: object,
+    dispatch: str = "detour_eta",
+    steps: int = 8,
+    requests_per_step: int = 8,
+    n_riders: int = 40,
+    seed: int = 33,
+    top_k: int = 10,
+) -> dict[str, object]:
+    """逐分钟骑手履约回放数据：骑手沿"→商家→用户"路径连续移动。
+
+    每 5 分钟派一批新单（路径感知顺路派单，dispatch 可选 detour_eta / min_eta），
+    每 1 分钟推进骑手位置并快照：骑手坐标/负载、在途路径折线（NaN 分隔）、
+    活跃订单的商家与用户点、累计 KPI。返回纯列表结构，便于前端逐帧渲染。
+    """
+    from .rider_sim import (
+        advance_riders_along_routes,
+        assign_orders_route_batch,
+        ensure_route_column,
+        generate_riders,
+    )
+
+    truth = data.truth_by_user()
+    known_users = set(data.users["user_id"].astype(str))
+    eval_users = [u for u in truth if u in known_users]
+    if not eval_users:
+        return {"frames": [], "total_minutes": 0}
+
+    users_df = data.users.set_index("user_id", drop=False)
+    merchants_df = data.merchants.set_index("wm_poi_id", drop=False)
+    request_rng = np.random.default_rng(seed)
+    choice_rng = np.random.default_rng(seed + 7)
+
+    riders = generate_riders(data.merchants, n_riders=n_riders, seed=seed)
+    ensure_route_column(riders)
+    riders["load"] = 0  # 回放从空载开始，避免无路径的幻影负载
+
+    total_minutes = steps * 5
+    active_orders: list[dict[str, float]] = []
+    completed = 0
+    etas: list[float] = []
+    frames: list[dict[str, object]] = []
+
+    for minute in range(total_minutes + 1):
+        if minute % 5 == 0 and minute // 5 < steps:
+            sample_size = min(requests_per_step, len(eval_users))
+            request_users = request_rng.choice(eval_users, size=sample_size, replace=False).astype(str).tolist()
+            rec_result = recommender.recommend(request_users, top_k, {u: "lunch" for u in request_users})
+            pending = []
+            for user_id in request_users:
+                recs = rec_result.recommendations.get(user_id, [])
+                chosen = choose_peak_replay_merchant(recs, rec_result.scores.get(user_id, {}), choice_rng)
+                if chosen is None or chosen not in merchants_df.index or user_id not in users_df.index:
+                    continue
+                pending.append(
+                    {
+                        "order_id": f"replay-{minute}-{user_id}",
+                        "user_id": user_id,
+                        "merchant_id": str(chosen),
+                        "user_row": users_df.loc[user_id],
+                        "merchant_row": merchants_df.loc[str(chosen)],
+                    }
+                )
+            assignments = assign_orders_route_batch(pending, riders, "lunch", minute, objective=dispatch)
+            orders_by_id = {str(o["order_id"]): o for o in pending}
+            for assignment in assignments:
+                order = orders_by_id[str(assignment["order_id"])]
+                completed += 1
+                etas.append(float(assignment["eta"]))
+                active_orders.append(
+                    {
+                        "m_lng": float(order["merchant_row"]["lng"]),
+                        "m_lat": float(order["merchant_row"]["lat"]),
+                        "u_lng": float(order["user_row"]["lng"]),
+                        "u_lat": float(order["user_row"]["lat"]),
+                        "t0": float(minute),
+                        "t1": float(minute) + float(assignment["eta"]),
+                    }
+                )
+
+        active_orders = [o for o in active_orders if o["t1"] >= minute]
+        leg_lng: list[float] = []
+        leg_lat: list[float] = []
+        for _, rider in riders.iterrows():
+            route = rider.get("route")
+            if not isinstance(route, list) or not route:
+                continue
+            leg_lng.extend([float(rider["lng"])] + [float(w["lng"]) for w in route] + [float("nan")])
+            leg_lat.extend([float(rider["lat"])] + [float(w["lat"]) for w in route] + [float("nan")])
+
+        frames.append(
+            {
+                "minute": minute,
+                "rider_lng": [float(v) for v in riders["lng"]],
+                "rider_lat": [float(v) for v in riders["lat"]],
+                "rider_load": [int(v) for v in riders["load"]],
+                "rider_id": [str(v) for v in riders["rider_id"]],
+                "leg_lng": leg_lng,
+                "leg_lat": leg_lat,
+                "m_lng": [o["m_lng"] for o in active_orders],
+                "m_lat": [o["m_lat"] for o in active_orders],
+                "u_lng": [o["u_lng"] for o in active_orders],
+                "u_lat": [o["u_lat"] for o in active_orders],
+                "completed": completed,
+                "avg_eta": float(np.mean(etas)) if etas else 0.0,
+                "busy_riders": int((riders["load"] > 0).sum()),
+            }
+        )
+        advance_riders_along_routes(riders, elapsed_minutes=1.0)
+
+    return {"frames": frames, "total_minutes": total_minutes, "n_riders": n_riders, "dispatch": dispatch}

@@ -40,11 +40,12 @@ def test_demo_map_supports_real_tiles_with_offline_fallback():
     source = Path("app.py").read_text(encoding="utf-8")
 
     assert "当前订单附近的用户、商家和骑手" in source
-    # 真实底图（Scattermap/carto-positron）默认开启，离线时可切回抽象画布。
+    # 真实底图默认开启（高德为国内首选，含 GCJ-02 纠偏），离线可切回抽象画布。
     assert "go.Scattermap(" in source
-    assert "carto-positron" in source
+    assert "高德（国内推荐）" in source
+    assert "_wgs84_to_gcj02_arrays" in source
     assert "use_real_map" in source
-    assert "离线请关闭" in source
+    assert "无底图（离线画布）" in source
 
 
 def test_demo_has_tripartite_perspective_panels():
@@ -52,7 +53,8 @@ def test_demo_has_tripartite_perspective_panels():
     assert "top_dishes_for_user" in source
     assert "merchant_supply_pressure" in source
     assert "enroute_opportunities" in source
-    assert "配送地图回放" in source
+    assert "骑手履约动画" in source
+    assert "build_delivery_replay" in source
 
 
 def test_recommendation_result_labels_use_plain_chinese():

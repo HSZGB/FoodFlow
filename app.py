@@ -204,6 +204,84 @@ def demo_color_map(values) -> dict[str, str]:
     return {str(value): demo_color(value) for value in values}
 
 
+# --- 地图底图源 -------------------------------------------------------------
+# 高德瓦片国内加载快但使用 GCJ-02 火星坐标系，绘制 WGS84 坐标前需纠偏对齐；
+# OSM/Carto 为 WGS84 但国内网络可能加载缓慢或失败。
+MAP_CFG = {"gcj02": False, "style": "carto-positron"}
+
+_AMAP_STYLE = {
+    "version": 8,
+    "sources": {
+        "amap": {
+            "type": "raster",
+            "tiles": [
+                f"https://webrd0{i}.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x={{x}}&y={{y}}&z={{z}}"
+                for i in (1, 2, 3, 4)
+            ],
+            "tileSize": 256,
+            "attribution": "© 高德地图",
+        }
+    },
+    "layers": [{"id": "amap", "type": "raster", "source": "amap"}],
+}
+_OSM_STYLE = {
+    "version": 8,
+    "sources": {
+        "osm": {
+            "type": "raster",
+            "tiles": ["https://tile.openstreetmap.org/{z}/{x}/{y}.png"],
+            "tileSize": 256,
+            "attribution": "© OpenStreetMap contributors",
+        }
+    },
+    "layers": [{"id": "osm", "type": "raster", "source": "osm"}],
+}
+MAP_TILE_SOURCES = {
+    "高德（国内推荐）": {"style": _AMAP_STYLE, "gcj02": True},
+    "OpenStreetMap": {"style": _OSM_STYLE, "gcj02": False},
+    "Carto 浅色": {"style": "carto-positron", "gcj02": False},
+}
+
+
+def _wgs84_to_gcj02_arrays(lng, lat):
+    """WGS84 -> GCJ-02 火星坐标纠偏（标准偏移算法，向量化）。"""
+    import numpy as np
+
+    lng = pd.to_numeric(pd.Series(list(lng)), errors="coerce").to_numpy(dtype=float)
+    lat = pd.to_numeric(pd.Series(list(lat)), errors="coerce").to_numpy(dtype=float)
+    a, ee = 6378245.0, 0.00669342162296594323
+    x, y = lng - 105.0, lat - 35.0
+
+    def _dlat(x, y):
+        d = -100.0 + 2.0 * x + 3.0 * y + 0.2 * y * y + 0.1 * x * y + 0.2 * np.sqrt(np.abs(x))
+        d += (20.0 * np.sin(6.0 * x * np.pi) + 20.0 * np.sin(2.0 * x * np.pi)) * 2.0 / 3.0
+        d += (20.0 * np.sin(y * np.pi) + 40.0 * np.sin(y / 3.0 * np.pi)) * 2.0 / 3.0
+        d += (160.0 * np.sin(y / 12.0 * np.pi) + 320.0 * np.sin(y * np.pi / 30.0)) * 2.0 / 3.0
+        return d
+
+    def _dlng(x, y):
+        d = 300.0 + x + 2.0 * y + 0.1 * x * x + 0.1 * x * y + 0.1 * np.sqrt(np.abs(x))
+        d += (20.0 * np.sin(6.0 * x * np.pi) + 20.0 * np.sin(2.0 * x * np.pi)) * 2.0 / 3.0
+        d += (20.0 * np.sin(x * np.pi) + 40.0 * np.sin(x / 3.0 * np.pi)) * 2.0 / 3.0
+        d += (150.0 * np.sin(x / 12.0 * np.pi) + 300.0 * np.sin(x / 30.0 * np.pi)) * 2.0 / 3.0
+        return d
+
+    dlat, dlng = _dlat(x, y), _dlng(x, y)
+    radlat = lat / 180.0 * np.pi
+    magic = 1 - ee * np.sin(radlat) ** 2
+    sqrtmagic = np.sqrt(magic)
+    dlat = (dlat * 180.0) / ((a * (1 - ee)) / (magic * sqrtmagic) * np.pi)
+    dlng = (dlng * 180.0) / (a / sqrtmagic * np.cos(radlat) * np.pi)
+    return lng + dlng, lat + dlat
+
+
+def map_coords(lng, lat):
+    """按当前底图源把 WGS84 坐标转换为绘制坐标（高德底图时做 GCJ-02 纠偏）。"""
+    if MAP_CFG["gcj02"]:
+        return _wgs84_to_gcj02_arrays(lng, lat)
+    return lng, lat
+
+
 def map_scatter(real_map: bool, lng, lat, **kwargs):
     """构造散点轨迹：真实底图用 Scattermap（经纬度语义），离线回退到抽象画布。"""
     use_gl = kwargs.pop("use_gl", False)
@@ -213,7 +291,8 @@ def map_scatter(real_map: bool, lng, lat, **kwargs):
             kwargs["marker"] = {key: value for key, value in marker.items() if key not in {"symbol", "line"}}
         kwargs.pop("fill", None)
         kwargs.pop("fillcolor", None)
-        return go.Scattermap(lon=lng, lat=lat, **kwargs)
+        plot_lng, plot_lat = map_coords(lng, lat)
+        return go.Scattermap(lon=plot_lng, lat=plot_lat, **kwargs)
     trace_cls = go.Scattergl if use_gl else go.Scatter
     return trace_cls(x=lng, y=lat, **kwargs)
 
@@ -228,11 +307,15 @@ def apply_map_layout(fig, real_map: bool, focus_lng: list[float], focus_lat: lis
     clean_lng = [float(v) for v in focus_lng if pd.notna(v)]
     clean_lat = [float(v) for v in focus_lat if pd.notna(v)]
     if real_map:
+        if clean_lng and clean_lat:
+            plot_lng, plot_lat = map_coords(clean_lng, clean_lat)
+            clean_lng = [float(v) for v in plot_lng]
+            clean_lat = [float(v) for v in plot_lat]
         pad_lng = max((max(clean_lng) - min(clean_lng)) * 0.08, 0.002) if clean_lng else 0.01
         pad_lat = max((max(clean_lat) - min(clean_lat)) * 0.08, 0.002) if clean_lat else 0.01
         fig.update_layout(
             map=dict(
-                style="carto-positron",
+                style=MAP_CFG["style"],
                 bounds=dict(
                     west=min(clean_lng) - pad_lng if clean_lng else 121.2,
                     east=max(clean_lng) + pad_lng if clean_lng else 121.5,
@@ -652,7 +735,16 @@ with st.sidebar:
         index=DEMO_STRATEGIES.index("Seq-xQuAD-Tripartite"),
     )
     top_k = st.slider("推荐数量", min_value=8, max_value=20, value=12, step=1)
-    use_real_map = st.checkbox("真实地图底图（需联网加载瓦片，离线请关闭）", value=True)
+    map_source = st.selectbox(
+        "地图底图",
+        [*MAP_TILE_SOURCES.keys(), "无底图（离线画布）"],
+        index=0,
+        help="真实底图需联网加载瓦片：国内网络选高德（已做 GCJ-02 坐标纠偏对齐）；海外网络可选 OSM/Carto；离线请选无底图。",
+    )
+    use_real_map = map_source in MAP_TILE_SOURCES
+    if use_real_map:
+        MAP_CFG["style"] = MAP_TILE_SOURCES[map_source]["style"]
+        MAP_CFG["gcj02"] = MAP_TILE_SOURCES[map_source]["gcj02"]
     preheat_clicked = st.button("预热演示缓存（全部策略 + 高峰回放）", use_container_width=True)
     st.caption("答辩前点一次：预先训练全部策略并跑一遍高峰回放，现场切换即走缓存不卡顿。")
 
@@ -1298,7 +1390,167 @@ with tab_case:
     )
     st.dataframe(display_df, use_container_width=True, hide_index=True)
 
+@st.cache_data(show_spinner=False)
+def load_delivery_replay(data_key: str, strategy: str, dispatch: str, _data: PreparedData) -> dict:
+    from foodflow.demo_support import build_delivery_replay
+
+    model = load_model(strategy, data_key, _data)
+    return build_delivery_replay(
+        _data, model, dispatch=dispatch, steps=8, requests_per_step=8, n_riders=40, seed=33, top_k=10
+    )
+
+
+def _replay_frame_traces(frame: dict, real_map: bool) -> list:
+    return [
+        map_scatter(
+            real_map,
+            frame["leg_lng"],
+            frame["leg_lat"],
+            mode="lines",
+            name="在途路径",
+            line=dict(color="#7c3aed", width=2),
+            hoverinfo="skip",
+        ),
+        map_scatter(
+            real_map,
+            frame["rider_lng"],
+            frame["rider_lat"],
+            mode="markers",
+            name="骑手（颜色=负载）",
+            text=frame["rider_id"],
+            marker=dict(
+                size=12,
+                color=frame["rider_load"],
+                colorscale=[[0.0, "#93c5fd"], [0.4, "#7c3aed"], [1.0, "#312e81"]],
+                cmin=0,
+                cmax=3,
+            ),
+            hovertemplate="骑手 %{text}",
+        ),
+        map_scatter(
+            real_map,
+            frame["m_lng"],
+            frame["m_lat"],
+            mode="markers",
+            name="出餐中商家",
+            marker=dict(size=10, color="#dc6803", opacity=0.85),
+            hoverinfo="skip",
+        ),
+        map_scatter(
+            real_map,
+            frame["u_lng"],
+            frame["u_lat"],
+            mode="markers",
+            name="待收餐用户",
+            marker=dict(size=8, color="#2563eb", opacity=0.85),
+            hoverinfo="skip",
+        ),
+    ]
+
+
 with tab_peak:
+    st.subheader("骑手履约动画")
+    st.caption(
+        "连续播放高峰期的完整履约过程：每 5 分钟到达一批订单，路径感知派单把新单插入骑手当前路径，"
+        "骑手沿取餐、送达路径逐分钟移动，颜色随负载加深；紫色线为在途路径，橙点为出餐中商家，蓝点为待收餐用户。"
+    )
+    anim_l, anim_r = st.columns([1.6, 1.4])
+    with anim_l:
+        replay_dispatch_label = st.radio(
+            "派单机制",
+            ["顺路合单（RouteBatch）", "路径最小 ETA（RouteMinETA）"],
+            horizontal=True,
+            key="replay_dispatch",
+        )
+    with anim_r:
+        run_replay_anim = st.checkbox("生成履约动画（首次约 10-30 秒）", value=False)
+    if run_replay_anim:
+        replay_dispatch = "min_eta" if "MinETA" in replay_dispatch_label else "detour_eta"
+        with st.spinner("正在逐分钟模拟骑手履约..."):
+            replay = load_delivery_replay(model_data_key, strategy_name, replay_dispatch, interactive_data)
+        replay_frames = replay.get("frames", [])
+        if not replay_frames:
+            st.info("当前数据没有可回放的订单。")
+        else:
+            focus_lng = [v for f in replay_frames for v in (f["m_lng"] + f["u_lng"])] or replay_frames[0]["rider_lng"]
+            focus_lat = [v for f in replay_frames for v in (f["m_lat"] + f["u_lat"])] or replay_frames[0]["rider_lat"]
+            replay_fig = go.Figure(
+                data=_replay_frame_traces(replay_frames[0], use_real_map),
+                frames=[
+                    go.Frame(
+                        data=_replay_frame_traces(frame, use_real_map),
+                        name=str(frame["minute"]),
+                        layout=go.Layout(
+                            title=(
+                                f"第 {frame['minute']} 分钟 · 已派 {frame['completed']} 单 · "
+                                f"忙碌骑手 {frame['busy_riders']}/{replay['n_riders']} · "
+                                f"累计平均 ETA {frame['avg_eta']:.1f} min"
+                            )
+                        ),
+                    )
+                    for frame in replay_frames
+                ],
+            )
+            apply_map_layout(
+                replay_fig,
+                use_real_map,
+                focus_lng,
+                focus_lat,
+                title=f"第 0 分钟 · 已派 {replay_frames[0]['completed']} 单",
+                height=560,
+            )
+            replay_fig.update_layout(
+                updatemenus=[
+                    dict(
+                        type="buttons",
+                        direction="left",
+                        x=0.0,
+                        y=1.12,
+                        buttons=[
+                            dict(
+                                label="▶ 播放",
+                                method="animate",
+                                args=[
+                                    None,
+                                    dict(
+                                        frame=dict(duration=280, redraw=True),
+                                        fromcurrent=True,
+                                        transition=dict(duration=0),
+                                    ),
+                                ],
+                            ),
+                            dict(
+                                label="⏸ 暂停",
+                                method="animate",
+                                args=[[None], dict(mode="immediate", frame=dict(duration=0, redraw=False))],
+                            ),
+                        ],
+                    )
+                ],
+                sliders=[
+                    dict(
+                        active=0,
+                        currentvalue=dict(prefix="分钟: "),
+                        steps=[
+                            dict(
+                                label=str(frame["minute"]),
+                                method="animate",
+                                args=[
+                                    [str(frame["minute"])],
+                                    dict(mode="immediate", frame=dict(duration=0, redraw=True)),
+                                ],
+                            )
+                            for frame in replay_frames
+                        ],
+                    )
+                ],
+            )
+            st.plotly_chart(replay_fig, use_container_width=True)
+            st.caption(
+                "点击 ▶ 播放观看完整履约过程；顺路合单模式下可观察骑手在配送途中顺路接起附近新单（负载颜色加深、路径延长）。"
+            )
+
+    st.divider()
     st.subheader("午餐高峰回放")
     st.caption(
         "按时间步模拟午餐高峰请求流：每步抽一批用户，先推荐商家，再模拟用户选店和骑手派单。"
@@ -1424,104 +1676,6 @@ with tab_peak:
                 match_rows = trace_df[
                     trace_df["step_matches_json"].fillna("").astype(str).str.len().gt(2)
                 ].copy()
-                if not match_rows.empty and use_real_map:
-                    st.subheader("配送地图回放（真实城市底图）")
-                    st.caption(
-                        "拖动时间步查看该策略在高峰期的派单演化：橙色菱形为商家、蓝色圆点为用户、"
-                        "骑手颜色随负载加深，紫色线为取餐段、橙色线为配送段。"
-                    )
-                    anim_policies = sorted(match_rows["policy"].astype(str).unique().tolist())
-                    anim_c1, anim_c2 = st.columns([1.2, 2])
-                    with anim_c1:
-                        anim_policy = st.selectbox("回放策略", anim_policies, key="peak_anim_policy")
-                    policy_rows = match_rows[match_rows["policy"].astype(str) == anim_policy]
-                    anim_steps = sorted(policy_rows["step"].dropna().astype(int).unique().tolist())
-                    with anim_c2:
-                        anim_step = st.select_slider("时间步（分钟）", options=anim_steps, value=anim_steps[-1], key="peak_anim_step")
-                    anim_row = policy_rows[policy_rows["step"].astype(int) == int(anim_step)].iloc[-1]
-                    try:
-                        anim_matches = json.loads(str(anim_row.get("step_matches_json", "[]")))
-                    except (TypeError, ValueError):
-                        anim_matches = []
-                    if anim_matches:
-                        anim_df = pd.DataFrame(anim_matches)
-                        anim_fig = go.Figure()
-                        for _, match in anim_df.iterrows():
-                            anim_fig.add_trace(
-                                go.Scattermap(
-                                    lon=[match["rider_lng"], match["merchant_lng"]],
-                                    lat=[match["rider_lat"], match["merchant_lat"]],
-                                    mode="lines",
-                                    line=dict(color="#7c3aed", width=2),
-                                    hoverinfo="skip",
-                                    showlegend=False,
-                                )
-                            )
-                            anim_fig.add_trace(
-                                go.Scattermap(
-                                    lon=[match["merchant_lng"], match["user_lng"]],
-                                    lat=[match["merchant_lat"], match["user_lat"]],
-                                    mode="lines",
-                                    line=dict(color="#dc6803", width=2),
-                                    hoverinfo="skip",
-                                    showlegend=False,
-                                )
-                            )
-                        anim_fig.add_trace(
-                            go.Scattermap(
-                                lon=anim_df["merchant_lng"],
-                                lat=anim_df["merchant_lat"],
-                                mode="markers",
-                                name="商家",
-                                text=anim_df["merchant_name"].astype(str),
-                                marker=dict(size=13, color="#dc6803"),
-                                hovertemplate="%{text}",
-                            )
-                        )
-                        anim_fig.add_trace(
-                            go.Scattermap(
-                                lon=anim_df["user_lng"],
-                                lat=anim_df["user_lat"],
-                                mode="markers",
-                                name="用户",
-                                text=anim_df["user_id"].astype(str),
-                                marker=dict(size=11, color="#2563eb"),
-                                hovertemplate="用户 %{text}",
-                            )
-                        )
-                        anim_fig.add_trace(
-                            go.Scattermap(
-                                lon=anim_df["rider_lng"],
-                                lat=anim_df["rider_lat"],
-                                mode="markers",
-                                name="骑手",
-                                text=anim_df["rider_id"].astype(str),
-                                customdata=anim_df[["rider_load", "eta"]].to_numpy(),
-                                marker=dict(
-                                    size=13,
-                                    color=pd.to_numeric(anim_df["rider_load"], errors="coerce").fillna(0),
-                                    colorscale=[[0, "#c4b5fd"], [1, "#4c1d95"]],
-                                ),
-                                hovertemplate="骑手 %{text} | 负载 %{customdata[0]} | ETA %{customdata[1]:.1f} min",
-                            )
-                        )
-                        anim_lng = (
-                            anim_df["merchant_lng"].tolist() + anim_df["user_lng"].tolist() + anim_df["rider_lng"].tolist()
-                        )
-                        anim_lat = (
-                            anim_df["merchant_lat"].tolist() + anim_df["user_lat"].tolist() + anim_df["rider_lat"].tolist()
-                        )
-                        apply_map_layout(
-                            anim_fig,
-                            True,
-                            anim_lng,
-                            anim_lat,
-                            title=f"{anim_policy} · 第 {anim_step} 步的批量派单",
-                            height=480,
-                        )
-                        st.plotly_chart(anim_fig, use_container_width=True)
-                    else:
-                        st.info("该时间步没有可回放的匹配记录。")
 
                 if not match_rows.empty:
                     st.subheader("仿真策略相对位置")

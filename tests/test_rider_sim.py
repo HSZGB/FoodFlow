@@ -236,3 +236,26 @@ def test_route_batch_assigns_all_orders_and_advances():
     advance_riders_along_routes(riders, elapsed_minutes=600.0)
     assert int(riders["load"].sum()) == 0
     assert all(len(route) == 0 for route in riders["route"])
+
+
+def test_advance_riders_makes_partial_progress_on_long_legs():
+    import pandas as pd
+
+    from foodflow.rider_sim import advance_riders_along_routes, ensure_route_column
+
+    riders = _route_test_riders().head(1).copy()
+    ensure_route_column(riders)
+    # 目的地约 11 公里外（道路口径 ~14 公里，20km/h 需 ~43 分钟）
+    riders.at[0, "route"] = [{"kind": "dropoff", "lng": 121.40, "lat": 37.55, "order_id": "o1"}]
+    riders.loc[0, "load"] = 1
+    start_lng = float(riders.loc[0, "lng"])
+
+    advance_riders_along_routes(riders, elapsed_minutes=5.0)
+    after_one_tick = float(riders.loc[0, "lng"])
+    assert after_one_tick > start_lng  # 单步 5 分钟也要有部分推进
+    assert len(riders.at[0, "route"]) == 1  # 尚未完成
+
+    for _ in range(12):
+        advance_riders_along_routes(riders, elapsed_minutes=5.0)
+    assert len(riders.at[0, "route"]) == 0  # 累计推进后最终完成
+    assert int(riders.loc[0, "load"]) == 0
