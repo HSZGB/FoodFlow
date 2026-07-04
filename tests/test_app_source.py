@@ -41,7 +41,9 @@ def test_demo_map_supports_real_tiles_with_offline_fallback():
 
     assert "当前订单附近的用户、商家和骑手" in source
     # 真实底图默认开启（高德为国内首选，含 GCJ-02 纠偏），离线可切回抽象画布。
-    assert "go.Scattermap(" in source
+    # Scattermapbox 兼容 Streamlit 自带的旧版 plotly.js（新版 Scattermap/MapLibre
+    # 会被静默降级成空白直角坐标系）。
+    assert "go.Scattermapbox(" in source
     assert "高德（国内推荐）" in source
     assert "_wgs84_to_gcj02_arrays" in source
     assert "use_real_map" in source

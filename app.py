@@ -292,7 +292,7 @@ def map_scatter(real_map: bool, lng, lat, **kwargs):
         kwargs.pop("fill", None)
         kwargs.pop("fillcolor", None)
         plot_lng, plot_lat = map_coords(lng, lat)
-        return go.Scattermap(lon=plot_lng, lat=plot_lat, **kwargs)
+        return go.Scattermapbox(lon=plot_lng, lat=plot_lat, **kwargs)
     trace_cls = go.Scattergl if use_gl else go.Scatter
     return trace_cls(x=lng, y=lat, **kwargs)
 
@@ -314,7 +314,7 @@ def apply_map_layout(fig, real_map: bool, focus_lng: list[float], focus_lat: lis
         pad_lng = max((max(clean_lng) - min(clean_lng)) * 0.08, 0.002) if clean_lng else 0.01
         pad_lat = max((max(clean_lat) - min(clean_lat)) * 0.08, 0.002) if clean_lat else 0.01
         fig.update_layout(
-            map=dict(
+            mapbox=dict(
                 style=MAP_CFG["style"],
                 bounds=dict(
                     west=min(clean_lng) - pad_lng if clean_lng else 121.2,
@@ -1504,8 +1504,10 @@ with tab_peak:
                     dict(
                         type="buttons",
                         direction="left",
-                        x=0.0,
-                        y=1.12,
+                        x=1.0,
+                        xanchor="right",
+                        y=1.18,
+                        yanchor="bottom",
                         buttons=[
                             dict(
                                 label="▶ 播放",
