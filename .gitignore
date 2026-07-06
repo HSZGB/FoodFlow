@@ -35,3 +35,5 @@ ppt/FoodFlow/speech.md
 *.out
 *.toc
 *.auxdata/lade/
+*.aux
+*.synctex.gz
