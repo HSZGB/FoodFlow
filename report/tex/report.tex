@@ -166,7 +166,7 @@
 
     \section{数据来源}
 
-    实验主要使用 Takeout Recommendation Dataset (TRD)，其 DOI 为 \texttt{10.5281/zenodo.8025855}。该数据集来自外卖平台在北京 11 个商圈的真实订单记录，时间跨度为 2021 年 3 月 1 日至 3 月 28 日，包含用户、商家、菜品、训练期订单、测试期订单与测试标签。TRD 在本文中承担两类作用：其一，作为推荐系统的交互样本，用于估计用户偏好、商家流行度和品类偏好；其二，作为订单生成的经验分布，使履约仿真中的用户请求保持外卖场景的复购性、区域性和品类偏好。
+    实验主要使用 Takeout Recommendation Dataset (TRD)，其 DOI 为 \texttt{10.5281/zenodo.8025855}\cite{trd2023}。该数据集来自外卖平台在北京 11 个商圈的真实订单记录，时间跨度为 2021 年 3 月 1 日至 3 月 28 日，包含用户、商家、菜品、训练期订单、测试期订单与测试标签。TRD 在本文中承担两类作用：其一，作为推荐系统的交互样本，用于估计用户偏好、商家流行度和品类偏好；其二，作为订单生成的经验分布，使履约仿真中的用户请求保持外卖场景的复购性、区域性和品类偏好。
 
     \begin{table}[htbp]
         \centering
@@ -197,7 +197,7 @@
     \end{equation}
     该模型不依赖用户个性化信息，用于衡量全局流行度偏置的下界表现。
 
-    贝叶斯个性化排序矩阵分解为每个用户和商家学习潜在表示 $\mathbf{z}_u,\mathbf{z}_m\in\mathbb{R}^d$，预测偏好强度为
+    贝叶斯个性化排序矩阵分解（BPR-MF）\cite{rendle2009bpr} 为每个用户和商家学习潜在表示 $\mathbf{z}_u,\mathbf{z}_m\in\mathbb{R}^d$，预测偏好强度为
     \begin{equation}
         s_{\mathrm{mf}}(u,m,t)=\mathbf{z}_u^{\top}\mathbf{z}_m.
     \end{equation}
@@ -207,13 +207,13 @@
     \end{equation}
     该目标直接优化成对排序关系，是隐式反馈推荐中的经典基准。
 
-    用户特征基准将品类偏好、复购、价格匹配、时段偏好、商家质量和新颖性写为统一特征函数 $\phi_j(u,m,t)$，并采用线性偏好函数：
+    用户特征基准将品类偏好、复购、价格匹配、时段偏好、商家质量和新颖性写为统一特征函数 $\phi_j(u,m,t)$，这些特征均归一化到 $[0,1]$ 区间以保证数值稳定性，并采用线性偏好函数：
     \begin{equation}
         s_{\mathrm{prof}}(u,m,t)=\sum_{j=1}^{J}\theta_j\phi_j(u,m,t),\quad \sum_{j=1}^{J}\theta_j=1,\quad \theta_j\ge 0.
     \end{equation}
-    例如，复购特征定义为
+    其中，复购特征定义为
     \begin{equation}
-        \phi_{\mathrm{rep}}(u,m,t)=\frac{\log(1+N_{um})}{\log 5},
+        \phi_{\mathrm{rep}}(u,m,t)=\frac{\log(1+N_{um})}{\log {(\max_{u,m}{N_{um}}+1)}},
     \end{equation}
     其中 $N_{um}$ 表示用户 $u$ 在训练期对商家 $m$ 的历史交互次数。
 
@@ -229,15 +229,11 @@
     \end{equation}
     其中 $m_{t-k}$ 为用户历史序列中第 $k$ 个近邻商家，$L$ 为回看窗口，$\eta\in(0,1)$ 为位置衰减系数。
 
-    规则型序列模型采用固定权重得到
+    规则型序列模型（Seq-Tuned）采用固定权重得到
     \begin{equation}
         s_{\mathrm{seq}}(u,m,t)=\sum_{j}\theta_j\phi_j(u,m,t).
     \end{equation}
-    学习排序模型则学习非线性映射 $F$：
-    \begin{equation}
-        s_{\mathrm{ltr}}(u,m,t)=F\left(\phi_1(u,m,t),\ldots,\phi_J(u,m,t)\right),
-    \end{equation}
-    并以排序质量指标为训练目标。实验中，学习排序主要用于检验手工特征权重能否由数据驱动的非线性函数替代。
+    学习排序模型（Logistic-LTR）使用 Scikit-learn\cite{pedregosa2011sklearn} 提供的 \verb|LogisticRegression| 模块，来对权重进行自适应调整。实验中，学习排序主要用于检验手工特征权重能否由数据驱动的非线性函数替代。
 
     \subsection{三方重排}
 
@@ -261,15 +257,57 @@
     \end{equation}
     其中 $\alpha+\beta+\chi+\delta=1$。所有带波浪线的量均在当前候选集合 $\mathcal{C}_u$ 内归一化，避免不同量纲导致权重不可解释。
 
-    列表级重排采用逐步选择机制。设 $S$ 为已选择商家集合，则下一项由
+    列表级重排（Seq-xQuAD-Tripartite）借鉴多样化检索中的逐步选择思想\cite{santos2010xquad}。设 $S$ 为已选择商家集合，则下一项由
     \begin{equation}
         m^*=\arg\max_{m\in\mathcal{C}_u\setminus S}\left[\lambda_r\widetilde{g}(u,m,t)+\lambda_d\mathbb{I}[c_m\notin C(S)]+\lambda_l\ell(m)\right]
     \end{equation}
     给出，其中 $C(S)$ 是已选商家的品类集合，$\ell(m)=1/(1+\log(1+n_m))$ 是长尾奖励。该策略使推荐列表同时考虑相关性、多样性和商家侧曝光分布。
+    
+    \subsection{基于商品重排}
+    
+    在三方重排框架基础上，融合了真实行为信号与 SPU 菜品画像，增强了召回阶段的个性化表征能力。模型（Session-SPU-Tripartite）仅使用训练期订单数据进行拟合，以避免评估阶段的信息泄露。
+    
+    \subsubsection{会话点击信号}
+    预处理阶段构建用户 $u$ 的训练期点击序列 $S_u=[m_1, m_2, \ldots, m_n]$，其中序列已根据请求时间倒序与点击 \texttt{rank} 正序进行了排序。会话分数 $session(u,m)$ 基于点击位置的指数衰减定义如下：
+    \begin{equation}
+    	session(u,m)=
+    	\begin{cases}
+    		\exp\left(-\frac{\operatorname{rank}_{\pi_u}(m)-1}{4}\right), & m\in S_u \\
+    		0, & m\notin S_u
+    	\end{cases}
+    \end{equation}
+    该函数赋予近期高频点击商家更高的偏好权重。
+    
+    \subsubsection{SPU 菜品画像信号}
+    模型通过统计用户与商家的菜品类目分布计算 SPU 亲和度 $\zeta(u,m)$。设 $n_{u,c}$ 和 $n_{m,c}$ 分别为用户 $u$ 与商家 $m$ 在类目 $c$ 下的累计订单计数，则亲和度定义为：
+    \begin{equation}
+    	\zeta(u,m)= \min\left( \frac{\sum_{c\in \mathcal{P}_u \cap \mathcal{P}_m}\min(n_{u,c},n_{m,c})} {\max(\sum_c n_{u,c}, 1)}, 1 \right)
+    \end{equation}
+    此指标衡量了候选商家提供的菜品类目对用户 $u$ 历史偏好集 $\mathcal{P}_u$ 的覆盖程度。
+    
+    \subsubsection{候选集扩展}
+    Session-SPU-Tripartite 扩展后的召回候选集 $\mathcal{C}_{ssp}(u)$ 由多源召回拼接而成：
+    \begin{align}
+    	\mathcal{C}_{session}(u) &= \{m : m \in S_u, m \in \text{active\_set}\} \\
+    	\mathcal{C}_{spu}(u) &= \{m : m \in \text{active\_set}, \mathcal{P}_m \cap \text{Top3}(\mathcal{P}_u) \neq \varnothing\} \\
+    	\mathcal{C}_{ssp}(u) &= \text{dedup}\left( \mathcal{C}_{session}(u) \oplus \text{Top120}(\mathcal{C}_{spu}(u)) \oplus \mathcal{C}_{seq}(u) \right)
+    \end{align}
+    其中 $\mathcal{C}_{seq}(u)$ 为原始序列召回候选，通过该策略，模型有效捕捉了“用户主动点击”与“菜品类目重合”两类核心信号。
+    
+    \subsubsection{分数组合与重排}
+    模型增强后的原始得分 $score_{raw}^{ssp}(u,m)$ 综合了三方权重及新接入的会话与 SPU 信号：
+    \begin{equation}
+    	score_{raw}^{ssp}(u,m) = g(u,m,t) + 0.055 \cdot session(u,m) + 0.015 \cdot \zeta(u,m)
+    \end{equation}
+    其中 $g(u,m,t)$ 为预定义的加权三方价值函数（权重分别为 $0.86, 0.025, 0.03, 0.015$）。在排序阶段，系统沿用 xQuAD 列表重排机制，通过下式贪婪选择最终推荐列表 $\pi_u^K$ 中的商家 $m^*$:
+    \begin{equation}
+    	m^* = \arg\max_{m\notin \pi_u} \left[ 0.84\cdot\widetilde{score}_{raw}^{ssp}(m) + 0.12\cdot\mathbb{I}[cat_m \notin C_{\pi_u}] + 0.04\cdot \ell(m) \right]
+    \end{equation}
+    该逻辑在确保三方公平性与供给可行性的同时，通过引入 session 与 SPU 信号显著提升了推荐结果的相关性。
 
     \subsection{知识图谱增强}
 
-    知识图谱用于建模用户、商家、品类、区域、价格段、口味和菜品实体之间的语义关系。定义图谱三元组集合
+    知识图谱用于建模用户、商家、品类、区域、价格段、口味和菜品实体之间的语义关系；相关图推荐方法可参考 KGAT 与 LightGCN\cite{wang2019kgat,he2020lightgcn}。定义图谱三元组集合
     \begin{equation}
         \mathcal{G}\subseteq \mathcal{E}\times\mathcal{L}\times\mathcal{E},
     \end{equation}
@@ -297,7 +335,7 @@
 
     \subsection{仿真策略与 MNL 用户选择模型}
 
-    推荐列表并不必然转化为订单。本文用多项逻辑模型刻画用户在推荐列表中的选择概率。设商家 $m$ 在推荐列表 $\pi_u^K$ 中的位置为 $\operatorname{rank}_{\pi_u}(m)$，用户对该商家的选择效用为
+    推荐列表并不必然转化为订单。本文用多项逻辑模型刻画用户在推荐列表中的选择概率\cite{luce1959choice,mcfadden1974logit}。设商家 $m$ 在推荐列表 $\pi_u^K$ 中的位置为 $\operatorname{rank}_{\pi_u}(m)$，用户对该商家的选择效用为
     \begin{equation}
         z(u,m,t)=\lambda_0+\lambda_s\widetilde{s}(u,m,t)+\lambda_p\frac{1}{\log_2(1+\operatorname{rank}_{\pi_u}(m))}+\lambda_y\mathbb{I}[m\in\mathcal{Y}_u].
     \end{equation}
@@ -336,7 +374,7 @@
     \begin{equation}
         \text{s.t.}\quad \sum_{b\in\mathcal{B}_t}x_{ob}\le 1,\quad \sum_{o\in\mathcal{O}_t}x_{ob}\le 1,\quad x_{ob}\in\{0,1\}.
     \end{equation}
-    该问题是标准最大权二分图匹配，可用匈牙利算法求解。与贪心策略相比，它在同一批订单和骑手容量上优化全局目标。
+    该问题是标准最大权二分图匹配，可用匈牙利算法求解\cite{kuhn1955hungarian}。与贪心策略相比，它在同一批订单和骑手容量上优化全局目标。
 
     \subsection{路径规划逻辑}
 
@@ -377,7 +415,7 @@
     \begin{equation}
         \operatorname{DCG@K}(u)=\sum_{j=1}^{K}\frac{\mathbb{I}[\pi_u(j)\in\mathcal{Y}_u]}{\log_2(j+1)},
     \end{equation}
-    归一化折损累计增益为
+    归一化折损累计增益为\cite{jarvelin2002ndcg}
     \begin{equation}
         \operatorname{NDCG@K}=\frac{1}{|\mathcal{U}_{\mathrm{eval}}|}\sum_{u\in\mathcal{U}_{\mathrm{eval}}}\frac{\operatorname{DCG@K}(u)}{\operatorname{IDCG@K}(u)}.
     \end{equation}
@@ -606,18 +644,42 @@
 
     本研究仍存在局限。首先，骑手轨迹与派单记录来自仿真生成，虽然可由公开配送任务数据校准，但不能完全替代工业级外卖平台数据。其次，MNL 用户选择模型是对真实下单行为的简化，尚未覆盖价格促销、店铺活动、天气和用户耐心等因素。再次，KG-Tripartite 当前主要采用轻量图谱兴趣匹配，尚未在完整闭环中训练端到端图神经网络。最后，三方重排与派单仍是解耦优化，未来可研究将推荐、选择和调度统一为端到端多目标决策问题。
 
-    \section{参考文献}
 
-    \begin{enumerate}
-        \item Steffen Rendle, Christoph Freudenthaler, Zeno Gantner, and Lars Schmidt-Thieme. 2009. BPR: Bayesian Personalized Ranking from Implicit Feedback. \textit{Proceedings of UAI}.
-        \item R. Duncan Luce. 1959. \textit{Individual Choice Behavior: A Theoretical Analysis}. Wiley.
-        \item Daniel McFadden. 1974. Conditional Logit Analysis of Qualitative Choice Behavior. In \textit{Frontiers in Econometrics}. Academic Press.
-        \item Kalervo Jarvelin and Jaana Kekalainen. 2002. Cumulated Gain-Based Evaluation of IR Techniques. \textit{ACM Transactions on Information Systems}, 20(4):422--446.
-        \item Tie-Yan Liu. 2009. Learning to Rank for Information Retrieval. \textit{Foundations and Trends in Information Retrieval}, 3(3):225--331.
-        \item Guolin Ke, Qi Meng, Thomas Finley, Taifeng Wang, Weidong Ma, Qiwei Ye, and Tie-Yan Liu. 2017. LightGBM: A Highly Efficient Gradient Boosting Decision Tree. \textit{Proceedings of NeurIPS}.
-        \item Rodrygo L. T. Santos, Craig Macdonald, and Iadh Ounis. 2010. Exploiting Query Reformulations for Web Search Result Diversification. \textit{Proceedings of WWW}.
-        \item H. W. Kuhn. 1955. The Hungarian Method for the Assignment Problem. \textit{Naval Research Logistics Quarterly}, 2(1--2):83--97.
-        \item Xiang Wang, Xiangnan He, Yixin Cao, Meng Liu, and Tat-Seng Chua. 2019. KGAT: Knowledge Graph Attention Network for Recommendation. \textit{Proceedings of KDD}.
-        \item Xiangnan He, Kuan Deng, Xiang Wang, Yan Li, Yongdong Zhang, and Meng Wang. 2020. LightGCN: Simplifying and Powering Graph Convolution Network for Recommendation. \textit{Proceedings of SIGIR}.
-    \end{enumerate}
+    \begin{thebibliography}{99}
+        \bibitem{trd2023}
+        Takeout Recommendation Dataset. 2023. Zenodo. DOI: \texttt{10.5281/zenodo.8025855}.
+
+        \bibitem{rendle2009bpr}
+        Steffen Rendle, Christoph Freudenthaler, Zeno Gantner, and Lars Schmidt-Thieme. 2009. BPR: Bayesian Personalized Ranking from Implicit Feedback. \textit{Proceedings of UAI}.
+
+        \bibitem{luce1959choice}
+        R. Duncan Luce. 1959. \textit{Individual Choice Behavior: A Theoretical Analysis}. Wiley.
+
+        \bibitem{mcfadden1974logit}
+        Daniel McFadden. 1974. Conditional Logit Analysis of Qualitative Choice Behavior. In \textit{Frontiers in Econometrics}. Academic Press.
+
+        \bibitem{jarvelin2002ndcg}
+        Kalervo Jarvelin and Jaana Kekalainen. 2002. Cumulated Gain-Based Evaluation of IR Techniques. \textit{ACM Transactions on Information Systems}, 20(4):422--446.
+
+        % \bibitem{liu2009ltr}
+        % Tie-Yan Liu. 2009. Learning to Rank for Information Retrieval. \textit{Foundations and Trends in Information Retrieval}, 3(3):225--331.
+
+        %\bibitem{ke2017lightgbm}
+        %Guolin Ke, Qi Meng, Thomas Finley, Taifeng Wang, Weidong Ma, Qiwei Ye, and Tie-Yan Liu. 2017. LightGBM: A Highly Efficient Gradient Boosting Decision Tree. \textit{Proceedings of NeurIPS}.
+        
+        \bibitem{pedregosa2011sklearn}
+        Fabian Pedregosa, Gaël Varoquaux, Alexandre Gramfort, Vincent Michel, Bertrand Thirion, Olivier Grisel, Mathieu Blondel, Peter Prettenhofer, Ron Weiss, Vincent Dubourg, Jake Vanderplas, Alexandre Passos, David Cournapeau, Matthieu Brucher, Matthieu Perrot, and Édouard Duchesnay. 2011. Scikit-learn: Machine Learning in Python. \textit{Journal of Machine Learning Research}, 12:2825--2830.
+
+        \bibitem{santos2010xquad}
+        Rodrygo L. T. Santos, Craig Macdonald, and Iadh Ounis. 2010. Exploiting Query Reformulations for Web Search Result Diversification. \textit{Proceedings of WWW}.
+
+        \bibitem{kuhn1955hungarian}
+        H. W. Kuhn. 1955. The Hungarian Method for the Assignment Problem. \textit{Naval Research Logistics Quarterly}, 2(1--2):83--97.
+
+        \bibitem{wang2019kgat}
+        Xiang Wang, Xiangnan He, Yixin Cao, Meng Liu, and Tat-Seng Chua. 2019. KGAT: Knowledge Graph Attention Network for Recommendation. \textit{Proceedings of KDD}.
+
+        \bibitem{he2020lightgcn}
+        Xiangnan He, Kuan Deng, Xiang Wang, Yan Li, Yongdong Zhang, and Meng Wang. 2020. LightGCN: Simplifying and Powering Graph Convolution Network for Recommendation. \textit{Proceedings of SIGIR}.
+    \end{thebibliography}
 \end{document}
