@@ -106,275 +106,315 @@
     \tableofcontents
     \newpage
 
-    \section{项目定位：推荐系统与动态履约闭环}
+    
 
-    本实验旨在构建一个面向外卖平台的推荐与动态履约仿真系统 FoodFlow。外卖推荐不能仅追求 Recall 或 NDCG——推荐列表会改变订单的空间分布，进而影响商家曝光、骑手负载、预计送达时间（ETA）和超时风险。因此 FoodFlow 在用户偏好之外，引入商家公平、ETA、供给约束和骑手负载，将推荐系统扩展为"用户—商家—骑手"三方闭环。
+    \section{符号定义}
 
-    实验目标包括：
-    \begin{enumerate}
-        \item 基于真实外卖订单数据（TRD 数据集），实现多种推荐模型，包括协同过滤、序列推荐、学习排序（LTR）以及三方重排方法；
-        \item 构建动态履约仿真器，将推荐结果转化为模拟订单，接入骑手匹配与高峰期履约仿真；
-        \item 通过离线评估指标（Recall、NDCG、Coverage、Exposure Gini 等）和仿真指标（平均 ETA、超时率、平台效用等），综合评估不同策略在三方指标上的权衡。
-    \end{enumerate}
+    本文研究一个由推荐系统与履约仿真系统耦合形成的外卖平台闭环。推荐模块在给定用户与上下文后产生商家排序；用户选择模型将排序转化为模拟订单；履约模块再将订单分配给骑手并更新系统状态。为避免工程变量与数学变量混用，表 \ref{tab:notation} 给出全文统一使用的符号。
 
-    \paragraph{} % 空行
-    \paragraph{} % 空行
-
-    \section{系统实现：推荐、三方重排与履约仿真}
-
-    \subsection{数据来源与预处理}
-
-    主数据集为 Takeout Recommendation Dataset (TRD)，DOI：\texttt{10.5281/zenodo.8025855}。数据来自美团外卖北京 11 个商圈，时间范围为 2021-03-01 至 2021-03-28，包含用户、餐厅、菜品、训练订单、测试订单和测试标签。项目默认下载 TRD 的 txt 文件，训练集使用完整 \texttt{orders\_train.txt}。
-
-    数据审计结果如表 \ref{tab:data_audit} 所示。
-
-    \begin{table}[h]
+    \begin{table}[htbp]
         \centering
-        \caption{TRD 数据集审计结果}
+        \caption{主要数学符号}
+        \label{tab:notation}
+        \small
+        \begin{tabular}{ll}
+            \toprule
+            \textbf{符号} & \textbf{含义} \\
+            \midrule
+            $\mathcal{U}$, $\mathcal{M}$, $\mathcal{R}$ & 用户、商家、骑手集合 \\
+            $u$, $m$, $r$ & 用户、商家、骑手的元素 \\
+            $t$ & 离散时间步或推荐请求时间 \\
+            $\mathcal{H}_u$ & 用户 $u$ 的历史交互序列 \\
+            $\mathcal{Y}_u$ & 用户 $u$ 在评估集中的真实相关商家集合 \\
+            $\mathcal{C}_u$ & 推荐阶段为用户 $u$ 生成的候选商家集合 \\
+            $\pi_u^K$ & 面向用户 $u$ 的长度为 $K$ 的推荐列表 \\
+            $\operatorname{rank}_{\pi_u}(m)$ & 商家 $m$ 在列表 $\pi_u$ 中的位置 \\
+            $c_m$, $a_m$, $p_m$ & 商家 $m$ 的品类、区域和价格段属性 \\
+            $q_m$, $n_m$ & 商家 $m$ 的质量估计与历史订单量 \\
+            $x_u$, $x_m$, $x_r$ & 用户、商家和骑手的空间位置 \\
+            $d(x,y)$ & 空间位置 $x$ 与 $y$ 间的配送距离估计 \\
+            $\tau(u,m,t)$ & 用户 $u$ 在时间 $t$ 从商家 $m$ 下单的预计履约时间 \\
+            $s(u,m,t)$ & 推荐模型给出的预测偏好强度 \\
+            $\phi_j(u,m,t)$, $\theta_j$ & 第 $j$ 类特征函数及其权重 \\
+            $\widetilde{x}$ & 变量 $x$ 在候选集合内的归一化值 \\
+            $b(m)$, $e(u,m,t)$, $h(m)$ & 商家公平、时效效用和供给可行性分量 \\
+            $g(u,m,t)$ & 三方重排的综合价值函数 \\
+            $\mathcal{E}$, $\mathcal{L}$, $\mathcal{G}$ & 知识图谱实体、关系和三元组集合 \\
+            $\mathbf{z}_x$ & 实体或关系 $x$ 的低维表示向量 \\
+            $\mathcal{O}_t$ & 时间步 $t$ 产生的订单集合 \\
+            $\mathcal{B}_t$ & 时间步 $t$ 的可用骑手容量槽集合 \\
+            $x_{ob}$ & 订单 $o$ 是否分配到容量槽 $b$ 的二元决策变量 \\
+            $Q_r$ & 骑手 $r$ 当前待执行路径序列 \\
+            $\Delta(r,o)$ & 将订单 $o$ 插入骑手 $r$ 路径后的最小边际绕行成本 \\
+            $N_{um}$, $A_{um}(t)$ & 历史交互次数和距上次交互的时间间隔 \\
+            $L$, $\gamma$, $\eta$ & 序列窗口、时间衰减尺度和位置衰减系数 \\
+            $\alpha$, $\beta$, $\chi$, $\delta$ & 三方价值函数中各分量的权重 \\
+            $\lambda_r$, $\lambda_d$, $\lambda_l$ & 列表重排中相关性、多样性和长尾奖励权重 \\
+            $\ell(m)$ & 商家 $m$ 的长尾奖励 \\
+            $\mu$, $\omega_l$, $k(u,m,t)$ & 图谱时间衰减、关系权重和图谱相似度 \\
+            $\mathcal{P}_u$, $\mathcal{P}_m$, $\zeta(u,m)$ & 用户菜品偏好、商家菜品画像和菜品亲和度 \\
+            $z(u,m,t)$, $z_0$ & 下单选择效用和不下单效用 \\
+            $\rho_r$, $L_r$, $\kappa(o,r)$ & 骑手可靠性、当前负载和接单可行性 \\
+            $A(o,r)$, $W_{ob}$ & 单订单派单价值和二分图边权 \\
+            $J(r,o)$, $\omega$ & 路径派单目标和绕行权衡系数 \\
+            $v_r$, $\varsigma$, $\tau_0$ & 骑手速度、道路弯曲系数和超时阈值 \\
+            $\Psi$ & 平台综合效用 \\
+            $\mathbb{I}[\cdot]$ & 指示函数，条件成立取 1，否则取 0 \\
+            \bottomrule
+        \end{tabular}
+    \end{table}
+
+    \section{数据来源}
+
+    实验主要使用 Takeout Recommendation Dataset (TRD)，其 DOI 为 \texttt{10.5281/zenodo.8025855}。该数据集来自外卖平台在北京 11 个商圈的真实订单记录，时间跨度为 2021 年 3 月 1 日至 3 月 28 日，包含用户、商家、菜品、训练期订单、测试期订单与测试标签。TRD 在本文中承担两类作用：其一，作为推荐系统的交互样本，用于估计用户偏好、商家流行度和品类偏好；其二，作为订单生成的经验分布，使履约仿真中的用户请求保持外卖场景的复购性、区域性和品类偏好。
+
+    \begin{table}[htbp]
+        \centering
+        \caption{TRD 数据统计}
         \label{tab:data_audit}
         \begin{tabular}{lr}
             \toprule
-            \textbf{审计项目} & \textbf{数值} \\
+            \textbf{统计项} & \textbf{数值} \\
             \midrule
-            必需 TRD 文件齐全 & 是 \\
-            训练集处理模式 & full \\
-            原始训练订单数 & 1,068,495 \\
-            处理后训练订单数 & 1,068,495 \\
-            训练订单使用比例 & 1.0000 \\
+            训练订单数 & 1,068,495 \\
             用户数 & 200,000 \\
             商家数 & 29,072 \\
             测试订单数 & 230,550 \\
-            离线评估用户数 & 300（前 300 名测试用户） \\
+            离线评估用户数 & 300 \\
             \bottomrule
         \end{tabular}
     \end{table}
 
-    TRD 不包含真实骑手数据，因此骑手位置、在线状态、负载和收入基于固定 seed 合成代理数据。可使用 LaDe delivery CSV 校准骑手速度、服务时长和负载分布，但 LaDe 并非外卖平台数据。
+    TRD 不包含真实骑手轨迹与派单记录，因此履约侧的骑手集合 $\mathcal{R}$ 由固定随机种子生成，并可由公开末端配送任务数据校准速度、服务时长和负载分布。TRD 也不提供精确经纬度，地理模块将用户与商家映射到真实城市配送点的空间分布中，使距离函数 $d(\cdot,\cdot)$ 与预计履约时间 $\tau(\cdot)$ 具有合理的城市尺度。该设定用于比较不同推荐与派单策略的相对效能，而不声称恢复平台真实派单过程。
 
-    \subsection{推荐系统模块：序列、SPU 与 KG 增强}
+    \section{推荐系统框架}
 
-    系统实现了 8 个代表性推荐策略，涵盖从简单基线到知识图谱增强的不同层次：
+    \subsection{基准模型}
 
-    \textbf{Popular（全局热门基线）：}按商家历史订单量排序，作为无个性化的对照组。
-
-    \textbf{BPR-MF（贝叶斯个性化排序矩阵分解）：}基于用户-商家隐式反馈，使用 24 维潜在因子、4 个 epoch 的 SGD 训练，是传统协同过滤的经典实现。
-
-    \textbf{UserOnly（基于用户画像的可解释排序）：}综合品类偏好（权重 0.20）、复购（0.52）、价格匹配（0.10）、时段偏好（0.06）、商家质量（0.07）和新颖度（0.05），构造完全可解释的推荐分数。
-
-    \textbf{Seq-Tuned（序列混合推荐）：}基于用户最近下单序列，提取快慢时间衰减、复购、商家转移、品类偏好、热度和质量等七类序列特征，通过人工调优的权重进行加权融合。权重配置为近因性（0.143+0.094）、复购（0.412）、转移（0.247）、品类（0.091）、热度（0.009）、质量（0.004）。
-
-    \textbf{LightGBM-LTR（LambdaRank 学习排序）：}复用 Seq-Tuned 的七类序列特征，使用 LightGBM LambdaRank 学习非线性排序函数，替代手工设定的权重。当 LightGBM 不可用时，自动回退为 Logistic-LTR。
-
-    推荐模型的候选集生成遵循以下流程：首先对每个用户提取历史下单序列和商家频次，计算七类序列特征值；然后基于特征分数对候选商家进行初筛，保留前 80 名进入重排阶段。核心特征计算公式如下：
-
-    对于复购特征（repeat），定义用户 $u$ 对商家 $m$ 的复购分为：
+    热门推荐将商家历史订单量 $n_m$ 作为排序依据：
     \begin{equation}
-        \text{repeat}(u, m) = \frac{\ln(1 + \text{count}(u, m))}{\ln 5}
+        s_{\mathrm{pop}}(u,m,t)=n_m.
     \end{equation}
-    其中 $\text{count}(u, m)$ 为用户 $u$ 在训练集中下单商家 $m$ 的总次数。
+    该模型不依赖用户个性化信息，用于衡量全局流行度偏置的下界表现。
 
-    对于商家转移特征（transition），考虑用户序列中从商家 $m_i$ 到 $m_j$ 的转移概率：
+    贝叶斯个性化排序矩阵分解为每个用户和商家学习潜在表示 $\mathbf{z}_u,\mathbf{z}_m\in\mathbb{R}^d$，预测偏好强度为
     \begin{equation}
-        \text{transition}(u, m) = \frac{\sum_{t=1}^{|\text{seq}|-1} \mathbb{I}[\text{seq}_t = m_{\text{prev}}] \cdot \text{cooccur}(m_{\text{prev}}, m)}{\max(1, |\text{seq}|-1)}
+        s_{\mathrm{mf}}(u,m,t)=\mathbf{z}_u^{\top}\mathbf{z}_m.
     \end{equation}
-
-    \textbf{Seq-xQuAD-Tripartite（序列推荐 + 三方重排）：}在 Seq-Tuned 候选集基础上，引入三方重排架构。候选集经过 min-max 归一化后，加权合成四个分量：用户偏好分（user\_score，权重 0.93）、商家公平分（fairness，权重 0.025）、ETA 分（eta\_score，权重 0.03）和供给分（supply\_score，权重 0.015）。之后通过 xQuAD 算法进行逐步选择，平衡相关性（权重 0.84）、品类覆盖多样性（0.12）和长尾曝光（0.04）。
-
-    \textbf{Session-SPU-Tripartite（会话与菜品增强三方）：}在三方重排基础上，额外注入训练期会话点击候选和基于 SPU 菜品品类的商家亲和度。通过菜品品类重叠扩展候选集，session 权重为 0.055，spu 权重为 0.015。
-
-    \textbf{KG-Tripartite（知识图谱增强三方推荐）：}在三方重排架构之上，引入 \texttt{foodflow/recommenders.py} 中实现的轻量知识图谱兴趣信号。该模型不训练完整图神经网络，而是将 TRD 结构化字段（商家类目、商圈区域、价格段、评分等级、口味、食材、品牌等）组织为知识图谱三元组，通过时间衰减将用户历史订单转化为图谱上的带权兴趣边，在候选排序中叠加图谱路径匹配特征。KG-Tripartite 作为 FoodFlow 主推荐链路的一部分，通过时间衰减与关系加权匹配将图谱信号接入三方重排，并可从历史下单、品类、区域和价格段构造路径证据解释推荐原因。
-
-    \subsection{三方重排模块：用户、商家与履约约束}
-
-    三方重排是 FoodFlow 的核心创新点，其架构如图 \ref{fig:framework} 所示。
-
-    \begin{figure}[htbp]
-        \centering
-        \includegraphics[width=0.9\textwidth]{framework.png}
-        \caption{FoodFlow 系统架构图}
-        \label{fig:framework}
-    \end{figure}
-    % \begin{figure}[htbp]
-    %     \centering
-    %     \begin{tikzpicture}[node distance=1.8cm, auto,
-    %         block/.style={rectangle, draw, fill=blue!10, text width=6cm, text centered, minimum height=0.8cm, rounded corners},
-    %         data/.style={rectangle, draw, fill=gray!10, text width=4cm, text centered, minimum height=0.7cm},
-    %         arrow/.style={-{Stealth[scale=1.2]}, thick}]
-
-    %         % 数据层
-    %         \node[data] (trd) {TRD 真实订单数据};
-    %         \node[block, above=0.8cm of trd] (preprocess) {预处理与特征工程};
-    %         \node[data, above=0.8cm of preprocess, text width=7cm] (features) {用户画像 / 商家特征 / 序列特征 / 上下文};
-
-    %         % 推荐层
-    %         \node[block, above=1.2cm of features, fill=yellow!15, text width=8cm] (recall) {\textbf{召回与基础排序层} \\ Popular / BPR-MF / UserOnly / Seq-Tuned / LightGBM-LTR};
-
-    %         % 重排层
-    %         \node[block, above=1.2cm of recall, fill=green!10, text width=10cm] (rerank) {\textbf{三方重排层 (xQuAD)} \\[2pt]
-    %             \footnotesize 候选集 Min-Max 归一化 $\rightarrow$ 分数融合 $\rightarrow$ xQuAD 逐步选择 \\[2pt]
-    %             \footnotesize 用户分(0.93) + 公平分(0.025) + ETA分(0.03) + 供给分(0.015)};
-
-    %         % 仿真层
-    %         \node[block, above=1.2cm of rerank, fill=red!10, text width=8cm] (sim) {\textbf{动态履约仿真层} \\ 骑手匹配（贪心/二分图批量）+ 状态更新};
-
-    %         % 输出
-    %         \node[data, above=0.8cm of sim, text width=8cm] (output) {最终推荐列表 + 履约指标};
-
-    %         % 连线
-    %         \draw[arrow] (trd) -- (preprocess);
-    %         \draw[arrow] (preprocess) -- (features);
-    %         \draw[arrow] (features) -- (recall);
-    %         \draw[arrow] (recall) -- (rerank);
-    %         \draw[arrow] (rerank) -- (sim);
-    %         \draw[arrow] (sim) -- (output);
-    %     \end{tikzpicture}
-    %     \caption{FoodFlow 系统架构图}
-    %     \label{fig:framework}
-    % \end{figure}
-
-    三方分数融合的具体计算方式如下：对于给定的候选商家集合 $\mathcal{C}$，首先对各分量的原始值进行 min-max 归一化，得到归一化分数 $\tilde{s}_u(m)$（用户分）、$\tilde{s}_f(m)$（公平分）、$\tilde{s}_e(m)$（ETA分）和 $\tilde{s}_s(m)$（供给分）。三方总分由加权和给出：
+    对于训练样本三元组 $(u,i,j)$，其中 $i$ 是用户 $u$ 交互过的商家、$j$ 是未交互商家，优化目标为
     \begin{equation}
-        s_{\text{tri}}(m) = w_u \cdot \tilde{s}_u(m) + w_f \cdot \tilde{s}_f(m) + w_e \cdot \tilde{s}_e(m) + w_s \cdot \tilde{s}_s(m)
+        \max_{\Theta}\sum_{(u,i,j)}\log \sigma\left(s_{\mathrm{mf}}(u,i,t)-s_{\mathrm{mf}}(u,j,t)\right)-\lambda\|\Theta\|_2^2.
     \end{equation}
-    其中权重满足 $w_u + w_f + w_e + w_s = 1$。
+    该目标直接优化成对排序关系，是隐式反馈推荐中的经典基准。
 
-    商家公平分的定义为 $s_f(m) = 0.75 \cdot (1 - \text{norm\_pop}(m)) + 0.25 \cdot \text{quality}(m)$，即对高曝光商家进行惩罚、对高质量低曝光商家进行补偿。ETA 分定义为 $s_e(m) = 1.0 - \min(\text{eta}(m) / 70.0,\ 1.0)$。供给分定义为 $s_s(m) = 0.6 \cdot (\text{delivery\_score}(m) / 5.0) + 0.4 / (1 + \ln(1 + \text{order\_count}(m)))$，综合考虑商家配送能力和长尾供给。
-
-    xQuAD 逐步选择的每一步中，对每个未被选中的候选商家 $m$，计算其综合价值：
+    用户特征基准将品类偏好、复购、价格匹配、时段偏好、商家质量和新颖性写为统一特征函数 $\phi_j(u,m,t)$，并采用线性偏好函数：
     \begin{equation}
-        v(m) = \lambda_r \cdot \text{rel}(m) + \lambda_d \cdot \text{div}(m) + \lambda_t \cdot \text{tail}(m)
+        s_{\mathrm{prof}}(u,m,t)=\sum_{j=1}^{J}\theta_j\phi_j(u,m,t),\quad \sum_{j=1}^{J}\theta_j=1,\quad \theta_j\ge 0.
     \end{equation}
-    其中 $\text{rel}(m)$ 为归一化后的三方总分，$\text{div}(m) \in \{0, 1\}$ 表示该商家品类是否尚未被已选列表覆盖，$\text{tail}(m) = 1/(1 + \ln(1 + \text{order\_count}(m)))$ 为长尾奖励。
-
-    \subsection{动态履约仿真模块}
-
-    仿真参数配置为：8 个时间步 $\times$ 每步 16 个请求 = 128 个请求/策略，Top-K = 10，模拟午餐高峰时段（每步间隔 5 分钟）。仿真流程如下：
-
-    \begin{enumerate}
-        \item 为当前策略拟合推荐器；
-        \item 使用固定种子生成 120 个合成骑手；
-        \item 对于每个时间步：
-        \begin{itemize}
-            \item 更新骑手可用性（减少负载，标记空闲骑手）；
-            \item 从评估用户中抽样请求用户；
-            \item 运行推荐器，获取每个用户的 Top-K 推荐；
-            \item 基于 MNL/Softmax 选择模型模拟用户决策；
-            \item 根据派单策略分配订单给骑手；
-            \item 更新骑手状态（位置、负载、收入）。
-        \end{itemize}
-        \item 收集每个策略的最终指标。
-    \end{enumerate}
-
-    \subsubsection{MNL 用户选择模型}
-
-    用户根据效用函数从推荐列表中选择商家，公式如下：
+    例如，复购特征定义为
     \begin{equation}
-        U(m) = -0.45 + \alpha_s \cdot \tilde{s}(m) + \alpha_r \cdot r(m) + \alpha_t \cdot \mathbb{I}[m \in \mathcal{T}_u]
+        \phi_{\mathrm{rep}}(u,m,t)=\frac{\log(1+N_{um})}{\log 5},
     \end{equation}
-    其中 $\tilde{s}(m)$ 为归一化推荐分数，$r(m) = 1/\log_2(\text{rank}(m) + 1)$ 为排名先验，$\mathbb{I}[m \in \mathcal{T}_u]$ 为真实命中奖励（bonus = 1.75）。不作选择的效用设为 2.0。选择概率由 Softmax 给出。
+    其中 $N_{um}$ 表示用户 $u$ 在训练期对商家 $m$ 的历史交互次数。
 
-    \subsubsection{骑手配送策略}
+    \subsection{用户特征}
 
-    系统实现了四种骑手派单策略，如表 \ref{tab:rider_policies} 所示。
-
-    \begin{table}[h]
-        \centering
-        \caption{骑手派单策略}
-        \label{tab:rider_policies}
-        \begin{tabular}{lll}
-            \toprule
-            \textbf{策略名称} & \textbf{分配方式} & \textbf{核心逻辑} \\
-            \midrule
-            nearest & 贪心 & 选择接驾距离最小的骑手 \\
-            min\_eta & 贪心 & 选择 ETA 最小的骑手 \\
-            load\_aware greedy & 贪心 & 负载感知评分，逐单分配 \\
-            load\_aware batch & 批量最优 & 负载感知 + 容量槽位二分图匹配 \\
-            \bottomrule
-        \end{tabular}
-    \end{table}
-
-    \subsection{二分图匹配派单算法}
-
-    对于批量派单模式，在每个时间步将所有待分配订单与骑手容量槽位构成二分图，使用匈牙利算法求最大权匹配。算法流程如下：
-
-    \textbf{步骤一：构建容量槽位。}对于每个骑手 $r_i$，其当前负载为 $l_i$，最大负载为 $L_{\max} = 3$，则创建 $c_i = \max(0, L_{\max} - l_i)$ 个容量槽位。每个槽位对应一个虚拟节点，允许同一个骑手接收多笔订单。
-
-    \textbf{步骤二：构建评分矩阵。}设订单数为 $N_o$，槽位总数为 $N_s$，构造评分矩阵 $S \in \mathbb{R}^{N_o \times N_s}$，其中：
+    序列推荐假设用户近期行为对下一次选择具有更强解释力。设 $A_{um}(t)$ 为用户 $u$ 上一次交互商家 $m$ 距离时间 $t$ 的间隔，则近期性特征可写为
     \begin{equation}
-        S_{ij} = \text{rider\_score}(\text{eta}_{ij}, r_j, \text{accept}_{ij}) - 0.20 \cdot \text{timeout\_risk}_{ij}
+        \phi_{\mathrm{rec}}(u,m,t)=\exp\{-A_{um}(t)/\gamma\},
     \end{equation}
-    骑手得分的计算为：
+    其中 $\gamma$ 控制时间衰减速度。商家转移特征用条件转移概率表示：
     \begin{equation}
-        \text{rider\_score} = 0.50 \cdot s_{\text{eta}} + 0.20 \cdot s_{\text{reliability}} + 0.15 \cdot s_{\text{load}} + 0.15 \cdot s_{\text{accept}}
+        \phi_{\mathrm{tr}}(u,m,t)=\max_{k\le L}\eta^k P(m\mid m_{t-k}),
     \end{equation}
-    其中 $s_{\text{eta}} = 1.0 - \min(\text{eta} / 70.0, 1.0)$，$s_{\text{reliability}}$ 基于骑手历史准时率，$s_{\text{load}} = 1.0 - \min(l / L_{\max}, 1.0)$，$s_{\text{accept}}$ 为骑手接单概率估计。超时风险惩罚项定义为 $\text{timeout\_risk} = \min(\max((\text{eta} - 45.0) / 60.0, 0.0), 1.0)$。
+    其中 $m_{t-k}$ 为用户历史序列中第 $k$ 个近邻商家，$L$ 为回看窗口，$\eta\in(0,1)$ 为位置衰减系数。
 
-    \textbf{步骤三：匈牙利算法求解。}调用 \texttt{scipy.optimize.linear\_sum\_assignment} 对负评分矩阵 $-S$ 求最小代价分配，等价于原始问题的最大权匹配。过滤掉匹配得分极低（$\leq -10^5$）的分配结果。
-
-    \textbf{步骤四：执行分配并更新骑手状态。}将匹配成功的订单分配给对应骑手，更新骑手位置、负载和收入。每位骑手的收入由基础配送费与距离补偿构成：$\text{income} = 5.0 + \text{eta} \times 0.08$。
-
-    \subsection{ETA 估计模型}
-
-    预计配送时间（ETA）由以下分量构成：
+    规则型序列模型采用固定权重得到
     \begin{equation}
-        \text{ETA} = t_{\text{wait}} + t_{\text{prep}} + t_{\text{peak}} + \frac{d_{\text{rider}\to\text{store}}}{\text{pickup\_speed}} \times 60 + \frac{d_{\text{store}\to\text{user}}}{\text{delivery\_speed}} \times 60 + t_{\text{load}}
+        s_{\mathrm{seq}}(u,m,t)=\sum_{j}\theta_j\phi_j(u,m,t).
     \end{equation}
-    其中 $t_{\text{prep}} = \text{service\_minutes} + (1 - \text{food\_score}/5) \times 5$（商家备餐时间），$t_{\text{peak}}$ 在高峰期加 6 分钟、非高峰期加 2 分钟，$t_{\text{load}} = \text{current\_load} \times 5$（骑手当前负载惩罚），配送速度 = 取餐速度 $\times 1.08$。
-
-    \subsection{平台效用函数}
-
-    综合平台效用函数被定义为各维度指标的加权和，用于从全局视角评估策略的系统级表现：
+    学习排序模型则学习非线性映射 $F$：
     \begin{equation}
-        \begin{aligned}
-            U_{\text{platform}} = 0.25 \cdot s_{\text{user}} &+ 0.25 \cdot r_{\text{ontime}} + 0.20 \cdot r_{\text{complete}} \\
-            &+ 0.15 \cdot (1 - g_{\text{merchant}}) + 0.10 \cdot (1 - \text{cv}_{\text{rider}}) - 0.05 \cdot r_{\text{timeout}}
-        \end{aligned}
+        s_{\mathrm{ltr}}(u,m,t)=F\left(\phi_1(u,m,t),\ldots,\phi_J(u,m,t)\right),
     \end{equation}
-    其中 $s_{\text{user}}$ 为用户满意度，$r_{\text{ontime}}$ 为准时率，$r_{\text{complete}}$ 为订单完成率，$g_{\text{merchant}}$ 为商家曝光 Gini 系数，$\text{cv}_{\text{rider}}$ 为骑手负载变异系数，$r_{\text{timeout}}$ 为超时率。该效用函数兼顾了用户体验、配送效率和生态公平三个维度。
+    并以排序质量指标为训练目标。实验中，学习排序主要用于检验手工特征权重能否由数据驱动的非线性函数替代。
 
-    \subsection{KG 增强与可解释推荐模块}
+    \subsection{三方重排}
 
-    FoodFlow 的轻量 KG 模块（\texttt{foodflow/kg.py}）与主推荐器（\texttt{foodflow/recommenders.py}）配合工作：前者将现有结构化字段转化为知识图谱三元组和可解释推荐路径，后者在 KG-Tripartite 中把图谱兴趣信号作为三方重排的增强分量。该模块不单独作为外部子项目呈现，而是融入 FoodFlow 的推荐系统主链路。
+    外卖推荐的目标不应只最大化预测偏好。若推荐列表持续把订单导向距离远、供给紧张或已高度曝光的商家，平台侧履约质量和生态公平会下降。因此本文将候选商家 $m\in\mathcal{C}_u$ 的价值分解为用户偏好、商家公平、时效和供给四个分量。
 
-    \subsubsection{知识图谱实体与关系设计}
+    商家公平分量惩罚过度曝光的头部商家，并奖励具有较高质量的长尾商家：
+    \begin{equation}
+        b(m)=0.75\left(1-\widetilde{n}_m\right)+0.25\widetilde{q}_m.
+    \end{equation}
+    时效分量将预计履约时间转化为效用：
+    \begin{equation}
+        e(u,m,t)=1-\min\{\tau(u,m,t)/\tau_{\max},1\}.
+    \end{equation}
+    供给分量综合商家配送能力与长尾供给：
+    \begin{equation}
+        h(m)=0.6\widetilde{q}_m+0.4\frac{1}{1+\log(1+n_m)}.
+    \end{equation}
+    三方综合价值函数为
+    \begin{equation}
+        g(u,m,t)=\alpha\widetilde{s}(u,m,t)+\beta\widetilde{b}(m)+\chi\widetilde{e}(u,m,t)+\delta\widetilde{h}(m),
+    \end{equation}
+    其中 $\alpha+\beta+\chi+\delta=1$。所有带波浪线的量均在当前候选集合 $\mathcal{C}_u$ 内归一化，避免不同量纲导致权重不可解释。
 
-    知识图谱实体包括：用户实体、商家实体、餐饮类目实体（一/二/三级）、口味实体（由菜品 taste 字段抽取）、食材实体、价格区间实体（由订单价格聚合）、评分等级实体（离散为 low/medium/high/excellent）、区域实体（aor\_id）、品牌实体和标准菜品实体。静态三元组以商家为头实体、属性为尾实体，关系包括 \texttt{has\_cat1/2/3}、\texttt{has\_brand}、\texttt{located\_in\_aor}、\texttt{has\_price}、\texttt{has\_poi\_score}、\texttt{has\_delivery\_score}、\texttt{has\_food\_score}、\texttt{has\_ingredient}、\texttt{has\_taste}、\texttt{has\_standard\_food} 等。主项目轻量 KG 共导出约 24 万条静态三元组。
+    列表级重排采用逐步选择机制。设 $S$ 为已选择商家集合，则下一项由
+    \begin{equation}
+        m^*=\arg\max_{m\in\mathcal{C}_u\setminus S}\left[\lambda_r\widetilde{g}(u,m,t)+\lambda_d\mathbb{I}[c_m\notin C(S)]+\lambda_l\ell(m)\right]
+    \end{equation}
+    给出，其中 $C(S)$ 是已选商家的品类集合，$\ell(m)=1/(1+\log(1+n_m))$ 是长尾奖励。该策略使推荐列表同时考虑相关性、多样性和商家侧曝光分布。
 
-    \subsubsection{图谱兴趣构造：时间衰减与关系匹配}
+    \subsection{知识图谱增强}
 
-    设用户 $u$ 在时间 $t$ 与商家 $i$ 发生过订单交互，当前推荐请求时间为 $T$。历史订单边权采用指数衰减 $w_{u,i,t}=\exp(-\lambda (T-t))$，其中 $\lambda=0.12$ 为衰减系数（以天为单位）。用户对兴趣实体 $e$ 的历史偏好为 $p^{hist}_{u,e}=\sum_{(i,t)\in \mathcal{H}_{u,T}} w_{u,i,t} A_{i,e}$，其中 $A_{i,e}=1$ 表示商家 $i$ 与实体 $e$ 通过静态图谱相连。
+    知识图谱用于建模用户、商家、品类、区域、价格段、口味和菜品实体之间的语义关系。定义图谱三元组集合
+    \begin{equation}
+        \mathcal{G}\subseteq \mathcal{E}\times\mathcal{L}\times\mathcal{E},
+    \end{equation}
+    其中 $\mathcal{E}$ 为实体集合，$\mathcal{L}$ 为关系集合。每个实体或关系被映射为低维表示 $\mathbf{z}_x$。用户在时间 $t$ 的图谱兴趣由历史交互的时间衰减聚合给出：
+    \begin{equation}
+        \mathbf{z}_{u,t}^{\mathrm{kg}}=\sum_{(m_i,t_i)\in\mathcal{H}_u}\exp\{-\mu(t-t_i)\}\sum_{(m_i,l,e)\in\mathcal{G}}\omega_l\mathbf{z}_e,
+    \end{equation}
+    其中 $\mu$ 为时间衰减系数，$\omega_l$ 表示关系 $l$ 的重要性。候选商家的图谱表示为
+    \begin{equation}
+        \mathbf{z}_{m}^{\mathrm{kg}}=\sum_{(m,l,e)\in\mathcal{G}}\omega_l\mathbf{z}_e.
+    \end{equation}
+    图谱增强分量定义为
+    \begin{equation}
+        k(u,m,t)=\frac{\left(\mathbf{z}_{u,t}^{\mathrm{kg}}\right)^{\top}\mathbf{z}_{m}^{\mathrm{kg}}}{\|\mathbf{z}_{u,t}^{\mathrm{kg}}\|_2\|\mathbf{z}_{m}^{\mathrm{kg}}\|_2}.
+    \end{equation}
+    在三方推荐中，$k(u,m,t)$ 与用户偏好分量共同进入 $s(u,m,t)$ 或作为额外项进入 $g(u,m,t)$。其作用是将“用户近期消费过相同品类、相近价位、同一区域或相似菜品”的结构化证据引入排序，同时保留可解释路径。
 
-    下单前点击序列反映当前一餐的短期偏好。设点击序列为 $\mathcal{C}_{u,T}=(c_1,c_2,\ldots,c_m)$，越靠近下单的点击权重越高：$w^{click}_{u,c_j,T}=\eta \rho^{m-j}$（$\eta=1.6,\ \rho=0.88$）。点击序列生成的临时偏好为 $p^{click}_{u,e}=\sum_{c_j\in \mathcal{C}_{u,T}} w^{click}_{u,c_j,T} A_{c_j,e}$。KG-Tripartite 将历史偏好与短期点击偏好合并为轻量图谱兴趣分，并与用户分、商家公平分、ETA 分和供给分共同进入三方重排。
+    SPU 菜品信号可视为图谱的一类细粒度实体。设 $\mathcal{P}_u$ 为用户历史消费菜品类别的多重集合，$\mathcal{P}_m$ 为商家售卖菜品类别的多重集合，则菜品亲和度定义为
+    \begin{equation}
+        \zeta(u,m)=\min\left\{\frac{\sum_{c\in\mathcal{P}_u\cap\mathcal{P}_m}\min\left(N_{u,c},N_{m,c}\right)}{\max\left(1,\sum_c N_{u,c}\right)},1\right\}.
+    \end{equation}
+    该分量为会话点击和菜品偏好的联合建模提供了比商家级交互更细的解释粒度。
 
-    \subsubsection{轻量 KG 路径解释}
+    \section{履约仿真模块}
 
-    主项目 \texttt{foodflow/kg.py} 将结构化字段转成可解释路径，例如：用户 $\rightarrow$ 历史下单商家 $\rightarrow$ 商家；用户 $\rightarrow$ 偏好品类 $\leftarrow$ 候选商家；用户 $\rightarrow$ 下单区域 $\leftarrow$ 候选商家；用户 $\rightarrow$ 价格段 $\leftarrow$ 候选商家。这些路径来自训练订单、用户品类偏好、商家类目、商家区域和价格段等真实字段。KG-Tripartite 在推荐时会将路径证据、ETA 和曝光补偿一起输出，保证解释引用真实参与推荐/重排的数据。
+    \subsection{仿真策略与 MNL 用户选择模型}
 
-    \subsection{路径感知顺路派单}
+    推荐列表并不必然转化为订单。本文用多项逻辑模型刻画用户在推荐列表中的选择概率。设商家 $m$ 在推荐列表 $\pi_u^K$ 中的位置为 $\operatorname{rank}_{\pi_u}(m)$，用户对该商家的选择效用为
+    \begin{equation}
+        z(u,m,t)=\lambda_0+\lambda_s\widetilde{s}(u,m,t)+\lambda_p\frac{1}{\log_2(1+\operatorname{rank}_{\pi_u}(m))}+\lambda_y\mathbb{I}[m\in\mathcal{Y}_u].
+    \end{equation}
+    不下单选项的效用记为 $z_0$。则用户从推荐列表中选择商家 $m$ 的概率为
+    \begin{equation}
+        P(m\mid u,\pi_u^K,t)=\frac{\exp(z(u,m,t))}{\exp(z_0)+\sum_{j\in\pi_u^K}\exp(z(u,j,t))}.
+    \end{equation}
+    该模型使推荐排序通过选择概率影响订单空间分布，从而将推荐系统与后续履约过程耦合。
 
-    除传统的最近骑手、最小 ETA 和负载感知逐单/批量匹配外，FoodFlow 新增了路径感知顺路派单策略。骑手不再只按直线距离或单点 ETA 评估，而是维护取/送航点序列（route），新单按 cheapest-insertion 算法枚举所有（取餐点，送达点）插入位置，计算边际绕行分钟数：
+    \subsection{骑手配送策略}
 
-    \begin{itemize}
-        \item \textbf{RouteMinETA：}在路径机制下最小化该单 ETA，作为 route 家族的公平基线。
-        \item \textbf{RouteBatch（RouteInsertion）：}目标为边际绕行 + ETA（等权），批量版按匈牙利轮次匹配，每轮每骑手至多一单，应用插入后重算下一轮成本。
-    \end{itemize}
+    对于订单 $o=(u,m,t)$，最近距离策略选择取餐距离最短的骑手：
+    \begin{equation}
+        r^*=\arg\min_{r\in\mathcal{R}_t} d(x_r,x_m),
+    \end{equation}
+    其中 $x_r$ 与 $x_m$ 分别表示骑手和商家的位置。最小预计履约时间策略选择
+    \begin{equation}
+        r^*=\arg\min_{r\in\mathcal{R}_t}\tau(o,r).
+    \end{equation}
+    负载感知策略将履约时间、骑手可靠性和当前负载合并为可派单价值：
+    \begin{equation}
+        A(o,r)=\xi_1\left(1-\min\{\tau(o,r)/\tau_{\max},1\}\right)+\xi_2\rho_r+\xi_3\frac{1}{1+L_r}+\xi_4\kappa(o,r),
+    \end{equation}
+    其中 $\rho_r$ 为骑手可靠性，$L_r$ 为当前负载，$\kappa(o,r)$ 为接单可行性估计。逐单贪心策略选择 $A(o,r)$ 最大的骑手。
 
-    骑手随时间沿路径行进（每步推进 5 分钟，经过 dropoff 即完成一单），替代"派单即瞬移"的简化假设。新增指标包括平均边际绕行（avg\_detour\_minutes）和顺路接单率（enroute\_pickup\_share）。
+    \subsection{二分图匹配派单}
 
-    \subsection{真实城市地理编码}
+    逐单贪心可能产生局部最优。批量派单在时间步 $t$ 将订单集合 $\mathcal{O}_t$ 与可用容量槽集合 $\mathcal{B}_t$ 构成二分图。设容量槽 $b$ 对应骑手 $r(b)$，边权为
+    \begin{equation}
+        W_{ob}=A(o,r(b))-\psi\max\{\tau(o,r(b))-\tau_0,0\},
+    \end{equation}
+    其中第二项惩罚高超时风险。全局匹配问题为
+    \begin{equation}
+        \max_{x}\sum_{o\in\mathcal{O}_t}\sum_{b\in\mathcal{B}_t}W_{ob}x_{ob}
+    \end{equation}
+    \begin{equation}
+        \text{s.t.}\quad \sum_{b\in\mathcal{B}_t}x_{ob}\le 1,\quad \sum_{o\in\mathcal{O}_t}x_{ob}\le 1,\quad x_{ob}\in\{0,1\}.
+    \end{equation}
+    该问题是标准最大权二分图匹配，可用匈牙利算法求解。与贪心策略相比，它在同一批订单和骑手容量上优化全局目标。
 
-    TRD 不含坐标，旧实现用高斯随机数合成经纬度。现在通过 \texttt{make geocode} 将用户/商家嵌入 LaDe（Cainiao 末端配送数据集）真实城市的配送 GPS 分布：先粗聚类提取最大密度簇质心 10km 内的城市核心区；每个 aor\_id 商圈映射到真实高密度簇，商家坐标从簇内真实点采样（约 60m 抖动）；每个 aoi\_id 居住区取真实锚点，用户在 120m 内散布。元数据写入 \texttt{data/processed/geo\_note.json}。诚实口径：这不是 TRD 的真实位置，而是"TRD 订单嵌入 LaDe 真实城市空间分布"；但从此距离、ETA 与地图展示具备真实街区尺度。所有行程按直线距离 $\times 1.3$ 道路弯曲系数换算，骑手默认速度校到 25 km/h（电动车市区口径）；备餐与骑手赶往商家并行计时，使 ETA 尺度落在合理区间。
+    \subsection{路径规划逻辑}
 
-    \section{系统评估：推荐效果与履约表现}
+    当骑手已经携带或等待多个订单时，单点预计履约时间不足以描述顺路接单价值。设 $L(Q_r)$ 为骑手 $r$ 当前路径序列 $Q_r$ 的总行驶成本。将订单 $o$ 的取餐点和送达点插入路径后的最小边际绕行为
+    \begin{equation}
+        \Delta(r,o)=\min_{i<j}\left[L\left(Q_r\oplus_{i,j}o\right)-L(Q_r)\right],
+    \end{equation}
+    其中 $\oplus_{i,j}$ 表示将取餐点插入第 $i$ 个位置、送达点插入第 $j$ 个位置且满足先取后送的可行路径操作。路径感知派单可最小化
+    \begin{equation}
+        J(r,o)=\omega\Delta(r,o)+(1-\omega)\tau(o,r),
+    \end{equation}
+    其中 $\omega$ 控制绕行成本与订单时效之间的权衡。运力紧张时，该策略能够利用骑手现有路径吸收顺路订单。
 
-    \subsection{FoodFlow 系统闭环实验}
+    \subsection{地理编码逻辑}
 
-    FoodFlow 主系统在完整 TRD 训练集（1,068,495 条订单）上进行离线推荐评估，并使用 10 个随机种子的动态履约仿真进行系统级评价。以下分别报告推荐侧、履约侧和系统权衡分析。
+    地理编码将用户和商家映射到二维空间点 $x_u,x_m\in\mathbb{R}^2$。若真实坐标不可得，可将区域 $a$ 表示为混合分布
+    \begin{equation}
+        x\mid a\sim \sum_{h=1}^{H}\nu_{a,h}\mathcal{N}(\boldsymbol{\mu}_{a,h},\Sigma_{a,h}),
+    \end{equation}
+    其中 $\boldsymbol{\mu}_{a,h}$ 和 $\Sigma_{a,h}$ 由真实城市配送点云估计。距离采用道路弯曲修正：
+    \begin{equation}
+        d(x,y)=\varsigma\|x-y\|_2,\quad \varsigma>1.
+    \end{equation}
+    预计履约时间由备餐、取餐行驶、送达行驶、高峰修正与负载修正组成：
+    \begin{equation}
+        \tau(o,r)=T_{\mathrm{prep}}(m)+\frac{d(x_r,x_m)}{v_r}+\frac{d(x_m,x_u)}{v_r}+T_{\mathrm{peak}}(t)+T_{\mathrm{load}}(r).
+    \end{equation}
 
-    \subsubsection{离线推荐结果}
+    \section{系统评估}
 
-    离线评估使用前 300 名测试用户，评估指标包括推荐侧（Recall@K、NDCG@K、MRR@K、HitRate@K）、商家侧（Coverage@20、Exposure Gini、LongTailExposure@20）和校准侧（CategoryJSD@20）。
-    各模型在 $K=20$ 下的主要指标如表 \ref{tab:offline_accuracy} 和 \ref{tab:offline_diversity} 所示。
+    \subsection{推荐指标}
+
+    给定用户 $u$ 的真实相关集合 $\mathcal{Y}_u$ 与推荐列表 $\pi_u^K$，召回率定义为
+    \begin{equation}
+        \operatorname{Recall@K}=\frac{1}{|\mathcal{U}_{\mathrm{eval}}|}\sum_{u\in\mathcal{U}_{\mathrm{eval}}}\frac{|\pi_u^K\cap\mathcal{Y}_u|}{|\mathcal{Y}_u|}.
+    \end{equation}
+    折损累计增益定义为
+    \begin{equation}
+        \operatorname{DCG@K}(u)=\sum_{j=1}^{K}\frac{\mathbb{I}[\pi_u(j)\in\mathcal{Y}_u]}{\log_2(j+1)},
+    \end{equation}
+    归一化折损累计增益为
+    \begin{equation}
+        \operatorname{NDCG@K}=\frac{1}{|\mathcal{U}_{\mathrm{eval}}|}\sum_{u\in\mathcal{U}_{\mathrm{eval}}}\frac{\operatorname{DCG@K}(u)}{\operatorname{IDCG@K}(u)}.
+    \end{equation}
+    平均倒数排名为
+    \begin{equation}
+        \operatorname{MRR@K}=\frac{1}{|\mathcal{U}_{\mathrm{eval}}|}\sum_{u\in\mathcal{U}_{\mathrm{eval}}}\frac{1}{\min\{j:\pi_u(j)\in\mathcal{Y}_u\}},
+    \end{equation}
+    若前 $K$ 位无命中，则该用户贡献为 0。
+
+    商家覆盖率衡量至少被推荐一次的商家占比：
+    \begin{equation}
+        \operatorname{Coverage@K}=\frac{|\cup_{u}\pi_u^K|}{|\mathcal{M}|}.
+    \end{equation}
+    曝光公平性用 Gini 系数衡量。设 $E_m$ 为商家 $m$ 的曝光次数，并按升序排列为 $E_{(1)}\le\cdots\le E_{(M)}$，则
+    \begin{equation}
+        \operatorname{Gini}=\frac{\sum_{i=1}^{M}(2i-M-1)E_{(i)}}{M\sum_{i=1}^{M}E_{(i)}}.
+    \end{equation}
+
+    \subsection{履约指标与平台效用}
+
+    履约指标包括平均预计履约时间、超时率、准时率、完成率、骑手负载离散度与骑手收入公平性。平均预计履约时间为
+    \begin{equation}
+        \overline{\tau}=\frac{1}{|\mathcal{O}|}\sum_{o\in\mathcal{O}}\tau(o),
+    \end{equation}
+    超时率定义为
+    \begin{equation}
+        r_{\mathrm{late}}=\frac{1}{|\mathcal{O}|}\sum_{o\in\mathcal{O}}\mathbb{I}[\tau(o)>\tau_0].
+    \end{equation}
+    平台效用函数综合用户、商家与骑手三方目标：
+    \begin{equation}
+        \Psi=0.25S_u+0.25R_{\mathrm{on}}+0.20R_{\mathrm{comp}}+0.15(1-G_m)+0.10(1-C_r)-0.05R_{\mathrm{late}},
+    \end{equation}
+    其中 $S_u$ 为平均用户满意度，$R_{\mathrm{on}}$ 为准时率，$R_{\mathrm{comp}}$ 为完成率，$G_m$ 为商家曝光 Gini，$C_r$ 为骑手负载变异系数，$R_{\mathrm{late}}$ 为超时率。
+
+    \subsection{离线推荐结果}
+
+    表 \ref{tab:offline_accuracy} 给出主要模型在 $K=20$ 下的推荐准确性。Seq-Tuned 在召回率上最高，说明外卖推荐强烈受复购和序列转移驱动；KG-Tripartite 在三方模型中取得最高的 NDCG，说明图谱语义信号能够改善排序位置质量。
 
     \begin{table}[htbp]
         \centering
@@ -387,338 +427,197 @@
             Popular & 0.0470 & 0.0210 \\
             BPR-MF & 0.1620 & 0.1068 \\
             UserOnly & 0.4287 & 0.3423 \\
-            KG-Tripartite & 0.4263 & 0.3480 \\
             Logistic-LTR & 0.4013 & 0.3412 \\
             \textbf{Seq-Tuned} & \textbf{0.4675} & \textbf{0.3652} \\
             Seq-xQuAD-Tripartite & 0.4113 & 0.3426 \\
             Session-SPU-Tripartite & 0.4119 & 0.3429 \\
+            KG-Tripartite & 0.4263 & 0.3480 \\
             \bottomrule
         \end{tabular}
     \end{table}
-    
+
     \begin{table}[htbp]
         \centering
-        \caption{离线推荐多样性与公平性指标（$K=20$）}
-        \label{tab:offline_diversity}
+        \caption{离线推荐覆盖与公平性指标（$K=20$）}
+        \label{tab:offline_fairness}
         \begin{tabular}{lccc}
             \toprule
-            \textbf{模型} & \textbf{Coverage@20} & \textbf{ExposureGini} & \textbf{CategoryJSD@20} \\
+            \textbf{模型} & \textbf{Coverage@20} & \textbf{Exposure Gini} & \textbf{Category JSD} \\
             \midrule
             Popular & 0.0062 & 0.9952 & 0.0581 \\
             BPR-MF & 0.1350 & 0.9516 & 0.0575 \\
             UserOnly & 0.2841 & 0.8857 & 0.0156 \\
-            KG-Tripartite & 0.2927 & 0.8746 & 0.0157 \\
-            Logistic-LTR & 0.4290 & 0.8282 & 0.4736 \\
-            \textbf{Seq-Tuned} & 0.2884 & 0.8927 & \textbf{0.0152} \\
+            Logistic-LTR & \textbf{0.4290} & \textbf{0.8282} & 0.4736 \\
+            Seq-Tuned & 0.2884 & 0.8927 & \textbf{0.0152} \\
             Seq-xQuAD-Tripartite & 0.2823 & 0.8904 & 0.0154 \\
             Session-SPU-Tripartite & 0.2884 & 0.8818 & 0.0158 \\
+            KG-Tripartite & 0.2927 & 0.8746 & 0.0157 \\
             \bottomrule
         \end{tabular}
     \end{table}
 
-    从表 \ref{tab:offline_accuracy} 和 \ref{tab:offline_diversity} 可以得出以下结论：
-    \begin{enumerate}
-        \item \textbf{Seq-Tuned 在离线准确率上最优：}Recall@20 达到 0.4675，NDCG@20 达到 0.3652，说明外卖推荐场景强烈依赖于复购序列和商家转移信号。
-        \item \textbf{KG-Tripartite 在三方模型中准确率最高：}Recall@20 达到 0.4263，NDCG@20 达到 0.3480，Exposure Gini 低至 0.8746，说明知识图谱引入的品类/商圈/价位结构化信号在保持品类校准的同时有效提升了排序精度。
-        \item \textbf{Logistic-LTR 在覆盖面上表现最佳：}Coverage@20 达到 0.4290，Exposure Gini 最低（0.8282），表明学习排序方法能有效降低曝光集中度。注意当前环境使用 Logistic-LTR 作为学习排序后备方案，完整 LightGBM-LTR 在 Coverage@20（0.4345）和 Exposure Gini（0.7942）上表现更优。
-        \item \textbf{三方模型离线准确率略低于 Seq-Tuned：}这是预期的——因为三方模型在排序中纳入了非精确匹配的公平性、配送距离和供给约束，但需要通过仿真来评估系统级收益。
-        \item \textbf{Popular 和 BPR-MF 表现较差：}Popular 仅靠热度导致 Coverage 极低（0.0062），Exposure Gini 接近 1；BPR-MF 受限于隐式反馈的稀疏性和维度设置。
-    \end{enumerate}
+    \subsection{实验数据分析}
+
+    离线推荐结果显示，实验数据具有明显的复购和序列依赖特征。Popular 的 Recall@20 仅为 0.0470，说明全局热度无法刻画用户个体偏好；BPR-MF 将 Recall@20 提升到 0.1620，但仍明显低于显式用户画像和序列特征模型。Seq-Tuned 的 Recall@20 达到 0.4675，较 UserOnly 提高 9.05\%，较 BPR-MF 提高 188.58\%，说明用户近期消费、复购、品类偏好和商家转移关系是 TRD 外卖场景中最有效的预测信号。
+
+    从排序质量看，Seq-Tuned 的 NDCG@20 为 0.3652，是所有模型中最高的，说明命中项不仅进入了前 20，也更靠近列表前部。KG-Tripartite 的 Recall@20 为 0.4263、NDCG@20 为 0.3480，在三方模型中最优，表明品类、区域、价位和菜品等图谱语义可以在引入公平与履约约束后部分弥补精度损失。Session-SPU-Tripartite 与 Seq-xQuAD-Tripartite 的准确率接近，但前者在仿真中获得更高平台效用，说明菜品细粒度信号对后续订单选择与履约链路更有帮助。
+
+    公平性指标揭示了另一类重要现象：高准确率并不自然带来合理曝光。Popular 的 Coverage@20 只有 0.0062，Exposure Gini 高达 0.9952，说明热门推荐几乎把曝光集中在极少数头部商家。Logistic-LTR 将 Coverage@20 提升到 0.4290，并把 Exposure Gini 降到 0.8282，但 Category JSD 升高到 0.4736，说明覆盖扩张伴随明显的品类分布偏移。相比之下，Seq-Tuned 与三方重排模型保持了约 0.015 的 Category JSD，能更好维持用户历史品类偏好；其中 KG-Tripartite 将 Exposure Gini 降至 0.8746，较 Seq-Tuned 下降 2.03\%，体现出三方重排在准确率、曝光公平和用户习惯之间的折中能力。
 
     \begin{figure}[htbp]
         \centering
-        \begin{subfigure}{0.48\linewidth}
+        \begin{subfigure}{0.48\textwidth}
             \centering
-            \includegraphics[width=\linewidth]{../../outputs/figures/offline_recall20.png}
-            \caption{各模型 Recall@20 对比}
-            \label{fig:recall20}
+            \includegraphics[width=\textwidth]{../../outputs/figures/offline_recall20.png}
+            \caption{Recall@20 对比}
+            \label{fig:offline_recall20}
         \end{subfigure}
         \hfill
-        \begin{subfigure}{0.48\linewidth}
+        \begin{subfigure}{0.48\textwidth}
             \centering
-            \includegraphics[width=\linewidth]{../../outputs/figures/offline_ndcg20.png}
-            \caption{各模型 NDCG@20 对比}
-            \label{fig:ndcg20}
+            \includegraphics[width=\textwidth]{../../outputs/figures/offline_ndcg20.png}
+            \caption{NDCG@20 对比}
+            \label{fig:offline_ndcg20}
         \end{subfigure}
-        \caption{离线推荐准确率指标对比}
-        \label{fig:offline_acc}
+        \caption{离线推荐准确性指标可视化}
+        \label{fig:offline_accuracy}
     \end{figure}
 
     \begin{figure}[htbp]
         \centering
-        \begin{subfigure}{0.48\linewidth}
+        \begin{subfigure}{0.48\textwidth}
             \centering
-            \includegraphics[width=\linewidth]{../../outputs/figures/offline_coverage20.png}
-            \caption{各模型 Coverage@20 对比}
-            \label{fig:coverage20}
+            \includegraphics[width=\textwidth]{../../outputs/figures/offline_coverage20.png}
+            \caption{Coverage@20 对比}
+            \label{fig:offline_coverage20}
         \end{subfigure}
         \hfill
-        \begin{subfigure}{0.48\linewidth}
+        \begin{subfigure}{0.48\textwidth}
             \centering
-            \includegraphics[width=\linewidth]{../../outputs/figures/offline_exposure_gini.png}
-            \caption{各模型 Exposure Gini 对比}
-            \label{fig:gini}
+            \includegraphics[width=\textwidth]{../../outputs/figures/offline_exposure_gini.png}
+            \caption{曝光 Gini 对比}
+            \label{fig:offline_exposure_gini}
         \end{subfigure}
-        \caption{商家侧指标对比}
-        \label{fig:offline_merchant}
+        \caption{离线推荐覆盖与曝光公平性可视化}
+        \label{fig:offline_fairness}
     \end{figure}
 
-    从图 \ref{fig:offline_acc} 可以直观看出，Seq-Tuned 和 LightGBM-LTR 在 Recall 和 NDCG 上明显领先于其他模型。图 \ref{fig:offline_merchant} 则展示了商家侧指标：LightGBM-LTR 的 Coverage 最高、Exposure Gini 最低，体现了学习排序在突破"热度偏差"方面的优势。
+    \subsection{动态履约仿真结果}
 
-    图 \ref{fig:category_jsd} 展示了 CategoryJSD@20 指标——衡量推荐列表品类分布与用户历史品类分布的 Jensen-Shannon 散度。Seq-Tuned 和 UserOnly 在该指标上表现最优，数值越低说明推荐品类越贴近用户真实消费习惯。
-
-    \begin{figure}[htbp]
-        \centering
-        \includegraphics[width=0.65\linewidth]{../../outputs/figures/offline_category_jsd20.png}
-        \caption{各模型 CategoryJSD@20 对比}
-        \label{fig:category_jsd}
-    \end{figure}
-
-    \subsubsection{权衡分析：准确率 vs 公平性}
-
-    推荐系统的核心挑战在于准确率与公平性之间的权衡。图 \ref{fig:tradeoff_ndcg_gini} 以 NDCG@20 为纵轴、Exposure Gini 为横轴，展示各模型在准确率-公平性二维空间中的位置。
-
-    \begin{figure}[htbp]
-        \centering
-        \begin{subfigure}{0.48\linewidth}
-            \centering
-            \includegraphics[width=\linewidth]{../../outputs/figures/tradeoff_ndcg_gini.png}
-            \caption{NDCG@20 与 Exposure Gini 的权衡}
-            \label{fig:tradeoff_ndcg_gini}
-        \end{subfigure}
-        \hfill
-        \begin{subfigure}{0.48\linewidth}
-            \centering
-            \includegraphics[width=\linewidth]{../../outputs/figures/tradeoff_recall_coverage.png}
-            \caption{Recall@20 与 Coverage@20 的权衡}
-            \label{fig:tradeoff_recall_coverage}
-        \end{subfigure}
-        \caption{准确率与公平性/覆盖面的权衡分析}
-        \label{fig:tradeoff}
-    \end{figure}
-
-    从图 \ref{fig:tradeoff} 可以看到，Logistic-LTR 位于准确率-公平性前沿的右下角（较高准确率、较低曝光集中度），Seq-Tuned 则位于高准确率但曝光略集中的位置，三方模型在保持较高准确率的同时维持了适中的公平性。
-
-    \subsubsection{动态履约仿真结果（常规运力 120 骑手）}
-
-    仿真采用 10 个随机种子重复运行，报告均值与 95\% 置信区间。常规运力场景使用 120 名合成骑手、8 个时间步 $\times$ 每步 16 个请求 = 128 个请求/策略，Top-K = 10，MNL/Softmax 用户选择。主要策略链路的完整指标如表 \ref{tab:simulation} 所示。
+    常规运力场景使用 120 名骑手，表 \ref{tab:simulation} 报告 10 个随机种子的均值与 95\% 置信区间。结果表明，离线准确率最高的策略并不必然带来最优履约表现；三方重排配合批量匹配在平均预计履约时间、超时率和平台效用上明显优于纯用户侧策略。
 
     \begin{table}[htbp]
         \centering
-        \caption{动态履约仿真完整指标（常规运力 120 骑手，10 种子均值 $\pm$ 95\% CI）}
+        \caption{常规运力履约仿真结果（120 名骑手，均值 $\pm$ 95\% 置信区间）}
         \label{tab:simulation}
         \footnotesize
         \begin{tabular}{lcccc}
             \toprule
-            \textbf{策略} & \textbf{平均ETA} & \textbf{超时率} & \textbf{准时率} & \textbf{平台效用} \\
+            \textbf{策略} & \textbf{平均预计履约时间} & \textbf{超时率} & \textbf{准时率} & \textbf{平台效用} \\
             \midrule
-            Popular + Nearest & 59.06 $\pm$2.28 & 0.579 $\pm$0.023 & 0.421 $\pm$0.023 & 0.391 $\pm$0.007 \\
-            UserOnly + MinETA & 41.54 $\pm$1.23 & 0.347 $\pm$0.031 & 0.653 $\pm$0.031 & 0.511 $\pm$0.009 \\
-            Seq-Tuned + MinETA & 40.44 $\pm$1.21 & 0.287 $\pm$0.041 & 0.713 $\pm$0.041 & 0.533 $\pm$0.012 \\
-            LightGBM-LTR + MinETA & 40.45 $\pm$1.11 & 0.299 $\pm$0.028 & 0.701 $\pm$0.028 & 0.528 $\pm$0.011 \\
-            Seq-xQuAD-Tripartite + Greedy & 37.04 $\pm$1.91 & 0.212 $\pm$0.046 & 0.788 $\pm$0.046 & 0.550 $\pm$0.012 \\
-            Seq-xQuAD-Tripartite + Batch & 35.90 $\pm$1.88 & 0.195 $\pm$0.036 & 0.805 $\pm$0.036 & 0.553 $\pm$0.009 \\
-            Session-SPU-Tripartite + Greedy & 38.14 $\pm$1.35 & 0.220 $\pm$0.031 & 0.780 $\pm$0.031 & 0.557 $\pm$0.011 \\
-            \textbf{Session-SPU-Tripartite + Batch} & 36.79 $\pm$1.25 & 0.199 $\pm$0.029 & 0.801 $\pm$0.029 & \textbf{0.557} $\pm$0.010 \\
-            KG-Tripartite + Batch & 36.90 $\pm$1.04 & 0.211 $\pm$0.033 & 0.789 $\pm$0.033 & 0.550 $\pm$0.011 \\
-            KG-Tripartite + RouteMinETA & 36.15 $\pm$0.96 & 0.229 $\pm$0.037 & 0.771 $\pm$0.037 & 0.542 $\pm$0.011 \\
-            KG-Tripartite + RouteBatch & 38.84 $\pm$1.24 & 0.311 $\pm$0.049 & 0.689 $\pm$0.049 & 0.517 $\pm$0.014 \\
+            热门推荐 + 最近距离 & 59.06 $\pm$2.28 & 0.579 $\pm$0.023 & 0.421 $\pm$0.023 & 0.391 $\pm$0.007 \\
+            用户画像 + 最小时效 & 41.54 $\pm$1.23 & 0.347 $\pm$0.031 & 0.653 $\pm$0.031 & 0.511 $\pm$0.009 \\
+            序列模型 + 最小时效 & 40.44 $\pm$1.21 & 0.287 $\pm$0.041 & 0.713 $\pm$0.041 & 0.533 $\pm$0.012 \\
+            序列三方重排 + 批量匹配 & \textbf{35.90} $\pm$1.88 & \textbf{0.195} $\pm$0.036 & \textbf{0.805} $\pm$0.036 & 0.553 $\pm$0.009 \\
+            会话-SPU 三方重排 + 批量匹配 & 36.79 $\pm$1.25 & 0.199 $\pm$0.029 & 0.801 $\pm$0.029 & \textbf{0.557} $\pm$0.010 \\
+            KG 三方重排 + 批量匹配 & 36.90 $\pm$1.04 & 0.211 $\pm$0.033 & 0.789 $\pm$0.033 & 0.550 $\pm$0.011 \\
+            KG 三方重排 + 路径最小时效 & 36.15 $\pm$0.96 & 0.229 $\pm$0.037 & 0.771 $\pm$0.037 & 0.542 $\pm$0.011 \\
             \bottomrule
         \end{tabular}
     \end{table}
 
-    从表 \ref{tab:simulation} 可以得出以下结论：
+    常规运力场景进一步说明，履约指标对推荐排序非常敏感。与热门推荐加最近距离相比，序列三方重排加批量匹配将平均预计履约时间从 59.06 分钟降至 35.90 分钟，下降 39.22\%；超时率从 0.579 降至 0.195，下降 66.32\%；平台效用从 0.391 提升到 0.553，提升 41.43\%。会话-SPU 三方重排的平均 ETA 略高于序列三方重排，但平台效用最高，说明平台效用并非单一 ETA 指标，而是用户满意度、准时率、完成率、商家公平和骑手负载共同作用的结果。
 
-    \begin{enumerate}
-        \item \textbf{三方方法在履约指标上全面优于纯用户侧方法。}Session-SPU-Tripartite + Batch 取得了最高的平台效用（0.557），Seq-xQuAD-Tripartite + Batch 取得了最低的平均 ETA（35.90 分钟）和最低的超时率（0.195）。
-        \item \textbf{批量二分图匹配优于贪心逐单分配。}Seq-xQuAD-Tripartite 下，Batch 模式的超时率（0.195）低于 Greedy 模式（0.212），说明全局最优匹配能有效平衡骑手负载。
-        \item \textbf{KG-Tripartite 在常规运力下与最优策略统计打平。}KG-Tripartite + Batch 的平均 ETA（36.90）和平台效用（0.550）与 Session-SPU-Tripartite 的置信区间重叠，表明图谱信号与 Session/SPU 信号在推荐-履约链路中具有互补性。
-        \item \textbf{顺路派单在常规运力下 ETA 与槽位匹配打平。}KG-Tripartite + RouteMinETA 的平均 ETA（36.15）与 Batch 最优值（35.90）的置信区间重叠——骑手大多空闲时，分散派单即是最优解，合单不会带来额外收益；且 route 家族的 ETA 诚实计入队列沿路径行进的时间，口径更严格。
-        \item \textbf{离线准确率最优不等于仿真效果最优。}Seq-Tuned 在离线 Recall 上最高，但在仿真中超时率（0.287）高于三方方法，说明纯粹追求准确率的推荐可能将订单引导至配送压力大的商家。
-    \end{enumerate}
+    \begin{figure}[htbp]
+        \centering
+        \begin{subfigure}{0.32\textwidth}
+            \centering
+            \includegraphics[width=\textwidth]{../../outputs/figures/simulation_avg_eta.png}
+            \caption{平均 ETA}
+            \label{fig:simulation_avg_eta}
+        \end{subfigure}
+        \hfill
+        \begin{subfigure}{0.32\textwidth}
+            \centering
+            \includegraphics[width=\textwidth]{../../outputs/figures/simulation_timeout_rate.png}
+            \caption{超时率}
+            \label{fig:simulation_timeout_rate}
+        \end{subfigure}
+        \hfill
+        \begin{subfigure}{0.32\textwidth}
+            \centering
+            \includegraphics[width=\textwidth]{../../outputs/figures/simulation_platform_utility.png}
+            \caption{平台效用}
+            \label{fig:simulation_platform_utility}
+        \end{subfigure}
+        \caption{常规运力下的履约仿真核心指标}
+        \label{fig:simulation_core}
+    \end{figure}
 
-    \subsubsection{运力紧张压力场景（30 骑手高峰爆单）}
-
-    为验证顺路派单在高峰爆单场景下的价值，使用 30 名骑手（常规运力的 25\%）模拟运力紧张的压力场景。10 种子均值结果如表 \ref{tab:sim_stress} 所示。
+    在运力紧张场景中，骑手数量下降至 30 名。表 \ref{tab:sim_stress} 显示路径感知派单在高峰爆单时具有明显优势。其原因是路径插入机制能利用骑手已有路线吸收边际绕行较小的订单，而容量槽匹配在稀缺运力下更容易产生远距离独立派单。
 
     \begin{table}[htbp]
         \centering
-        \caption{运力紧张压力场景仿真（30 骑手，10 种子均值 $\pm$ 95\% CI）}
+        \caption{运力紧张履约仿真结果（30 名骑手，均值 $\pm$ 95\% 置信区间）}
         \label{tab:sim_stress}
         \footnotesize
         \begin{tabular}{lcccc}
             \toprule
-            \textbf{策略} & \textbf{平均ETA} & \textbf{超时率} & \textbf{平台效用} & \textbf{顺路接单率} \\
+            \textbf{策略} & \textbf{平均预计履约时间} & \textbf{超时率} & \textbf{平台效用} & \textbf{顺路接单率} \\
             \midrule
-            Popular + Nearest & 76.86 $\pm$2.56 & 0.749 $\pm$0.029 & 0.412 $\pm$0.012 & --- \\
-            Seq-Tuned + MinETA & 76.64 $\pm$2.46 & 0.819 $\pm$0.014 & 0.442 $\pm$0.014 & --- \\
-            Seq-xQuAD-Tripartite + Batch & 60.96 $\pm$4.84 & 0.679 $\pm$0.046 & 0.486 $\pm$0.017 & --- \\
-            KG-Tripartite + Batch & 61.47 $\pm$2.85 & 0.685 $\pm$0.039 & 0.481 $\pm$0.014 & --- \\
-            \textbf{KG-Tripartite + RouteMinETA} & \textbf{44.88} $\pm$1.55 & \textbf{0.457} $\pm$0.038 & \textbf{0.544} $\pm$0.016 & 0.669 $\pm$0.016 \\
-            KG-Tripartite + RouteBatch & 47.34 $\pm$1.66 & 0.515 $\pm$0.040 & 0.525 $\pm$0.015 & 0.666 $\pm$0.015 \\
+            热门推荐 + 最近距离 & 76.86 $\pm$2.56 & 0.749 $\pm$0.029 & 0.412 $\pm$0.012 & --- \\
+            序列模型 + 最小时效 & 76.64 $\pm$2.46 & 0.819 $\pm$0.014 & 0.442 $\pm$0.014 & --- \\
+            序列三方重排 + 批量匹配 & 60.96 $\pm$4.84 & 0.679 $\pm$0.046 & 0.486 $\pm$0.017 & --- \\
+            KG 三方重排 + 批量匹配 & 61.47 $\pm$2.85 & 0.685 $\pm$0.039 & 0.481 $\pm$0.014 & --- \\
+            \textbf{KG 三方重排 + 路径最小时效} & \textbf{44.88} $\pm$1.55 & \textbf{0.457} $\pm$0.038 & \textbf{0.544} $\pm$0.016 & 0.669 $\pm$0.016 \\
+            KG 三方重排 + 路径批量匹配 & 47.34 $\pm$1.66 & 0.515 $\pm$0.040 & 0.525 $\pm$0.015 & 0.666 $\pm$0.015 \\
             \bottomrule
         \end{tabular}
     \end{table}
 
-    从表 \ref{tab:sim_stress} 可以得出：
+    运力紧张场景放大了派单策略差异。KG 三方重排加路径最小时效的平均 ETA 为 44.88 分钟，较 KG 三方重排加批量匹配下降 26.99\%，超时率从 0.685 降至 0.457，平台效用从 0.481 提升到 0.544。路径批量匹配虽然顺路接单率同样较高，但平均 ETA 和超时率均弱于路径最小时效，说明在强约束高峰期，先压低单笔订单履约风险比追求批量全局匹配更关键。
+
+    综合推荐与履约两侧指标可以看到，Seq-Tuned 代表离线准确率前沿，而 Session-SPU-Tripartite、KG-Tripartite 等三方策略代表系统效用前沿。图 \ref{fig:tradeoff_frontier} 展示了这一权衡关系：越靠近右上方的策略，越能同时保持较高 Recall@20 与较高平台效用；而仅沿单一指标优化会导致曝光集中、ETA 上升或超时率恶化。
+
+    \begin{figure}[htbp]
+        \centering
+        \begin{subfigure}{0.48\textwidth}
+            \centering
+            \includegraphics[width=\textwidth]{../../outputs/figures/pareto_recall_utility.png}
+            \caption{召回率与平台效用前沿}
+            \label{fig:pareto_recall_utility}
+        \end{subfigure}
+        \hfill
+        \begin{subfigure}{0.48\textwidth}
+            \centering
+            \includegraphics[width=\textwidth]{../../outputs/figures/tripartite_scorecard.png}
+            \caption{三方策略综合得分}
+            \label{fig:tripartite_scorecard}
+        \end{subfigure}
+        \caption{推荐准确率、履约表现与平台效用的综合权衡}
+        \label{fig:tradeoff_frontier}
+    \end{figure}
+
+    \section{总结与局限}
+
+    本文将外卖推荐建模为“用户偏好排序—多目标重排—用户选择—骑手履约”的闭环问题。实验表明，单纯提高离线召回率并不等价于提升平台整体效用。Seq-Tuned 在离线召回上表现最强，但三方重排方法通过引入商家公平、时效和供给分量，显著降低平均预计履约时间和超时率。Session-SPU-Tripartite 在常规运力下取得最高平台效用，说明会话点击与菜品细粒度信号能够为三方闭环提供有价值的补充。KG-Tripartite 在三方模型中保持较高排序质量，并能通过品类、区域、价位和菜品路径提供可解释证据。
+
+    履约侧实验进一步显示，派单策略需要随供需状态变化。常规运力下，批量二分图匹配能在全局层面均衡骑手容量；运力紧张时，路径感知顺路派单通过最小化边际绕行成本显著降低预计履约时间和超时率。这一结果说明推荐系统与履约系统不应被视作两个独立模块，而应作为共同影响平台效用的联动系统进行评估。
+
+    本研究仍存在局限。首先，骑手轨迹与派单记录来自仿真生成，虽然可由公开配送任务数据校准，但不能完全替代工业级外卖平台数据。其次，MNL 用户选择模型是对真实下单行为的简化，尚未覆盖价格促销、店铺活动、天气和用户耐心等因素。再次，KG-Tripartite 当前主要采用轻量图谱兴趣匹配，尚未在完整闭环中训练端到端图神经网络。最后，三方重排与派单仍是解耦优化，未来可研究将推荐、选择和调度统一为端到端多目标决策问题。
+
+    \section{参考文献}
 
     \begin{enumerate}
-        \item \textbf{顺路派单在运力紧张时大幅反超。}KG-Tripartite + RouteMinETA 的平均 ETA（44.88 分钟）比最优槽位匹配（Seq-xQuAD-Tripartite + Batch，60.96 分钟）低约 16 分钟，远超置信区间范围；超时率从 0.679 降至 0.457。
-        \item \textbf{顺路接单率达 66.9\%。}说明在运力吃紧时，cheapest-insertion 路径感知派单能有效利用骑手已有路径顺路接单，避免远距离单独调度。
-        \item \textbf{无免费午餐。}顺路派单不是在所有场景下更优——运力充足时槽位批量匹配的 ETA 更好；顺路合单的优势出现在运力紧张的高峰场景。派单机制可随供需状态切换，这是三方联合视角的核心论据。
+        \item Steffen Rendle, Christoph Freudenthaler, Zeno Gantner, and Lars Schmidt-Thieme. 2009. BPR: Bayesian Personalized Ranking from Implicit Feedback. \textit{Proceedings of UAI}.
+        \item R. Duncan Luce. 1959. \textit{Individual Choice Behavior: A Theoretical Analysis}. Wiley.
+        \item Daniel McFadden. 1974. Conditional Logit Analysis of Qualitative Choice Behavior. In \textit{Frontiers in Econometrics}. Academic Press.
+        \item Kalervo Jarvelin and Jaana Kekalainen. 2002. Cumulated Gain-Based Evaluation of IR Techniques. \textit{ACM Transactions on Information Systems}, 20(4):422--446.
+        \item Tie-Yan Liu. 2009. Learning to Rank for Information Retrieval. \textit{Foundations and Trends in Information Retrieval}, 3(3):225--331.
+        \item Guolin Ke, Qi Meng, Thomas Finley, Taifeng Wang, Weidong Ma, Qiwei Ye, and Tie-Yan Liu. 2017. LightGBM: A Highly Efficient Gradient Boosting Decision Tree. \textit{Proceedings of NeurIPS}.
+        \item Rodrygo L. T. Santos, Craig Macdonald, and Iadh Ounis. 2010. Exploiting Query Reformulations for Web Search Result Diversification. \textit{Proceedings of WWW}.
+        \item H. W. Kuhn. 1955. The Hungarian Method for the Assignment Problem. \textit{Naval Research Logistics Quarterly}, 2(1--2):83--97.
+        \item Xiang Wang, Xiangnan He, Yixin Cao, Meng Liu, and Tat-Seng Chua. 2019. KGAT: Knowledge Graph Attention Network for Recommendation. \textit{Proceedings of KDD}.
+        \item Xiangnan He, Kuan Deng, Xiang Wang, Yan Li, Yongdong Zhang, and Meng Wang. 2020. LightGCN: Simplifying and Powering Graph Convolution Network for Recommendation. \textit{Proceedings of SIGIR}.
     \end{enumerate}
-
-    \begin{figure}[htbp]
-        \centering
-        \begin{subfigure}{0.48\linewidth}
-            \centering
-            \includegraphics[width=\linewidth]{../../outputs/figures/simulation_avg_eta.png}
-            \caption{各策略平均 ETA 对比}
-            \label{fig:avg_eta}
-        \end{subfigure}
-        \hfill
-        \begin{subfigure}{0.48\linewidth}
-            \centering
-            \includegraphics[width=\linewidth]{../../outputs/figures/simulation_p95_eta.png}
-            \caption{各策略 P95 ETA 对比}
-            \label{fig:p95_eta}
-        \end{subfigure}
-        \caption{配送时效指标对比}
-        \label{fig:eta_metrics}
-    \end{figure}
-
-    \begin{figure}[htbp]
-        \centering
-        \begin{subfigure}{0.48\linewidth}
-            \centering
-            \includegraphics[width=\linewidth]{../../outputs/figures/simulation_timeout_rate.png}
-            \caption{各策略超时率对比}
-            \label{fig:timeout}
-        \end{subfigure}
-        \hfill
-        \begin{subfigure}{0.48\linewidth}
-            \centering
-            \includegraphics[width=\linewidth]{../../outputs/figures/simulation_platform_utility.png}
-            \caption{各策略平台效用对比}
-            \label{fig:platform_utility}
-        \end{subfigure}
-        \caption{履约质量与平台效用对比}
-        \label{fig:sim_quality}
-    \end{figure}
-
-    从图 \ref{fig:eta_metrics} 和图 \ref{fig:sim_quality} 可以直观看到，三方策略（Seq-xQuAD-Tripartite、Session-SPU-Tripartite、KG-Tripartite）配合 Batch 匹配在平均 ETA、P95 ETA、超时率和平台效用上均显著优于纯用户侧策略。特别值得注意的是，从 Popular + Nearest 到 Seq-xQuAD-Tripartite + Batch，平台效用提升了约 41\%（从 0.391 到 0.553），平均 ETA 下降了约 39\%（从 59.06 分钟到 35.90 分钟）。
-
-    \begin{figure}[htbp]
-        \centering
-        \begin{subfigure}{0.48\linewidth}
-            \centering
-            \includegraphics[width=\linewidth]{../../outputs/figures/simulation_rider_load_std.png}
-            \caption{骑手负载标准差对比}
-            \label{fig:rider_load}
-        \end{subfigure}
-        \hfill
-        \begin{subfigure}{0.48\linewidth}
-            \centering
-            \includegraphics[width=\linewidth]{../../outputs/figures/simulation_rider_income_gini.png}
-            \caption{骑手收入 Gini 对比}
-            \label{fig:income_gini}
-        \end{subfigure}
-        \caption{骑手侧指标对比}
-        \label{fig:rider_metrics}
-    \end{figure}
-
-    \begin{figure}[htbp]
-        \centering
-        \begin{subfigure}{0.48\linewidth}
-            \centering
-            \includegraphics[width=\linewidth]{../../outputs/figures/simulation_active_rider_rate.png}
-            \caption{活跃骑手率对比}
-            \label{fig:active_rider}
-        \end{subfigure}
-        \hfill
-        \begin{subfigure}{0.48\linewidth}
-            \centering
-            \includegraphics[width=\linewidth]{../../outputs/figures/simulation_exposure_gini.png}
-            \caption{仿真中商家曝光 Gini 对比}
-            \label{fig:sim_exposure_gini}
-        \end{subfigure}
-        \caption{骑手活跃率与商家曝光公平性}
-        \label{fig:sim_rider_merchant}
-    \end{figure}
-
-    图 \ref{fig:rider_metrics} 展示了骑手侧指标。负载感知的派单策略（load\_aware）在骑手负载均衡和收入公平性上均优于 nearest 和 min\_eta。图 \ref{fig:sim_rider_merchant} 显示三方策略在保持较高活跃骑手率的同时，商家曝光 Gini 也更低。
-
-    \subsubsection{三方帕累托前沿分析}
-
-    为综合评估推荐准确率与系统效用之间的权衡，图 \ref{fig:pareto} 将各策略映射到 Recall@20（推荐侧）与平台效用（系统侧）的二维空间中，并标注帕累托前沿。
-
-    \begin{figure}[htbp]
-        \centering
-        \begin{subfigure}{0.48\linewidth}
-            \centering
-            \includegraphics[width=\linewidth]{../../outputs/figures/pareto_recall_utility.png}
-            \caption{Recall@20 与平台效用的帕累托前沿}
-            \label{fig:pareto}
-        \end{subfigure}
-        \hfill
-        \begin{subfigure}{0.48\linewidth}
-            \centering
-            \includegraphics[width=\linewidth]{../../outputs/figures/tradeoff_eta_utility.png}
-            \caption{平均 ETA 与平台效用的权衡}
-            \label{fig:eta_utility}
-        \end{subfigure}
-        \caption{三方权衡与帕累托前沿分析}
-        \label{fig:tripartite_tradeoff}
-    \end{figure}
-
-    \begin{figure}[htbp]
-        \centering
-        \includegraphics[width=0.7\linewidth]{../../outputs/figures/tripartite_scorecard.png}
-        \caption{三方策略综合记分卡}
-        \label{fig:scorecard}
-    \end{figure}
-
-    从图 \ref{fig:pareto} 可以清晰识别三类前沿策略：
-    \begin{itemize}
-        \item \textbf{离线准确率前沿：}Seq-Tuned 和 Logistic-LTR 代表推荐准确率的上界，在 Recall@20 上分别达到 0.4675 和 0.4013（完整 LightGBM-LTR 可达到 0.4424）。
-        \item \textbf{系统效用前沿（常规运力 120 骑手）：}Session-SPU-Tripartite + Batch、Seq-xQuAD-Tripartite + Batch 和 KG-Tripartite + Batch 代表平台效用的上界，分别达到 0.557、0.553 和 0.550。
-        \item \textbf{系统效用前沿（运力紧张 30 骑手）：}KG-Tripartite + RouteMinETA 在压力场景下平台效用达到 0.544，远超同场景下最优槽位匹配的 0.486，说明路径感知顺路派单是高峰爆单时的韧性机制。
-    \end{itemize}
-
-    这三类策略共同构成了三方推荐的权衡边界——说明在外卖推荐场景中，纯粹的准确率优化和系统级多目标优化并不完全重合，需要根据平台的战略偏好进行折中。图 \ref{fig:scorecard} 的综合记分卡进一步印证了这一发现：三方模型在配送时效和平台效用上表现优异，而 Seq-Tuned 在用户侧指标上保持领先。
-
-    \begin{figure}[htbp]
-        \centering
-        \includegraphics[width=0.85\linewidth]{demo.png}
-        \caption{FoodFlow Streamlit 交互演示界面——展示推荐工作台、空间分布与高峰回放}
-        \label{fig:demo}
-    \end{figure}
-
-    \section{系统总结与局限}
-
-    通过本实验，我们构建了完整的"推荐—重排—履约仿真"闭环系统，获得以下主要收获：
-
-    \begin{enumerate}
-        \item \textbf{推荐系统需要从系统视角评估。}离线准确率指标（Recall、NDCG）只能反映模型匹配用户历史行为的能力，无法衡量推荐结果对履约链路的下游影响。FoodFlow 通过引入动态履约仿真，揭示了推荐准确率与平台效用之间的权衡关系。
-        \item \textbf{三方重排在履约指标上带来了显著收益。}在候选排序中纳入商家公平、ETA 和供给约束，虽然会略微牺牲离线准确率，但能显著降低平均 ETA 和超时率，提升平台全局效用。这一发现对实际外卖平台的推荐系统设计具有启示意义。
-        \item \textbf{知识图谱信号能增强三方推荐的排序精度与可解释性。}KG-Tripartite 在三方模型中离线准确率最高（Recall@20=0.4263、NDCG@20=0.3480），同时通过品类/商圈/价位结构化路径提供可解释推荐证据。该能力已经融入 \texttt{foodflow/recommenders.py} 的 KG-Tripartite 主链路，而不是作为独立模块单独评估。
-        \item \textbf{二分图批量匹配优于贪心逐单分配。}匈牙利算法在容量约束下寻求全局最优匹配，相比贪心策略能更均衡地分配骑手负载，降低超时风险。
-        \item \textbf{路径感知顺路派单是高峰爆单时的韧性机制。}运力充足时，槽位批量匹配的 ETA 更优；但在运力紧张（30 骑手）的压力场景下，cheapest-insertion 顺路派单大幅反超——平均 ETA 比最优槽位匹配低约 16 分钟，顺路接单率达 66.9\%。派单机制可随供需状态切换，这是三方联合视角的核心论据。
-        \item \textbf{多种子仿真为策略比较提供了统计置信度。}10 种子均值和 95\% 置信区间的使用使得策略间差异的显著性可以被量化评估，避免了单种子点估计的偶然性。
-        \item \textbf{真实城市地理编码使仿真具备物理意义。}通过 LaDe 数据集将用户/商家嵌入真实城市配送 GPS 分布，距离与 ETA 具备了真实街区尺度，使仿真结果不再停留于抽象数值。
-    \end{enumerate}
-
-    本实验也存在以下局限性：
-    \begin{itemize}
-        \item 骑手数据默认来自合成仿真，虽然可使用 LaDe delivery CSV 校准末端配送参数，但仍不能替代工业级外卖派单数据。
-        \item 离线评估默认只使用前 300 名测试用户（全量测试用户约 108,739 名），大规模评估的计算开销较大。
-        \item LightGBM-LTR 当前使用项目构造的候选集和特征，训练标签来自历史下单集合，后续可引入更丰富的上下文特征、真实曝光/点击标签和跨城市验证。
-        \item 仿真中的 MNL 选择模型为简化的用户行为假设，实际用户的下单决策受更多因素影响。
-        \item KG-Tripartite 当前使用的是免训练的轻量图谱近似（时间衰减 + 关系加权匹配），尚未引入端到端图神经网络训练；后续可在现有 \texttt{foodflow/recommenders.py} 主链路内继续增强图谱表示学习。
-        \item 当前三方优化采用"推荐重排 + 下单后骑手匹配"的解耦闭环，不是工业级端到端联合调度系统。
-    \end{itemize}
-
-    总体而言，FoodFlow 验证了"推荐 + 履约联合优化"这一技术路线的可行性。后续工作可以围绕更精细的骑手行为建模（如接单意愿学习、多平台竞争）、KG 表示学习与三方重排的端到端融合、更大规模的真实数据验证以及在线 A/B 测试展开。
-
-
 \end{document}
