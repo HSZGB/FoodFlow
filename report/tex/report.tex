@@ -636,6 +636,46 @@
         \label{fig:tradeoff_frontier}
     \end{figure}
 
+    \section{demo 演示}
+
+    本实验实现了一个可视化 demo，展示用户画像、推荐商家路径解释、骑手配送路径和不同配送策略下的路径对比。图 \ref{fig:demo} 展示了 demo 的四个主要界面。
+
+    \begin{figure}[htbp]
+        \centering
+    
+        % 第一行
+        \begin{subfigure}[b]{0.45\textwidth}
+            \centering
+            \includegraphics[width=\linewidth]{demo_main.png}
+            \caption{用户画像}
+        \end{subfigure}
+        \hfill
+        \begin{subfigure}[b]{0.45\textwidth}
+            \centering
+            \includegraphics[width=\linewidth]{demo_marchant.png}
+            \caption{推荐商家路径解释}
+        \end{subfigure}
+    
+        \vspace{0.5em}
+    
+        % 第二行
+        \begin{subfigure}[b]{0.45\textwidth}
+            \centering
+            \includegraphics[width=\linewidth]{map.png}
+            \caption{骑手配送路径可视化}
+        \end{subfigure}
+        \hfill
+        \begin{subfigure}[b]{0.45\textwidth}
+            \centering
+            \includegraphics[width=\linewidth]{position.png}
+            \caption{不同配送策略下的路径对比}
+        \end{subfigure}
+    
+        \caption{demo 演示界面}
+        \label{fig:demo}
+    \end{figure}
+    
+
     \section{总结与局限}
 
     本文将外卖推荐建模为“用户偏好排序—多目标重排—用户选择—骑手履约”的闭环问题。实验表明，单纯提高离线召回率并不等价于提升平台整体效用。Seq-Tuned 在离线召回上表现最强，但三方重排方法通过引入商家公平、时效和供给分量，显著降低平均预计履约时间和超时率。Session-SPU-Tripartite 在常规运力下取得最高平台效用，说明会话点击与菜品细粒度信号能够为三方闭环提供有价值的补充。KG-Tripartite 在三方模型中保持较高排序质量，并能通过品类、区域、价位和菜品路径提供可解释证据。
