@@ -204,6 +204,15 @@
 
     \section{推荐系统框架}
 
+    FoodFlow 的整体流程如图 \ref{fig:framework} 所示。系统首先从 TRD 行为、商家属性、会话点击、SPU 菜品和地理履约上下文中构造特征；随后经过基础推荐、序列排序、知识图谱兴趣匹配和三方履约感知重排生成 Top-K 商家列表；最后由用户选择模型产生模拟订单，并进入骑手匹配与动态履约仿真。该框架使推荐准确率、商家曝光、骑手履约效率和平台效用能够在同一闭环中评价。
+
+    \begin{figure}[H]
+        \centering
+        \includegraphics[width=\textwidth]{framework.png}
+        \caption{FoodFlow 推荐与履约仿真整体框架}
+        \label{fig:framework}
+    \end{figure}
+
     \subsection{基准模型}
 
     热门推荐将商家历史订单量 $n_m$ 作为排序依据：
