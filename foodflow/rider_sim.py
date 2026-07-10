@@ -1,3 +1,9 @@
+"""
+骑手生成与订单派单工具。
+
+包含最近骑手、最小 ETA、负载感知批量匹配和路径插入派单等策略。
+"""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -44,6 +50,7 @@ def generate_riders(
     seed: int = 42,
     calibration: RiderCalibration | None = None,
 ) -> pd.DataFrame:
+    """按商家位置生成可复现的合成骑手池。"""
     rng = np.random.default_rng(seed)
     calibration = calibration or RiderCalibration()
     anchors = merchants.sample(n=n_riders, replace=True, random_state=seed).reset_index(drop=True)
@@ -75,6 +82,7 @@ def estimate_order_eta(
     period: str,
     current_time: int = 0,
 ) -> float:
+    """估计非路径派单策略下的订单 ETA。"""
     rider_to_store = haversine_km(
         float(rider_row.get("lng", 116.40)),
         float(rider_row.get("lat", 39.92)),
@@ -150,6 +158,12 @@ def assign_order(
     period: str = "lunch",
     current_time: int = 0,
 ) -> tuple[str | None, float]:
+    """
+    使用贪心策略分配单个订单。
+
+    nearest 按取餐距离选择骑手，min_eta 按 ETA 选择骑手，load_aware 综合 ETA、
+    可靠性、当前负载和接单概率。
+    """
     if riders.empty:
         return None, float("inf")
     candidates = riders.copy()
@@ -188,7 +202,11 @@ def assign_orders_batch(
     current_time: int = 0,
     max_load: int = 3,
 ) -> pd.DataFrame:
-    """Assign a batch against rider capacity slots with one optimal matching."""
+    """
+    将一批订单分配到骑手容量槽位上。
+
+    每个骑手按剩余容量展开为多个槽位，订单-槽位分数矩阵由 Hungarian 算法求解。
+    """
     if not orders or riders.empty:
         return pd.DataFrame(columns=ASSIGNMENT_COLUMNS)
     candidates = riders.reset_index(drop=True).copy()
@@ -198,6 +216,7 @@ def assign_orders_batch(
         capacity = max(max_load - current_load, 0)
         for slot_number in range(capacity):
             slot_rider = rider.copy()
+            # 同一骑手的后续槽位对应更高临时负载。
             slot_rider["load"] = current_load + slot_number
             slots.append({"rider_idx": int(rider_idx), "slot_number": slot_number, "rider": slot_rider})
     if not slots:
@@ -225,6 +244,7 @@ def assign_orders_batch(
             elif policy == "min_eta":
                 score = -eta
             elif policy == "load_aware":
+                # load_aware 分数由 ETA、可靠性、负载和超时风险共同构成。
                 score = rider_score(eta, rider, acceptance) - 0.20 * timeout_risk
             else:
                 raise ValueError(f"Unknown rider policy: {policy}")
@@ -351,7 +371,8 @@ def route_insertion_cost(
     period: str = "lunch",
     current_time: int = 0,
 ) -> dict[str, float] | None:
-    """Best (pickup, dropoff) insertion into the rider's current route.
+    """
+    计算新订单取餐点和送达点在当前骑手路径中的最佳插入位置。
 
     返回边际绕行分钟数（detour）、该单送达 ETA 与插入位置；容量不足返回 None。
     """
@@ -371,6 +392,7 @@ def route_insertion_cost(
     best: dict[str, float] | None = None
     for i in range(len(route) + 1):
         for j in range(i, len(route) + 1):
+            # 取餐点必须排在送达点之前；这里枚举所有可行插入位置。
             candidate = route[:i] + [pickup] + route[i:j] + [dropoff] + route[j:]
             total = _route_total_minutes(lng, lat, candidate, speed)
             detour = total - base_minutes
@@ -403,7 +425,7 @@ def assign_order_route(
     max_load: int = 3,
     objective: str = "detour_eta",
 ) -> dict[str, object] | None:
-    """Greedy route-aware dispatch: pick the rider with the cheapest insertion."""
+    """路径感知逐单派单：选择插入目标值最小的骑手。"""
     if riders.empty:
         return None
     ensure_route_column(riders)
@@ -433,7 +455,8 @@ def assign_orders_route_batch(
     max_load: int = 3,
     objective: str = "detour_eta",
 ) -> list[dict[str, object]]:
-    """Batch route-aware dispatch via Hungarian rounds.
+    """
+    通过多轮 Hungarian 匹配执行路径感知批量派单。
 
     每轮为每个骑手至多分配一单（成本 = 边际绕行 + 超时惩罚），应用插入后
     重新计算下一轮成本，直到订单派完或无可行骑手。相比容量槽位模型，
@@ -516,6 +539,7 @@ def apply_route_assignment(
     eta: float,
     current_time: int,
 ) -> None:
+    """将取餐点和送达点插入骑手的当前路径。"""
     idx = riders.index[riders["rider_id"].astype(str) == str(rider_id)]
     if len(idx) == 0:
         return
@@ -542,7 +566,8 @@ def apply_route_assignment(
 
 
 def advance_riders_along_routes(riders: pd.DataFrame, elapsed_minutes: float) -> None:
-    """Move riders along their routes for `elapsed_minutes` of simulated time.
+    """
+    按给定仿真时间推进骑手路径。
 
     走完的航点被弹出：经过 dropoff 即完成一单（load 由剩余 dropoff 数决定），
     骑手位置更新到最后经过的航点。替代旧实现"派单即瞬移到用户"的处理。

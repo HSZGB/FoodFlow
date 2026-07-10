@@ -87,7 +87,7 @@ class BaseRecommender:
         return RecommendationResult(self.name, recs, scores)
 
     def _remove_seen_and_backfill(self, user_id: str, ranked: list[str], k: int) -> list[str]:
-        # Food delivery has strong repeat consumption, so historical merchants remain valid candidates.
+        # 外卖场景允许复购，历史商家仍保留为候选。
         out = []
         for item in ranked + self.popular_list:
             if item not in out:
@@ -130,7 +130,7 @@ class RepeatRecommender(BaseRecommender):
     def recommend_for_user(self, user_id: str, k: int, period: str = "lunch") -> tuple[list[str], dict[str, float]]:
         counts = Counter(self.history.get(user_id, []))
         ranked = [m for m, _ in counts.most_common()]
-        # Repeat is intentionally allowed to include seen merchants because food delivery has strong reorder behavior.
+        # Repeat 基线允许推荐历史商家，用于刻画复购行为。
         out = []
         for item in ranked + self.popular_list:
             if item not in out:
@@ -150,7 +150,7 @@ class ItemCFRecommender(BaseRecommender):
         item_counts = Counter(train["wm_poi_id"].astype(str))
         co_counts: Counter[tuple[str, str]] = Counter()
         for items in user_items:
-            # Very heavy users add little signal and can dominate runtime, so cap each basket.
+            # 对超大用户篮子做截断，避免共现统计被少数用户主导。
             capped = items[:80]
             for i, item_i in enumerate(capped):
                 for item_j in capped[i + 1 :]:
@@ -382,6 +382,12 @@ def _normalize_tripartite_components(
     components_by_item: dict[str, dict[str, float]],
     weights: dict[str, float],
 ) -> dict[str, dict[str, float]]:
+    """
+    对单个用户候选集合内的三方分量做归一化。
+
+    输入为候选商家的用户分、公平分、ETA 分、供给分，以及子类附加的
+    Session/SPU/KG 分量；输出会重算可直接排序的 final_score。
+    """
     if not components_by_item:
         return components_by_item
     frame = pd.DataFrame.from_dict(components_by_item, orient="index")
@@ -409,6 +415,12 @@ def _normalize_tripartite_components(
 
 
 class WeightedSequentialRecommender(SequentialHybridRecommender):
+    """
+    Seq-Tuned 使用的可解释序列排序基类。
+
+    特征包括近期消费、复购、商家转移、品类偏好、热度和质量。
+    """
+
     name = "Seq-Weighted"
 
     def __init__(self, name: str = "Seq-Weighted", weights: dict[str, float] | None = None):
@@ -443,6 +455,10 @@ class SeqTunedRecommender(WeightedSequentialRecommender):
 
 
 class LightGBMRankerRecommender(WeightedSequentialRecommender):
+    """
+    基于 Seq-Tuned 同一组序列特征训练的 LambdaRank 排序器。
+    """
+
     name = "LightGBM-LTR"
 
     def __init__(
@@ -484,6 +500,7 @@ class LightGBMRankerRecommender(WeightedSequentialRecommender):
             candidates = self._sequential_candidates(user_id)[: self.candidate_limit]
             if not candidates:
                 continue
+            # 训练标签只来自训练期历史订单；离线评估的测试标签不参与拟合。
             user_features: list[list[float]] = []
             user_labels: list[int] = []
             for merchant_id in candidates:
@@ -530,6 +547,13 @@ class LightGBMRankerRecommender(WeightedSequentialRecommender):
 
 
 class LogisticLTRRecommender(WeightedSequentialRecommender):
+    """
+    LightGBM 不可用时的线性 LTR 后备模型。
+
+    该模型使用 LogisticRegression 对同一组序列特征打分，结果表中显式标为
+    Logistic-LTR。
+    """
+
     name = "Logistic-LTR"
 
     def __init__(
@@ -616,6 +640,12 @@ class LogisticLTRRecommender(WeightedSequentialRecommender):
 
 
 class SeqTripartiteRecommender(SequentialHybridRecommender):
+    """
+    用户-商家-骑手三方目标的商家打分器。
+
+    输出包含用户偏好、商家曝光公平、预计时效和供给可行性等分量。
+    """
+
     name = "Seq-Tripartite"
 
     def __init__(
@@ -644,6 +674,7 @@ class SeqTripartiteRecommender(SequentialHybridRecommender):
         eta_score = 1.0 - min(eta / 70.0, 1.0)
         supply = supply_score_for_merchant(merchant)
         fair = float(self.fair.get(merchant_id, 0.0))
+        # raw final_score 保留原始加权值；排序前会统一做候选内归一化。
         final = float(
             self.user_weight * user_score
             + self.fairness_weight * fair
@@ -762,6 +793,13 @@ class SeqTunedXQuadRecommender(SeqXQuadRecommender):
 
 
 class SeqXQuadTripartiteRecommender(SeqTripartiteRecommender):
+    """
+    带列表级 xQuAD 重排的三方推荐器。
+
+    先计算用户偏好、公平、ETA、供给分量，再按相关性、品类覆盖和长尾奖励
+    贪心构造 Top-K 列表。
+    """
+
     name = "Seq-xQuAD-Tripartite"
 
     def __init__(
@@ -780,6 +818,7 @@ class SeqXQuadTripartiteRecommender(SeqTripartiteRecommender):
     def _rerank_xquad(self, scores: dict[str, float], k: int) -> list[str]:
         if not scores:
             return []
+        # 只对前 80 个候选做列表级重排，后续由 xQuAD 处理覆盖和长尾项。
         candidates = sorted(scores, key=scores.get, reverse=True)[:80]
         min_score = min(scores[m] for m in candidates)
         max_score = max(scores[m] for m in candidates)
@@ -822,6 +861,12 @@ class SeqXQuadTripartiteRecommender(SeqTripartiteRecommender):
 
 
 class SessionSpuTripartiteRecommender(SeqXQuadTripartiteRecommender):
+    """
+    加入训练期 Session 和 SPU 信号的三方重排器。
+
+    Session 点击用于扩展候选商家，SPU 类目用于计算菜品级亲和度。
+    """
+
     name = "Session-SPU-Tripartite"
 
     def __init__(
@@ -844,6 +889,7 @@ class SessionSpuTripartiteRecommender(SeqXQuadTripartiteRecommender):
         if not data.session_interactions.empty:
             sessions = data.session_interactions.copy()
             if "split" in sessions.columns:
+                # 只读取 train split；测试期点击和订单只用于评估。
                 sessions = sessions[sessions["split"].astype(str).eq("train")].copy()
             sessions["rank"] = pd.to_numeric(sessions.get("rank", 1), errors="coerce").fillna(1)
             sort_columns = ["user_id"]
@@ -865,6 +911,7 @@ class SessionSpuTripartiteRecommender(SeqXQuadTripartiteRecommender):
         self.user_spu_categories: dict[str, Counter[str]] = {}
         self.merchant_spu_categories: dict[str, Counter[str]] = {}
         if not data.order_spus_train.empty and "category" in data.spus.columns:
+            # SPU 类目画像只由 order_spus_train 构建。
             order_spus = data.order_spus_train.merge(
                 data.spus[["wm_food_spu_id", "category"]],
                 on="wm_food_spu_id",
@@ -916,6 +963,7 @@ class SessionSpuTripartiteRecommender(SeqXQuadTripartiteRecommender):
                 if merchant_id in self.active_set and favorite_categories & set(categories):
                     spu_candidates.append(merchant_id)
         base = super()._sequential_candidates(user_id)
+        # 先拼接多源候选，再交给三方分数和 xQuAD 统一排序。
         return [m for m in dict.fromkeys(session_candidates + spu_candidates[:120] + base) if m in self.merchants.index]
 
     def component_scores(self, user_id: str, merchant_id: str, period: str = "lunch") -> dict[str, float]:
@@ -933,12 +981,13 @@ class SessionSpuTripartiteRecommender(SeqXQuadTripartiteRecommender):
 
 
 class KGTripartiteRecommender(SessionSpuTripartiteRecommender):
-    """Session-SPU 三方推荐器之上叠加轻量知识图谱兴趣信号。
+    """
+    Session-SPU 三方推荐器之上叠加轻量知识图谱兴趣信号。
 
-    思想来自 kg-demo（动态 KG 注意力模型）的免训练近似：用户兴趣 = 对其
-    历史商家 KG 属性（品类/商圈/价位）的时间衰减加权分布，商家由同一组
-    KG 属性刻画，kg_score 为两者在关系加权下的匹配度。torch 版的完整
-    实现与 GPU 实验结果见 kg-demo/。
+    思想来自 kg-demo（动态 KG 注意力模型）的免训练近似：
+    用户兴趣 = 对其历史商家 KG 属性（品类/商圈/价位）的时间衰减加权分布，
+    商家由同一组 KG 属性刻画，kg_score 为两者在关系加权下的匹配度。
+    torch 版的完整实现与 GPU 实验结果见 kg-demo/。
     """
 
     name = "KG-Tripartite"
@@ -1013,6 +1062,7 @@ class KGTripartiteRecommender(SessionSpuTripartiteRecommender):
         for user_id, group in orders.groupby("user_id", sort=False):
             interests: dict[str, dict[str, float]] = {}
             for position, merchant_id in enumerate(group["wm_poi_id"]):
+                # 按历史订单位置做时间衰减，越近的订单权重越高。
                 weight = float(np.exp(-position / self.kg_decay))
                 for relation, node in self.merchant_kg_nodes.get(merchant_id, {}).items():
                     bucket = interests.setdefault(relation, {})
@@ -1020,6 +1070,7 @@ class KGTripartiteRecommender(SessionSpuTripartiteRecommender):
             for relation, bucket in interests.items():
                 total = sum(bucket.values())
                 if total > 0:
+                    # 每类关系内部归一化，再进入关系加权匹配。
                     interests[relation] = {node: value / total for node, value in bucket.items()}
             self.user_kg_interests[str(user_id)] = interests
         return self

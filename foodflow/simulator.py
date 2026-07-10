@@ -133,6 +133,10 @@ def _choice_model(
     truth_bonus: float = 1.75,
     rank_weight: float = 0.25,
 ) -> str | None:
+    """用 MNL 选择模型把 Top-K 推荐列表转成模拟订单。
+
+    排序分、位置偏置和命中标签会进入效用函数；额外的不下单选项返回 None。
+    """
     if not recs:
         return None
     candidates = [str(item) for item in recs[:10]]
@@ -155,6 +159,7 @@ def _choice_model(
 
 
 def platform_utility(metrics: dict[str, float]) -> float:
+    """计算用户、商家和骑手三侧指标合成的平台效用。"""
     timeout = metrics.get("timeout_rate", 0.0)
     return float(
         0.25 * metrics.get("user_satisfaction", 0.0)
@@ -177,6 +182,10 @@ def run_simulation(
     rider_calibration: RiderCalibration | None = None,
     n_riders: int = 120,
 ) -> pd.DataFrame:
+    """运行午餐高峰的推荐-下单-派单仿真。
+
+    返回每条策略的订单完成数、ETA、超时率、曝光 Gini、骑手负载和平台效用。
+    """
     policies = policies or DEFAULT_POLICIES
     truth = data.truth_by_user()
     eval_users = list(truth.keys())
@@ -190,6 +199,7 @@ def run_simulation(
 
     for policy_index, policy in enumerate(policies, start=1):
         recommender_seed = _stable_policy_seed(seed, policy.recommender)
+        # 各策略共用请求流和初始骑手池。
         request_rng = np.random.default_rng(request_seed)
         choice_rng = np.random.default_rng(_stable_policy_seed(seed, f"choice:{policy.recommender}"))
         if verbose:
@@ -224,6 +234,7 @@ def run_simulation(
         for step in range(steps):
             current_time = step * 5
             if route_mode:
+                # 路径模式下，每个时间步推进骑手当前航点序列。
                 advance_riders_along_routes(riders, elapsed_minutes=5.0)
             else:
                 ready = riders["available_at"] <= current_time
@@ -237,6 +248,7 @@ def run_simulation(
             for user_id in request_users:
                 recs = rec_result.recommendations[user_id]
                 for rank, merchant_id in enumerate(recs, start=1):
+                    # 按排名折扣累计商家曝光，用于计算商家曝光 Gini。
                     exposure[merchant_id] += 1.0 / np.log2(rank + 1)
                 chosen = _choice_model(
                     recs,
@@ -258,6 +270,7 @@ def run_simulation(
                     "satisfaction": 1.0 if chosen in truth.get(user_id, set()) else 0.45,
                 }
                 if assignment_mode in {"batch", "route_batch"}:
+                    # 批量模式先收集当前时间步订单，再统一做匹配。
                     pending_orders.append(order)
                     continue
                 if route_mode:
@@ -290,6 +303,7 @@ def run_simulation(
                 satisfaction.append(float(order["satisfaction"]))
 
             if assignment_mode == "route_batch" and pending_orders:
+                # 路径批量模式使用插入成本，并在每轮匹配后更新骑手路径。
                 route_assignments = assign_orders_route_batch(
                     pending_orders, riders, "lunch", current_time, objective=route_objective
                 )
@@ -306,6 +320,7 @@ def run_simulation(
                     timeouts += int(eta > 45.0)
                     satisfaction.append(float(order["satisfaction"]))
             elif assignment_mode == "batch" and pending_orders:
+                # 容量槽位批量匹配只分配订单到骑手，不调整骑手航点顺序。
                 available = riders[riders["load"] <= 2].copy()
                 assignments = assign_orders_batch(
                     pending_orders,
@@ -391,7 +406,7 @@ def run_simulation_multi_seed(
     rider_calibration: RiderCalibration | None = None,
     n_riders: int = 120,
 ) -> pd.DataFrame:
-    """Run the simulation once per seed and aggregate per-policy mean/std/95% CI.
+    """按多个随机种子重复仿真，并汇总均值、标准差和 95% 置信区间。
 
     单种子结果是点估计，策略间效用差通常只有 0.01–0.05 量级，没有方差无法
     判断显著性。输出保持单种子 schema（数值列为跨种子均值），并追加
