@@ -16,6 +16,7 @@
 \usepackage{lastpage}
 \usepackage{tabularx}
 \usepackage{threeparttable}
+\usepackage{dirtree}
 \usepackage{tikz}
 \usetikzlibrary{graphs, positioning, arrows.meta}
 \geometry{margin=2.5cm}
@@ -684,6 +685,30 @@
 
     本研究仍存在局限。首先，骑手轨迹与派单记录来自仿真生成，虽然可由公开配送任务数据校准，但不能完全替代工业级外卖平台数据。其次，MNL 用户选择模型是对真实下单行为的简化，尚未覆盖价格促销、店铺活动、天气和用户耐心等因素。再次，KG-Tripartite 当前主要采用轻量图谱兴趣匹配，尚未在完整闭环中训练端到端图神经网络。最后，三方重排与派单仍是解耦优化，未来可研究将推荐、选择和调度统一为端到端多目标决策问题。
 
+    \section{核心代码框架}
+
+    \dirtree{%
+    .1 foodflow/.
+    .2 cli.py\dotfill 命令行入口.
+    .2 download.py\dotfill TRD 下载.
+    .2 preprocess.py\dotfill 数据清洗与特征处理.
+    .2 data.py\dotfill 处理后数据加载.
+    .2 recommenders.py\dotfill 推荐基线、序列模型与三方重排.
+    .2 rerank.py\dotfill ETA、公平分、供给分等重排特征.
+    .2 kg.py\dotfill 轻量知识图谱三元组与路径解释.
+    .2 rider\_sim.py\dotfill 骑手生成、ETA 估计、订单匹配.
+    .2 simulator.py\dotfill 动态履约仿真.
+    .2 metrics.py\dotfill 推荐与公平指标.
+    .2 evaluate.py\dotfill 离线推荐评估.
+    .2 figures.py\dotfill 图表生成.
+    .2 report.py\dotfill 实验报告生成.
+    .2 explain.py\dotfill 推荐解释.
+    .1 app.py\dotfill Streamlit Demo.
+    .1 Makefile\dotfill 常用运行命令.
+    .1 outputs/\dotfill 指标 CSV 与图表.
+    .1 report/\dotfill 实验报告.
+    .1 tests/\dotfill 单元测试与集成 Smoke 测试.
+    }
 
     \begin{thebibliography}{99}
         \bibitem{trd2023}
