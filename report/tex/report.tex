@@ -3,9 +3,11 @@
 \usepackage{geometry}
 \usepackage{graphicx}
 \usepackage{booktabs}
+\usepackage{longtable}
 \usepackage{multirow}
 \usepackage{array}
 \usepackage{float}
+\usepackage[section]{placeins}
 \usepackage{listings}
 \usepackage{xcolor}
 \usepackage{fancyhdr}
@@ -74,27 +76,26 @@
 % 封面页
 \begin{titlepage}
 	\centering
-	\vspace*{1cm}
-	\includegraphics[width=0.6\textwidth]{pc1.png}
-	\paragraph{}
-	{\Huge\bfseries\
-		本科生实验报告\par}
-	\vspace{4cm}
-	\begin{center}
-		\hspace*{4.8em}
-		{\Large
-			\begin{tabular}{rl}
-				实验课程： & 大数据原理与技术 \\
-				实验名称： & 外卖三方推荐与动态履约仿真系统 \\
-				专业名称： & 计算机科学与技术 \\
-				实验地点： & 东校园实验中心大楼 B201 \\
-				报告时间： & 2026/7/6\\
-			\end{tabular}\par}
-	\end{center}
-	\vspace{2cm}
+	\vspace*{0.8cm}
+	\includegraphics[width=0.72\textwidth]{sysu.jpg}
+
+	\vspace{1.5cm}
+	{\Huge\bfseries 本科生实验报告\par}
+	\vspace{0.45cm}
+	{\Large\bfseries 外卖三方推荐与动态履约仿真系统\par}
+
+	\vspace{2.0cm}
+	{\Large
+		\begin{tabular}{r@{\hspace{1.2em}}l}
+			实验课程： & 大数据原理与技术 \\
+			专业名称： & 计算机科学与技术 \\
+			实验地点： & 东校园实验中心大楼 B201 \\
+			报告时间： & 2026/7/6 \\
+	\end{tabular}\par}
+
+	\vspace{1.7cm}
 	\newcolumntype{C}{>{\centering\arraybackslash}X}
-	
-	\begin{tabularx}{\textwidth}{|c|C|C|C|C|}
+	\begin{tabularx}{0.88\textwidth}{|c|C|C|C|C|}
 		\hline
 		组员 & 成员1 & 成员2 & 成员3 & 成员4 \\ \hline
 		学号 & 23342035 & 23336011 & 23336003 & 23320143 \\ \hline
@@ -113,63 +114,71 @@
 
     本文研究一个由推荐系统与履约仿真系统耦合形成的外卖平台闭环。推荐模块在给定用户与上下文后产生商家排序；用户选择模型将排序转化为模拟订单；履约模块再将订单分配给骑手并更新系统状态。为避免工程变量与数学变量混用，表 \ref{tab:notation} 给出全文统一使用的符号。
 
-    \begin{table}[htbp]
-        \centering
+    {
+    \small
+    \setlength{\LTpre}{0.4em}
+    \setlength{\LTpost}{0.4em}
+    \begin{longtable}{>{\raggedright\arraybackslash}p{0.31\textwidth}>{\raggedright\arraybackslash}p{0.58\textwidth}}
         \caption{主要数学符号}
-        \label{tab:notation}
-        \small
-        \begin{tabular}{ll}
-            \toprule
-            \textbf{符号} & \textbf{含义} \\
-            \midrule
-            $\mathcal{U}$, $\mathcal{M}$, $\mathcal{R}$ & 用户、商家、骑手集合 \\
-            $u$, $m$, $r$ & 用户、商家、骑手的元素 \\
-            $t$ & 离散时间步或推荐请求时间 \\
-            $\mathcal{H}_u$ & 用户 $u$ 的历史交互序列 \\
-            $\mathcal{Y}_u$ & 用户 $u$ 在评估集中的真实相关商家集合 \\
-            $\mathcal{C}_u$ & 推荐阶段为用户 $u$ 生成的候选商家集合 \\
-            $\pi_u^K$ & 面向用户 $u$ 的长度为 $K$ 的推荐列表 \\
-            $\operatorname{rank}_{\pi_u}(m)$ & 商家 $m$ 在列表 $\pi_u$ 中的位置 \\
-            $c_m$, $a_m$, $p_m$ & 商家 $m$ 的品类、区域和价格段属性 \\
-            $q_m$, $n_m$ & 商家 $m$ 的质量估计与历史订单量 \\
-            $x_u$, $x_m$, $x_r$ & 用户、商家和骑手的空间位置 \\
-            $d(x,y)$ & 空间位置 $x$ 与 $y$ 间的配送距离估计 \\
-            $\tau(u,m,t)$ & 用户 $u$ 在时间 $t$ 从商家 $m$ 下单的预计履约时间 \\
-            $s(u,m,t)$ & 推荐模型给出的预测偏好强度 \\
-            $\phi_j(u,m,t)$, $\theta_j$ & 第 $j$ 类特征函数及其权重 \\
-            $\widetilde{x}$ & 变量 $x$ 在候选集合内的归一化值 \\
-            $b(m)$, $e(u,m,t)$, $h(m)$ & 商家公平、时效效用和供给可行性分量 \\
-            $g(u,m,t)$ & 三方重排的综合价值函数 \\
-            $\mathcal{E}$, $\mathcal{L}$, $\mathcal{G}$ & 知识图谱实体、关系和三元组集合 \\
-            $\mathbf{z}_x$ & 实体或关系 $x$ 的低维表示向量 \\
-            $\mathcal{O}_t$ & 时间步 $t$ 产生的订单集合 \\
-            $\mathcal{B}_t$ & 时间步 $t$ 的可用骑手容量槽集合 \\
-            $x_{ob}$ & 订单 $o$ 是否分配到容量槽 $b$ 的二元决策变量 \\
-            $Q_r$ & 骑手 $r$ 当前待执行路径序列 \\
-            $\Delta(r,o)$ & 将订单 $o$ 插入骑手 $r$ 路径后的最小边际绕行成本 \\
-            $N_{um}$, $A_{um}(t)$ & 历史交互次数和距上次交互的时间间隔 \\
-            $L$, $\gamma$, $\eta$ & 序列窗口、时间衰减尺度和位置衰减系数 \\
-            $\alpha$, $\beta$, $\chi$, $\delta$ & 三方价值函数中各分量的权重 \\
-            $\lambda_r$, $\lambda_d$, $\lambda_l$ & 列表重排中相关性、多样性和长尾奖励权重 \\
-            $\ell(m)$ & 商家 $m$ 的长尾奖励 \\
-            $\mu$, $\omega_l$, $k(u,m,t)$ & 图谱时间衰减、关系权重和图谱相似度 \\
-            $\mathcal{P}_u$, $\mathcal{P}_m$, $\zeta(u,m)$ & 用户菜品偏好、商家菜品画像和菜品亲和度 \\
-            $z(u,m,t)$, $z_0$ & 下单选择效用和不下单效用 \\
-            $\rho_r$, $L_r$, $\kappa(o,r)$ & 骑手可靠性、当前负载和接单可行性 \\
-            $A(o,r)$, $W_{ob}$ & 单订单派单价值和二分图边权 \\
-            $J(r,o)$, $\omega$ & 路径派单目标和绕行权衡系数 \\
-            $v_r$, $\varsigma$, $\tau_0$ & 骑手速度、道路弯曲系数和超时阈值 \\
-            $\Psi$ & 平台综合效用 \\
-            $\mathbb{I}[\cdot]$ & 指示函数，条件成立取 1，否则取 0 \\
-            \bottomrule
-        \end{tabular}
-    \end{table}
+        \label{tab:notation}\\
+        \toprule
+        \textbf{符号} & \textbf{含义} \\
+        \midrule
+        \endfirsthead
+        \multicolumn{2}{c}{表 \thetable{}（续）：主要数学符号}\\
+        \toprule
+        \textbf{符号} & \textbf{含义} \\
+        \midrule
+        \endhead
+        \bottomrule
+        \endfoot
+        $\mathcal{U}$, $\mathcal{M}$, $\mathcal{R}$ & 用户、商家、骑手集合 \\
+        $u$, $m$, $r$ & 用户、商家、骑手的元素 \\
+        $t$ & 离散时间步或推荐请求时间 \\
+        $\mathcal{H}_u$ & 用户 $u$ 的历史交互序列 \\
+        $\mathcal{Y}_u$ & 用户 $u$ 在评估集中的真实相关商家集合 \\
+        $\mathcal{C}_u$ & 推荐阶段为用户 $u$ 生成的候选商家集合 \\
+        $\pi_u^K$ & 面向用户 $u$ 的长度为 $K$ 的推荐列表 \\
+        $\operatorname{rank}_{\pi_u}(m)$ & 商家 $m$ 在列表 $\pi_u$ 中的位置 \\
+        $c_m$, $a_m$, $p_m$ & 商家 $m$ 的品类、区域和价格段属性 \\
+        $q_m$, $n_m$ & 商家 $m$ 的质量估计与历史订单量 \\
+        $x_u$, $x_m$, $x_r$ & 用户、商家和骑手的空间位置 \\
+        $d(x,y)$ & 空间位置 $x$ 与 $y$ 间的配送距离估计 \\
+        $\tau(u,m,t)$ & 用户 $u$ 在时间 $t$ 从商家 $m$ 下单的预计履约时间 \\
+        $s(u,m,t)$ & 推荐模型给出的预测偏好强度 \\
+        $\phi_j(u,m,t)$, $\theta_j$ & 第 $j$ 类特征函数及其权重 \\
+        $\widetilde{x}$ & 变量 $x$ 在候选集合内的归一化值 \\
+        $b(m)$, $e(u,m,t)$, $h(m)$ & 商家公平、时效效用和供给可行性分量 \\
+        $g(u,m,t)$ & 三方重排的综合价值函数 \\
+        $\mathcal{E}$, $\mathcal{L}$, $\mathcal{G}$ & 知识图谱实体、关系和三元组集合 \\
+        $\mathbf{z}_x$ & 实体或关系 $x$ 的低维表示向量 \\
+        $\mathcal{O}_t$ & 时间步 $t$ 产生的订单集合 \\
+        $\mathcal{B}_t$ & 时间步 $t$ 的可用骑手容量槽集合 \\
+        $x_{ob}$ & 订单 $o$ 是否分配到容量槽 $b$ 的二元决策变量 \\
+        $Q_r$ & 骑手 $r$ 当前待执行路径序列 \\
+        $\Delta(r,o)$ & 将订单 $o$ 插入骑手 $r$ 路径后的最小边际绕行成本 \\
+        $N_{um}$, $A_{um}(t)$ & 历史交互次数和距上次交互的时间间隔 \\
+        $L$, $\gamma$, $\eta$ & 序列窗口、时间衰减尺度和位置衰减系数 \\
+        $\alpha$, $\beta$, $\chi$, $\delta$ & 三方价值函数中各分量的权重 \\
+        $\lambda_r$, $\lambda_d$, $\lambda_l$ & 列表重排中相关性、多样性和长尾奖励权重 \\
+        $\ell(m)$ & 商家 $m$ 的长尾奖励 \\
+        $\mu$, $\omega_l$, $k(u,m,t)$ & 图谱时间衰减、关系权重和图谱相似度 \\
+        $\mathcal{P}_u$, $\mathcal{P}_m$, $\zeta(u,m)$ & 用户菜品偏好、商家菜品画像和菜品亲和度 \\
+        $z(u,m,t)$, $z_0$ & 下单选择效用和不下单效用 \\
+        $\rho_r$, $L_r$, $\kappa(o,r)$ & 骑手可靠性、当前负载和接单可行性 \\
+        $A(o,r)$, $W_{ob}$ & 单订单派单价值和二分图边权 \\
+        $J(r,o)$, $\omega$ & 路径派单目标和绕行权衡系数 \\
+        $v_r$, $\varsigma$, $\tau_0$ & 骑手速度、道路弯曲系数和超时阈值 \\
+        $\Psi$ & 平台综合效用 \\
+        $\mathbb{I}[\cdot]$ & 指示函数，条件成立取 1，否则取 0 \\
+    \end{longtable}
+    }
 
     \section{数据来源}
 
     实验主要使用 Takeout Recommendation Dataset (TRD)，其 DOI 为 \texttt{10.5281/zenodo.8025855}\cite{trd2023}。该数据集来自外卖平台在北京 11 个商圈的真实订单记录，时间跨度为 2021 年 3 月 1 日至 3 月 28 日，包含用户、商家、菜品、训练期订单、测试期订单与测试标签。TRD 在本文中承担两类作用：其一，作为推荐系统的交互样本，用于估计用户偏好、商家流行度和品类偏好；其二，作为订单生成的经验分布，使履约仿真中的用户请求保持外卖场景的复购性、区域性和品类偏好。
 
-    \begin{table}[htbp]
+    \begin{table}[H]
         \centering
         \caption{TRD 数据统计}
         \label{tab:data_audit}
